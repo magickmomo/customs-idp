@@ -212,4 +212,4 @@ function SettingsPage(){return <section><div className="page-head"><div><div cla
 function Toggle({label,on}){return <div className="toggle-row"><span>{label}</span><div className={"toggle "+(on?"on":"")}><i></i></div></div>}
 
 createRoot(document.getElementById("root")).render(<App/>);
-// Vercel redeploy trigger 2026-09-18T20:26:46.067Z
+// Vercel redeploy trigger after connection reset 2026-09-18T20:26:46.067Z
