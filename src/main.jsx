@@ -36,15 +36,41 @@ function App(){
   const [livePacks,setLivePacks]=useState(packs);
   const uploadRef=useRef(null);
 
-  const handleUpload=(files)=>{
+  const handleUpload=async(files)=>{
     const selected=Array.from(files||[]);
     if(!selected.length) return;
+    const file=selected[0];
     const id=`PK-${10483+livePacks.length}`;
     const newPack={id,customer:"Unassigned customer",docs:selected.length,status:"Processing",confidence:0,received:"Just now",ticket:`UPLOAD-${Date.now().toString().slice(-5)}`,uploadedFiles:selected.map(f=>({name:f.name,size:f.size,type:f.type}))};
     setLivePacks(prev=>[newPack,...prev]);
-    notify(`${selected.length} document${selected.length===1?"":"s"} uploaded — pack ${id} created`);
-    navigate("review");
     setSelectedPack(newPack);
+    navigate("review");
+    notify("Document uploaded — AI extraction started");
+    try {
+      const buffer=await file.arrayBuffer();
+      const bytes=new Uint8Array(buffer);
+      let binary="";
+      const chunk=0x8000;
+      for(let i=0;i<bytes.length;i+=chunk) binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+chunk,bytes.length)));
+      const base64=btoa(binary);
+      const dataUrl=`data:${file.type || "application/octet-stream"};base64,${base64}`;
+      const response=await fetch("/api/extract",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({fileData:dataUrl,filename:file.name,mimeType:file.type})
+      });
+      const result=await response.json();
+      if(!response.ok) throw new Error(result.error || "Extraction failed");
+      const processed={...newPack,status:"Needs review",confidence:Math.round((result.extraction.confidence||0)*100),extractedData:result.extraction};
+      setSelectedPack(processed);
+      setLivePacks(prev=>prev.map(p=>p.id===id?processed:p));
+      notify("AI extraction complete — review the extracted data");
+    } catch(error) {
+      const failed={...newPack,status:"Needs review",processingError:error.message};
+      setSelectedPack(failed);
+      setLivePacks(prev=>prev.map(p=>p.id===id?failed:p));
+      notify("Extraction failed — check the pack for details");
+    }
   };
 
   const filteredPacks=useMemo(()=>livePacks.filter(p=>
