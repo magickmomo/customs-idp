@@ -48,7 +48,8 @@ function App(){
     const selected=Array.from(files||[]);
     if(!selected.length) return;
     const file=selected[0];
-    const highest=livePacks.reduce((max,p)=>Math.max(max,Number(String(p.id||"").replace("PK-",""))||0),10482);\n    const id=`PK-${highest+1}`;
+    const highest=livePacks.reduce((max,p)=>Math.max(max,Number(String(p.id||"").replace("PK-",""))||0),10482);
+    const id=`PK-${highest+1}`;
     const newPack={id,customer:"Unassigned customer",docs:selected.length,status:"Processing",confidence:0,received:"Just now",ticket:`UPLOAD-${Date.now().toString().slice(-5)}`,uploadedFiles:selected.map(f=>({name:f.name,size:f.size,type:f.type}))};
     setLivePacks(prev=>[newPack,...prev]);
     setSelectedPack(newPack);
