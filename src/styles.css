@@ -140,3 +140,10 @@ button{touch-action:manipulation}
   .manager-customer-grid,.manager-control-grid{grid-template-columns:1fr}
   .manager-note{margin:0 13px 13px}
 }
+
+
+/* Pack ownership */
+.owner-select{border:1px solid #dfe5ee;background:#fff;color:#4d596c;border-radius:6px;padding:6px 8px;font-size:9px;max-width:145px;cursor:pointer}
+.review-owner{min-width:145px}
+.owner-select:focus{outline:2px solid #bfdbfe;outline-offset:1px}
+@media(max-width:650px){.owner-select{max-width:125px}.review-owner{min-width:125px}}
