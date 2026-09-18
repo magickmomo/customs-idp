@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity, AlertCircle, ArrowRight, Bot, CheckCircle2, ChevronDown, FileText,
@@ -33,14 +33,14 @@ function App(){
   const [agentOpen,setAgentOpen]=useState(true);
   const [query,setQuery]=useState("");
   const [toast,setToast]=useState("");
-  const [livePacks,setLivePacks]=useState(packs);
+  const [livePacks,setLivePacks]=useState(()=>{\n    try {\n      const saved=localStorage.getItem("customs-idp-packs");\n      return saved ? JSON.parse(saved) : packs;\n    } catch { return packs; }\n  });\n  useEffect(()=>{\n    try { localStorage.setItem("customs-idp-packs",JSON.stringify(livePacks)); } catch {}\n  },[livePacks]);
   const uploadRef=useRef(null);
 
   const handleUpload=async(files)=>{
     const selected=Array.from(files||[]);
     if(!selected.length) return;
     const file=selected[0];
-    const id=`PK-${10483+livePacks.length}`;
+    const highest=livePacks.reduce((max,p)=>Math.max(max,Number(String(p.id||"").replace("PK-",""))||0),10482);\n    const id=`PK-${highest+1}`;
     const newPack={id,customer:"Unassigned customer",docs:selected.length,status:"Processing",confidence:0,received:"Just now",ticket:`UPLOAD-${Date.now().toString().slice(-5)}`,uploadedFiles:selected.map(f=>({name:f.name,size:f.size,type:f.type}))};
     setLivePacks(prev=>[newPack,...prev]);
     setSelectedPack(newPack);
@@ -75,7 +75,7 @@ function App(){
 
   const filteredPacks=useMemo(()=>livePacks.filter(p=>
     [p.id,p.customer,p.status,p.ticket].join(" ").toLowerCase().includes(query.toLowerCase())
-  ),[query]);
+  ),[livePacks,query]);
 
   const navigate=(p)=>setPage(p);
   const notify=(msg)=>{setToast(msg);setTimeout(()=>setToast(""),2500)};
