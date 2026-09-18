@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity, AlertCircle, ArrowRight, Bot, CheckCircle2, ChevronDown, FileText,
@@ -33,8 +33,21 @@ function App(){
   const [agentOpen,setAgentOpen]=useState(true);
   const [query,setQuery]=useState("");
   const [toast,setToast]=useState("");
+  const [livePacks,setLivePacks]=useState(packs);
+  const uploadRef=useRef(null);
 
-  const filteredPacks=useMemo(()=>packs.filter(p=>
+  const handleUpload=(files)=>{
+    const selected=Array.from(files||[]);
+    if(!selected.length) return;
+    const id=`PK-${10483+livePacks.length}`;
+    const newPack={id,customer:"Unassigned customer",docs:selected.length,status:"Processing",confidence:0,received:"Just now",ticket:`UPLOAD-${Date.now().toString().slice(-5)}`,uploadedFiles:selected.map(f=>({name:f.name,size:f.size,type:f.type}))};
+    setLivePacks(prev=>[newPack,...prev]);
+    notify(`${selected.length} document${selected.length===1?"":"s"} uploaded — pack ${id} created`);
+    navigate("review");
+    setSelectedPack(newPack);
+  };
+
+  const filteredPacks=useMemo(()=>livePacks.filter(p=>
     [p.id,p.customer,p.status,p.ticket].join(" ").toLowerCase().includes(query.toLowerCase())
   ),[query]);
 
@@ -65,10 +78,11 @@ function App(){
         <div className="top-actions"><button className="icon-btn"><Mail size={18}/></button><div className="top-avatar">LW</div></div>
       </header>
 
+      <input ref={uploadRef} className="hidden-upload" type="file" multiple accept=".pdf,.xlsx,.xls,.doc,.docx,.csv,.png,.jpg,.jpeg,.eml,.msg" onChange={e=>handleUpload(e.target.files)}/>
       <div className="content">
         {page==="dashboard" && <Dashboard navigate={navigate} notify={notify}/>}
-        {page==="inbox" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{setSelectedPack(p);navigate("review")}}/>}
-        {page==="packs" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{setSelectedPack(p);navigate("review")}} title="Packs"/>}
+        {page==="inbox" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{setSelectedPack(p);navigate("review")}} onUpload={handleUpload}/>}
+        {page==="packs" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{setSelectedPack(p);navigate("review")}} title="Packs" onUpload={handleUpload}/>}
         {page==="review" && <Review pack={selectedPack} back={()=>navigate("inbox")} notify={notify}/>}
         {page==="customers" && <Customers notify={notify}/>}
         {page==="agent" && <AgentPage/>}
@@ -103,8 +117,8 @@ function Dashboard({navigate,notify}){
 function Metric({label,value,delta,icon:Icon,warning}){return <div className="metric"><div className={"metric-icon "+(warning?"warning":"")}><Icon size={19}/></div><div className="metric-copy"><span>{label}</span><strong>{value}</strong><small className={delta.startsWith("-")?"positive":""}>{delta}</small></div></div>}
 function Queue({label,value,pct,cls}){return <div className="queue"><div><span className={"queue-dot "+cls}></span><b>{label}</b><strong>{value}</strong></div><div className="progress"><i className={cls} style={{width:pct+"%"}}></i></div><small>{pct}%</small></div>}
 
-function InboxPage({packs,query,setQuery,openPack,title="Inbox"}){
- return <section><div className="page-head"><div><div className="eyebrow">Document processing</div><h1>{title}</h1><p>Review incoming document packs, extraction confidence and validation status.</p></div><button className="primary"><Plus size={17}/> New pack</button></div>
+function InboxPage({packs,query,setQuery,openPack,title="Inbox",onUpload}){
+ return <section><div className="page-head"><div><div className="eyebrow">Document processing</div><h1>{title}</h1><p>Review incoming document packs, extraction confidence and validation status.</p></div><button className="primary" onClick={onUpload}><Plus size={17}/> Upload documents</button></div>
  <div className="toolbar"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search packs, customers or tickets..."/></div><button className="filter">Status <ChevronDown size={15}/></button><button className="filter">Customer <ChevronDown size={15}/></button></div>
  <div className="panel"><PackTable packs={packs} onOpen={openPack}/></div></section>
 }
@@ -117,7 +131,7 @@ function Review({pack,back,notify}){
  const [tab,setTab]=useState("extraction");
  const [chat,setChat]=useState("");
  return <section><button className="back" onClick={back}>← Back to inbox</button><div className="review-head"><div><div className="eyebrow">{pack.id} · {pack.ticket}</div><h1>{pack.customer}</h1><p>{pack.docs} documents · received {pack.received}</p></div><div className="review-actions"><Status status={pack.status}/><button className="secondary" onClick={()=>notify("Pack marked as validated")}>Approve pack</button></div></div>
- <div className="review-layout"><div className="panel extraction-panel"><div className="tabs"><button className={tab==="extraction"?"selected":""} onClick={()=>setTab("extraction")}>Extracted data</button><button className={tab==="documents"?"selected":""} onClick={()=>setTab("documents")}>Documents ({pack.docs})</button><button className={tab==="json"?"selected":""} onClick={()=>setTab("json")}>Middleware JSON</button></div>{tab==="extraction"&&<><div className="data-summary"><div><span>Invoice total</span><b>£720.00</b></div><div><span>Gross mass</span><b>23.01 kg</b></div><div><span>Country export</span><b>HU</b></div><div><span>Delivery term</span><b>DDP · Maldon</b></div></div><div className="section-title"><div><h3>Invoice positions</h3><span>3 lines extracted · click a value to edit</span></div><button className="secondary" onClick={()=>notify("Extraction rule saved for this customer")}>Save corrections</button></div><div className="line-table"><table><thead><tr><th>#</th><th>DESCRIPTION</th><th>HS CODE</th><th>ORIGIN</th><th>QTY</th><th>NET KG</th><th>GROSS KG</th><th>VALUE</th><th></th></tr></thead><tbody>{sampleLines.map(l=><tr key={l.line}><td>{l.line}</td><td><b>{l.description}</b><small>{l.confidence}% confidence</small></td><td>{l.hs}</td><td><span className="country">{l.origin}</span></td><td>{l.qty}</td><td>{l.net}</td><td>{l.gross}</td><td>£{l.value}</td><td><MoreHorizontal size={16}/></td></tr>)}</tbody></table></div></>}{tab==="documents"&&<div className="doc-list">{["Commercial Invoice 88421.pdf","Packing List 88421.pdf","Certificate of Origin.pdf","Transport Document.pdf"].map((d,i)=><div className="doc-row" key={d}><FileText size={20}/><div><b>{d}</b><span>{i===0?"Extracted · 97% confidence":"Processed · ready to review"}</span></div><button className="secondary">Open</button></div>)}</div>}{tab==="json"&&<pre className="json">{"{\n  \"customerId\": \"ACME-001\",\n  \"identifier\": \"PK-10482\",\n  \"customerReference\": \"88421\",\n  \"customerCustomerNo\": \"ACME-UK\",\n  \"deliveryTerm_SAD20\": \"DDP\",\n  \"deliveryTermPlace_SAD20\": \"Maldon\",\n  \"countryOfExport_SAD15\": \"HU\",\n  \"countryOfDestination_SAD17\": \"GB\",\n  \"totalAmountInvoiced_SAD22\": 720.00,\n  \"totalAmountInvoicedCurrency_SAD22\": \"GBP\",\n  \"totalGrossMass\": 23.01,\n  \"ticketNo\": \"TK-88421\",\n  \"positions\": [...]\n}"}</pre>}</div>
+ <div className="review-layout"><div className="panel extraction-panel"><div className="tabs"><button className={tab==="extraction"?"selected":""} onClick={()=>setTab("extraction")}>Extracted data</button><button className={tab==="documents"?"selected":""} onClick={()=>setTab("documents")}>Documents ({pack.docs})</button><button className={tab==="json"?"selected":""} onClick={()=>setTab("json")}>Middleware JSON</button></div>{tab==="extraction"&&<><div className="data-summary"><div><span>Invoice total</span><b>£720.00</b></div><div><span>Gross mass</span><b>23.01 kg</b></div><div><span>Country export</span><b>HU</b></div><div><span>Delivery term</span><b>DDP · Maldon</b></div></div><div className="section-title"><div><h3>Invoice positions</h3><span>3 lines extracted · click a value to edit</span></div><button className="secondary" onClick={()=>notify("Extraction rule saved for this customer")}>Save corrections</button></div><div className="line-table"><table><thead><tr><th>#</th><th>DESCRIPTION</th><th>HS CODE</th><th>ORIGIN</th><th>QTY</th><th>NET KG</th><th>GROSS KG</th><th>VALUE</th><th></th></tr></thead><tbody>{sampleLines.map(l=><tr key={l.line}><td>{l.line}</td><td><b>{l.description}</b><small>{l.confidence}% confidence</small></td><td>{l.hs}</td><td><span className="country">{l.origin}</span></td><td>{l.qty}</td><td>{l.net}</td><td>{l.gross}</td><td>£{l.value}</td><td><MoreHorizontal size={16}/></td></tr>)}</tbody></table></div></>}{tab==="documents"&&<div className="doc-list">{(pack.uploadedFiles?.length?pack.uploadedFiles.map(f=>f.name):["Commercial Invoice 88421.pdf","Packing List 88421.pdf","Certificate of Origin.pdf","Transport Document.pdf"]).map((d,i)=><div className="doc-row" key={d}><FileText size={20}/><div><b>{d}</b><span>{pack.uploadedFiles?.length?"Uploaded · awaiting extraction":"Extracted · 97% confidence"}</span></div><button className="secondary" onClick={()=>notify(`Document selected: ${d}`)}>Open</button></div>)}</div>}{tab==="json"&&<pre className="json">{"{\n  \"customerId\": \"ACME-001\",\n  \"identifier\": \"PK-10482\",\n  \"customerReference\": \"88421\",\n  \"customerCustomerNo\": \"ACME-UK\",\n  \"deliveryTerm_SAD20\": \"DDP\",\n  \"deliveryTermPlace_SAD20\": \"Maldon\",\n  \"countryOfExport_SAD15\": \"HU\",\n  \"countryOfDestination_SAD17\": \"GB\",\n  \"totalAmountInvoiced_SAD22\": 720.00,\n  \"totalAmountInvoicedCurrency_SAD22\": \"GBP\",\n  \"totalGrossMass\": 23.01,\n  \"ticketNo\": \"TK-88421\",\n  \"positions\": [...]\n}"}</pre>}</div>
  <aside className="agent-panel"><div className="agent-title"><div className="agent-orb"><Sparkles size={18}/></div><div><b>Extraction Agent</b><span>Online · customer-aware</span></div></div><div className="agent-insight"><Sparkles size={15}/><div><b>Validation complete</b><p>I found 1 field that may need review: the gross mass was apportioned across the three lines using the configured net-weight ratio.</p></div></div><div className="agent-rule"><span>Applied customer rule</span><b>Gross weight apportionment</b><small>Net-weight ratio · Bancale Legno excluded from net weight</small></div><div className="chat"><div className="message agent">I can correct extracted fields, explain why a value was chosen, or save a correction as a customer rule.</div><div className="chat-input"><input value={chat} onChange={e=>setChat(e.target.value)} placeholder="Ask the agent to change something..."/><button onClick={()=>{setChat("");notify("Agent request queued")}}><ArrowRight size={16}/></button></div></div></aside></div></section>
 }
 
