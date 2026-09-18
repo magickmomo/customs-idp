@@ -54,3 +54,5 @@ button{touch-action:manipulation}
   .review-actions{gap:8px}
   .review-actions .secondary{padding:8px 10px}
 }
+
+.doc-preview-overlay{position:fixed;inset:0;background:rgba(10,18,30,.72);display:flex;align-items:center;justify-content:center;padding:24px;z-index:1000}.doc-preview{width:min(1100px,96vw);height:min(850px,92vh);background:#fff;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.3)}.doc-preview-head{height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 14px 0 20px;border-bottom:1px solid #e6eaf0}.doc-preview iframe{border:0;flex:1;width:100%;background:#f4f6f8}
