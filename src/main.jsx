@@ -33,7 +33,15 @@ function App(){
   const [agentOpen,setAgentOpen]=useState(true);
   const [query,setQuery]=useState("");
   const [toast,setToast]=useState("");
-  const [livePacks,setLivePacks]=useState(()=>{\n    try {\n      const saved=localStorage.getItem("customs-idp-packs");\n      return saved ? JSON.parse(saved) : packs;\n    } catch { return packs; }\n  });\n  useEffect(()=>{\n    try { localStorage.setItem("customs-idp-packs",JSON.stringify(livePacks)); } catch {}\n  },[livePacks]);
+  const [livePacks,setLivePacks]=useState(()=>{
+    try {
+      const saved=localStorage.getItem("customs-idp-packs");
+      return saved ? JSON.parse(saved) : packs;
+    } catch { return packs; }
+  });
+  useEffect(()=>{
+    try { localStorage.setItem("customs-idp-packs",JSON.stringify(livePacks)); } catch {}
+  },[livePacks]);
   const uploadRef=useRef(null);
 
   const handleUpload=async(files)=>{
