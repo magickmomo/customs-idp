@@ -95,7 +95,7 @@ function App(){
       <div className="workspace"><div className="avatar">LW</div><div><b>Customs Operations</b><span>Production</span></div><ChevronDown size={15}/></div>
       <nav>
         <NavItem icon={LayoutDashboard} label="Dashboard" active={page==="dashboard"} onClick={()=>navigate("dashboard")}/>
-        <NavItem icon={Inbox} label="Inbox" badge="4" active={page==="inbox"} onClick={()=>navigate("inbox")}/>
+        <NavItem icon={Inbox} label="Inbox" badge={livePacks.length} active={page==="inbox"} onClick={()=>navigate("inbox")}/>
         <NavItem icon={Package} label="Packs" active={page==="packs"} onClick={()=>navigate("packs")}/>
         <NavItem icon={Users} label="Customers" active={page==="customers"} onClick={()=>navigate("customers")}/>
         <NavItem icon={Bot} label="AI Agent" active={page==="agent"} onClick={()=>navigate("agent")}/>
