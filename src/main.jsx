@@ -44,14 +44,31 @@ function App(){
   const [query,setQuery]=useState("");
   const [toast,setToast]=useState("");
   const [livePacks,setLivePacks]=useState(()=>{
-    try {
-      const saved=localStorage.getItem("customs-idp-packs");
-      return saved ? JSON.parse(saved) : packs;
-    } catch { return packs; }
+    try { const saved=localStorage.getItem("customs-idp-packs"); return saved ? JSON.parse(saved) : packs; }
+    catch { return packs; }
   });
+  const [dataSource,setDataSource]=useState("local");
   useEffect(()=>{
-    try { localStorage.setItem("customs-idp-packs",JSON.stringify(livePacks)); } catch {}
-  },[livePacks]);
+    let active=true;
+    (async()=>{
+      try {
+        const response=await fetch("/api/packs");
+        if(!response.ok) throw new Error("Database unavailable");
+        const data=await response.json();
+        if(active && Array.isArray(data.packs) && data.packs.length){ setLivePacks(data.packs); setDataSource("database"); }
+      } catch { /* keep local prototype data until database credentials are configured */ }
+    })();
+    return()=>{active=false;};
+  },[]);
+  useEffect(()=>{ try { localStorage.setItem("customs-idp-packs",JSON.stringify(livePacks)); } catch {} },[livePacks]);
+  const persistPack=async(pack)=>{
+    try{
+      const response=await fetch("/api/packs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pack)});
+      if(!response.ok) throw new Error("Database save failed");
+      setDataSource("database");
+      return true;
+    }catch{return false;}
+  };
   const uploadRef=useRef(null);
 
   const handleUpload=async(files)=>{
@@ -63,6 +80,7 @@ function App(){
     const newPack={id,customer:"Unassigned customer",docs:selected.length,status:"Processing",confidence:0,received:"Just now",ticket:`UPLOAD-${Date.now().toString().slice(-5)}`,assignedTo:"Liam Wingrove",uploadedFiles:selected.map((f,index)=>({id:`${id}-${index}`,name:f.name,size:f.size,type:f.type}))};
     await Promise.all(selected.map((f,index)=>saveUploadedDocument(`${id}-${index}`,f)));
     setLivePacks(prev=>[newPack,...prev]);
+    persistPack(newPack);
     setSelectedPack(newPack);
     navigate("review");
     notify("Document uploaded — AI extraction started");
@@ -84,11 +102,13 @@ function App(){
       const processed={...newPack,status:"Needs review",confidence:Math.round((result.extraction.confidence||0)*100),extractedData:result.extraction};
       setSelectedPack(processed);
       setLivePacks(prev=>prev.map(p=>p.id===id?processed:p));
+      persistPack(processed);
       notify("AI extraction complete — review the extracted data");
     } catch(error) {
       const failed={...newPack,status:"Needs review",processingError:error.message};
       setSelectedPack(failed);
       setLivePacks(prev=>prev.map(p=>p.id===id?failed:p));
+      persistPack(failed);
       notify("Extraction failed — check the pack for details");
     }
   };
@@ -99,12 +119,12 @@ function App(){
 
   const navigate=(p)=>{setPage(p);setMobileMenuOpen(false);};
   const notify=(msg)=>{setToast(msg);setTimeout(()=>setToast(""),2500)};
-  const assignPack=(packId,assignedTo)=>{setLivePacks(prev=>prev.map(p=>p.id===packId?{...p,assignedTo}:p));if(selectedPack?.id===packId)setSelectedPack(prev=>({...prev,assignedTo}));notify(`Pack ${packId} assigned to ${assignedTo}`)};
+  const assignPack=(packId,assignedTo)=>{const updated={...livePacks.find(p=>p.id===packId),assignedTo};setLivePacks(prev=>prev.map(p=>p.id===packId?updated:p));if(selectedPack?.id===packId)setSelectedPack(prev=>({...prev,assignedTo}));persistPack(updated);notify(`Pack ${packId} assigned to ${assignedTo}`)};
 
   return <div className={"app-shell "+(sidebarCollapsed?"sidebar-collapsed":"")}>
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div>
-      <div className="workspace"><div className="avatar">LW</div><div><b>Customs Operations</b><span>Production</span></div><ChevronDown size={15}/></div>
+      <div className="workspace"><div className="avatar">LW</div><div><b>Customs Operations</b><span>{dataSource==="database"?"Database connected":"Prototype storage"}</span></div><ChevronDown size={15}/></div>
       <nav>
         <NavItem icon={Inbox} label="Inbox" badge={livePacks.length} active={page==="inbox"} onClick={()=>navigate("inbox")}/>
         {canViewManager && <NavItem icon={Activity} label="Manager" active={page==="manager"} onClick={()=>navigate("manager")}/>}
@@ -118,7 +138,7 @@ function App(){
     </aside>
     <button className="sidebar-collapse-btn" aria-label={sidebarCollapsed?"Expand sidebar":"Collapse sidebar"} onClick={()=>setSidebarCollapsed(v=>!v)}>{sidebarCollapsed?<ChevronRight size={17}/>:<ChevronLeft size={17}/>}</button>
 
-    {mobileMenuOpen && <div className="mobile-menu-overlay" onClick={()=>setMobileMenuOpen(false)}><aside className="mobile-menu" onClick={e=>e.stopPropagation()}><div className="mobile-menu-head"><div className="brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><button className="icon-btn" aria-label="Close navigation" onClick={()=>setMobileMenuOpen(false)}><X size={20}/></button></div><div className="mobile-workspace"><div className="avatar">LW</div><div><b>Customs Operations</b><span>Production</span></div></div><nav><NavItem icon={Inbox} label="Inbox" badge={livePacks.length} active={page==="inbox"} onClick={()=>navigate("inbox")}/>{canViewManager && <NavItem icon={Activity} label="Manager" active={page==="manager"} onClick={()=>navigate("manager")}/>}<NavItem icon={Users} label="Customers" active={page==="customers"} onClick={()=>navigate("customers")}/><NavItem icon={Bot} label="AI Agent" active={page==="agent"} onClick={()=>navigate("agent")}/><NavItem icon={Settings} label="Settings" active={page==="settings"} onClick={()=>navigate("settings")}/></nav><div className="mobile-system-status"><span className="dot"></span><div><b>All systems operational</b><span>Last sync 16:02</span></div></div></aside></div>}
+    {mobileMenuOpen && <div className="mobile-menu-overlay" onClick={()=>setMobileMenuOpen(false)}><aside className="mobile-menu" onClick={e=>e.stopPropagation()}><div className="mobile-menu-head"><div className="brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><button className="icon-btn" aria-label="Close navigation" onClick={()=>setMobileMenuOpen(false)}><X size={20}/></button></div><div className="mobile-workspace"><div className="avatar">LW</div><div><b>Customs Operations</b><span>{dataSource==="database"?"Database connected":"Prototype storage"}</span></div></div><nav><NavItem icon={Inbox} label="Inbox" badge={livePacks.length} active={page==="inbox"} onClick={()=>navigate("inbox")}/>{canViewManager && <NavItem icon={Activity} label="Manager" active={page==="manager"} onClick={()=>navigate("manager")}/>}<NavItem icon={Users} label="Customers" active={page==="customers"} onClick={()=>navigate("customers")}/><NavItem icon={Bot} label="AI Agent" active={page==="agent"} onClick={()=>navigate("agent")}/><NavItem icon={Settings} label="Settings" active={page==="settings"} onClick={()=>navigate("settings")}/></nav><div className="mobile-system-status"><span className="dot"></span><div><b>All systems operational</b><span>Last sync 16:02</span></div></div></aside></div>}
 
     <main className="main">
       <header className="topbar">
@@ -132,7 +152,8 @@ function App(){
         {page==="dashboard" && <Dashboard navigate={navigate} notify={notify} livePacks={livePacks}/>}
         {page==="inbox" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{setSelectedPack(p);navigate("review")}} onUpload={handleUpload}/>}
         
-        {page==="review" && <Review pack={selectedPack} back={()=>navigate("inbox")} notify={notify} onAssign={assignPack} approvePack={()=>{const approved={...selectedPack,status:"Validated"};setSelectedPack(approved);setLivePacks(prev=>prev.map(p=>p.id===approved.id?approved:p));notify("Pack approved and validated");navigate("inbox");}}/>}
+        {page==="review" && <Review pack={selectedPack} back={()=>navigate("inbox")} notify={notify} onAssign={assignPack} approvePack={()=>{const approved={...selectedPack,status:"Validated"};setSelectedPack(approved);setLivePacks(prev=>prev.map(p=>p.id===approved.id?approved:p));
+      persistPack(approved);notify("Pack approved and validated");navigate("inbox");}}/>}
         {page==="customers" && <Customers notify={notify}/>}
         {page==="agent" && <AgentPage/>}
         {page==="settings" && <SettingsPage/>}
@@ -178,7 +199,7 @@ function ManagerPage({livePacks}){
  const team=["Liam Wingrove","Michael Houston","Sophie Wingrove"].map(name=>{const rows=livePacks.filter(p=>p.assignedTo===name);const docs=rows.reduce((n,p)=>n+(Number(p.docs)||0),0);const reviews=rows.filter(p=>p.status==="Needs review").length;const conf=rows.length?Math.round(rows.reduce((n,p)=>n+(Number(p.confidence)||0),0)/rows.length):0;return {name,role:name==="Liam Wingrove"?"IDP Project Lead":"Data Processor",packs:rows.length,docs,reviews,confidence:rows.length?conf+"%":"—"};});
  const unassigned=livePacks.filter(p=>!p.assignedTo||p.assignedTo==="Unassigned").length;
  const customersLive=[...new Set(livePacks.map(p=>p.customer).filter(Boolean))];
- return <section><div className="page-head"><div><div className="eyebrow">Management · operational intelligence</div><h1>Manager</h1><p>Live operational metrics from the packs currently stored in this browser.</p></div><span className="online-pill"><span></span> Live platform</span></div>
+ return <section><div className="page-head"><div><div className="eyebrow">Management · operational intelligence</div><h1>Manager</h1><p>Live operational metrics from the packs currently stored in this browser.</p></div><span className="online-pill"><span></span> {dataSource==="database"?"Database connected":"Prototype storage"}</span></div>
  <div className="metric-grid"><Metric label="Packs processed" value={totalPacks.toLocaleString()} delta={validated+" validated"} icon={Package}/><Metric label="Documents processed" value={totalDocuments.toLocaleString()} delta="Across current packs" icon={FileText}/><Metric label="Average AI confidence" value={avgConfidence+"%"} delta={totalPacks?"Current loaded packs":"No live packs"} icon={Sparkles}/><Metric label="Human review queue" value={review.toLocaleString()} delta={processing+" still processing"} icon={AlertCircle} warning={review>0}/></div>
  <div className="manager-grid"><div className="panel"><div className="panel-head"><div><h2>Team performance</h2><p>Live metrics based on pack ownership</p></div></div><div className="manager-table-wrap"><table><thead><tr><th>TEAM MEMBER</th><th>ROLE</th><th>PACKS</th><th>DOCUMENTS</th><th>REVIEWS</th><th>AVG CONF.</th></tr></thead><tbody>{team.map(m=><tr key={m.name}><td><b>{m.name}</b></td><td>{m.role}</td><td>{m.packs}</td><td>{m.docs}</td><td>{m.reviews}</td><td>{m.confidence}</td></tr>)}</tbody></table></div><div className="manager-note"><ShieldCheck size={15}/><span>Metrics update immediately when a pack is assigned in Inbox. {unassigned?unassigned+" pack"+(unassigned===1?" is":"s are")+" currently unassigned.":"All current packs have an owner."}</span></div></div>
  <div className="panel"><div className="panel-head"><div><h2>Platform health</h2><p>Current workload across the operation</p></div></div><div className="queue-list"><Queue label="Validated" value={validated} pct={totalPacks?((validated/totalPacks)*100).toFixed(1):"0.0"} cls="good"/><Queue label="Processing" value={processing} pct={totalPacks?((processing/totalPacks)*100).toFixed(1):"0.0"} cls="blue"/><Queue label="Needs review" value={review} pct={totalPacks?((review/totalPacks)*100).toFixed(1):"0.0"} cls="warn"/></div></div></div>
