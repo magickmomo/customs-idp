@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  Activity, AlertCircle, ArrowRight, Bot, CheckCircle2, ChevronDown, FileText,
+  Activity, AlertCircle, ArrowRight, Bot, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, FileText,
   Inbox, LayoutDashboard, Mail, Menu, MoreHorizontal, Package, Plus, Search,
   Settings, ShieldCheck, Sparkles, Users, X, Zap
 } from "lucide-react";
@@ -38,6 +38,7 @@ function App(){
   const [selectedPack,setSelectedPack]=useState(packs[0]);
   const [agentOpen,setAgentOpen]=useState(true);
   const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
+  const [sidebarCollapsed,setSidebarCollapsed]=useState(false);
   const [query,setQuery]=useState("");
   const [toast,setToast]=useState("");
   const [livePacks,setLivePacks]=useState(()=>{
@@ -97,7 +98,7 @@ function App(){
   const navigate=(p)=>{setPage(p);setMobileMenuOpen(false);};
   const notify=(msg)=>{setToast(msg);setTimeout(()=>setToast(""),2500)};
 
-  return <div className="app-shell">
+  return <div className={"app-shell "+(sidebarCollapsed?"sidebar-collapsed":"")}>
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div>
       <div className="workspace"><div className="avatar">LW</div><div><b>Customs Operations</b><span>Production</span></div><ChevronDown size={15}/></div>
@@ -112,6 +113,7 @@ function App(){
         <NavItem icon={Settings} label="Settings" active={page==="settings"} onClick={()=>navigate("settings")}/>
         <div className="system-status"><span className="dot"></span><div><b>All systems operational</b><span>Last sync 16:02</span></div></div>
       </div>
+      <button className="sidebar-collapse-btn" aria-label={sidebarCollapsed?"Expand sidebar":"Collapse sidebar"} onClick={()=>setSidebarCollapsed(v=>!v)}>{sidebarCollapsed?<ChevronRight size={17}/>:<ChevronLeft size={17}/>}</button>
     </aside>
 
     {mobileMenuOpen && <div className="mobile-menu-overlay" onClick={()=>setMobileMenuOpen(false)}><aside className="mobile-menu" onClick={e=>e.stopPropagation()}><div className="mobile-menu-head"><div className="brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><button className="icon-btn" aria-label="Close navigation" onClick={()=>setMobileMenuOpen(false)}><X size={20}/></button></div><div className="mobile-workspace"><div className="avatar">LW</div><div><b>Customs Operations</b><span>Production</span></div></div><nav><NavItem icon={LayoutDashboard} label="Dashboard" active={page==="dashboard"} onClick={()=>navigate("dashboard")}/><NavItem icon={Inbox} label="Inbox" badge={livePacks.length} active={page==="inbox"} onClick={()=>navigate("inbox")}/><NavItem icon={Package} label="Packs" active={page==="packs"} onClick={()=>navigate("packs")}/><NavItem icon={Users} label="Customers" active={page==="customers"} onClick={()=>navigate("customers")}/><NavItem icon={Bot} label="AI Agent" active={page==="agent"} onClick={()=>navigate("agent")}/><NavItem icon={Settings} label="Settings" active={page==="settings"} onClick={()=>navigate("settings")}/></nav><div className="mobile-system-status"><span className="dot"></span><div><b>All systems operational</b><span>Last sync 16:02</span></div></div></aside></div>}
