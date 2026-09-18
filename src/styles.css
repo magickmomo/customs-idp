@@ -76,3 +76,25 @@ button{touch-action:manipulation}
   .mobile-menu{animation:mobileMenuIn .18s ease-out}
 }
 @keyframes mobileMenuIn{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+
+.sidebar-collapse-btn{position:absolute;right:-13px;top:78px;width:28px;height:28px;border:1px solid #dbe2ec;background:#fff;color:#526176;border-radius:50%;display:grid;place-items:center;cursor:pointer;box-shadow:0 3px 12px rgba(15,23,42,.12);z-index:20}
+.sidebar-collapse-btn:hover{color:#2563eb;border-color:#b9c8dd}
+.sidebar-collapsed .sidebar{width:74px;padding-left:10px;padding-right:10px}
+.sidebar-collapsed .main{margin-left:74px;width:calc(100% - 74px)}
+.sidebar-collapsed .brand>div:last-child,
+.sidebar-collapsed .workspace>div:nth-child(2),
+.sidebar-collapsed .workspace>svg,
+.sidebar-collapsed .nav-item span,
+.sidebar-collapsed .nav-item em,
+.sidebar-collapsed .system-status>div{display:none}
+.sidebar-collapsed .brand{justify-content:center;padding-left:0;padding-right:0}
+.sidebar-collapsed .workspace{justify-content:center;padding:9px 5px}
+.sidebar-collapsed .nav-item{justify-content:center;padding-left:8px;padding-right:8px}
+.sidebar-collapsed .side-bottom .nav-item{justify-content:center}
+.sidebar-collapsed .system-status{justify-content:center;padding:10px 5px}
+.sidebar-collapsed .sidebar-collapse-btn{right:-14px}
+@media(max-width:650px){
+  .sidebar-collapse-btn{display:none}
+  .sidebar-collapsed .sidebar{display:none}
+  .sidebar-collapsed .main{margin-left:0;width:100%}
+}
