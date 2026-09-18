@@ -108,7 +108,7 @@ The downstream system will later apply customer-specific rules and middleware ma
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: "gpt-5",
+        model: "gpt-5.6-luna",
         input: [{ role: "user", content }],
         text: {
           format: {
@@ -126,7 +126,7 @@ The downstream system will later apply customer-specific rules and middleware ma
       return res.status(response.status).json({ error: data?.error?.message || "OpenAI extraction failed." });
     }
 
-    const textOutput = data.output?.flatMap(item => item.content || [])
+    const textOutput = data.output_text || data.output?.flatMap(item => item.content || [])
       .find(item => item.type === "output_text")?.text;
 
     if (!textOutput) {
