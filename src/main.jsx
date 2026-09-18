@@ -37,6 +37,7 @@ function App(){
   const [page,setPage]=useState("dashboard");
   const [selectedPack,setSelectedPack]=useState(packs[0]);
   const [agentOpen,setAgentOpen]=useState(true);
+  const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
   const [query,setQuery]=useState("");
   const [toast,setToast]=useState("");
   const [livePacks,setLivePacks]=useState(()=>{
@@ -93,7 +94,7 @@ function App(){
     [p.id,p.customer,p.status,p.ticket].join(" ").toLowerCase().includes(query.toLowerCase())
   ),[livePacks,query]);
 
-  const navigate=(p)=>setPage(p);
+  const navigate=(p)=>{setPage(p);setMobileMenuOpen(false);};
   const notify=(msg)=>{setToast(msg);setTimeout(()=>setToast(""),2500)};
 
   return <div className="app-shell">
@@ -113,11 +114,13 @@ function App(){
       </div>
     </aside>
 
+    {mobileMenuOpen && <div className="mobile-menu-overlay" onClick={()=>setMobileMenuOpen(false)}><aside className="mobile-menu" onClick={e=>e.stopPropagation()}><div className="mobile-menu-head"><div className="brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><button className="icon-btn" aria-label="Close navigation" onClick={()=>setMobileMenuOpen(false)}><X size={20}/></button></div><div className="mobile-workspace"><div className="avatar">LW</div><div><b>Customs Operations</b><span>Production</span></div></div><nav><NavItem icon={LayoutDashboard} label="Dashboard" active={page==="dashboard"} onClick={()=>navigate("dashboard")}/><NavItem icon={Inbox} label="Inbox" badge={livePacks.length} active={page==="inbox"} onClick={()=>navigate("inbox")}/><NavItem icon={Package} label="Packs" active={page==="packs"} onClick={()=>navigate("packs")}/><NavItem icon={Users} label="Customers" active={page==="customers"} onClick={()=>navigate("customers")}/><NavItem icon={Bot} label="AI Agent" active={page==="agent"} onClick={()=>navigate("agent")}/><NavItem icon={Settings} label="Settings" active={page==="settings"} onClick={()=>navigate("settings")}/></nav><div className="mobile-system-status"><span className="dot"></span><div><b>All systems operational</b><span>Last sync 16:02</span></div></div></aside></div>}
+
     <main className="main">
       <header className="topbar">
-        <div className="mobile-brand"><Menu size={20}/><strong>Customs IDP</strong></div>
+        <button className="mobile-menu-btn" aria-label="Open navigation" onClick={()=>setMobileMenuOpen(true)}><Menu size={20}/></button><div className="mobile-brand"><strong>Customs IDP</strong></div>
         <div className="crumb">Operations <span>/</span> {page[0].toUpperCase()+page.slice(1)}</div>
-        <div className="top-actions"><button className="icon-btn"><Mail size={18}/></button><div className="top-avatar">LW</div></div>
+        <div className="top-actions"><button className="icon-btn" aria-label="Open inbox" onClick={()=>navigate("inbox")}><Mail size={18}/></button><div className="top-avatar">LW</div></div>
       </header>
 
       <input ref={uploadRef} className="hidden-upload" type="file" multiple accept=".pdf,.xlsx,.xls,.doc,.docx,.csv,.png,.jpg,.jpeg,.eml,.msg" onChange={e=>handleUpload(e.target.files)}/>
