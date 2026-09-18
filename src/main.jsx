@@ -57,7 +57,8 @@ function App(){
     const highest=livePacks.reduce((max,p)=>Math.max(max,Number(String(p.id||"").replace("PK-",""))||0),10482);
     const id=`PK-${highest+1}`;
     const newPack={id,customer:"Unassigned customer",docs:selected.length,status:"Processing",confidence:0,received:"Just now",ticket:`UPLOAD-${Date.now().toString().slice(-5)}`,uploadedFiles:selected.map((f,index)=>({id:`${id}-${index}`,name:f.name,size:f.size,type:f.type}))};
-    await Promise.all(selected.map((f,index)=>saveUploadedDocument(`${id}-${index}`,f)));\n    setLivePacks(prev=>[newPack,...prev]);
+    await Promise.all(selected.map((f,index)=>saveUploadedDocument(`${id}-${index}`,f)));
+    setLivePacks(prev=>[newPack,...prev]);
     setSelectedPack(newPack);
     navigate("review");
     notify("Document uploaded — AI extraction started");
