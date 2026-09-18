@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity, AlertCircle, ArrowRight, Bot, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, FileText,
-  Inbox, LayoutDashboard, Mail, Menu, MoreHorizontal, Package, Plus, Search,
+  Inbox, Mail, Menu, MoreHorizontal, Package, Plus, Search,
   Settings, ShieldCheck, Sparkles, Users, X, Zap
 } from "lucide-react";
 import "./styles.css";
@@ -34,11 +34,11 @@ const sampleLines = [
 ];
 
 function App(){
-  const [page,setPage]=useState("dashboard");
+  const [page,setPage]=useState("inbox");
   const [selectedPack,setSelectedPack]=useState(packs[0]);
   const [agentOpen,setAgentOpen]=useState(true);
   const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
-  const [sidebarCollapsed,setSidebarCollapsed]=useState(false);
+  const [sidebarCollapsed,setSidebarCollapsed]=useState(false);\n  const currentUserRole="manager";\n  const canViewManager=currentUserRole==="manager" || currentUserRole==="admin";
   const [query,setQuery]=useState("");
   const [toast,setToast]=useState("");
   const [livePacks,setLivePacks]=useState(()=>{
@@ -103,9 +103,8 @@ function App(){
       <div className="brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div>
       <div className="workspace"><div className="avatar">LW</div><div><b>Customs Operations</b><span>Production</span></div><ChevronDown size={15}/></div>
       <nav>
-        <NavItem icon={LayoutDashboard} label="Dashboard" active={page==="dashboard"} onClick={()=>navigate("dashboard")}/>
         <NavItem icon={Inbox} label="Inbox" badge={livePacks.length} active={page==="inbox"} onClick={()=>navigate("inbox")}/>
-        
+        {canViewManager && <NavItem icon={Activity} label="Manager" active={page==="manager"} onClick={()=>navigate("manager")}/>}
         <NavItem icon={Users} label="Customers" active={page==="customers"} onClick={()=>navigate("customers")}/>
         <NavItem icon={Bot} label="AI Agent" active={page==="agent"} onClick={()=>navigate("agent")}/>
       </nav>
@@ -116,7 +115,7 @@ function App(){
     </aside>
     <button className="sidebar-collapse-btn" aria-label={sidebarCollapsed?"Expand sidebar":"Collapse sidebar"} onClick={()=>setSidebarCollapsed(v=>!v)}>{sidebarCollapsed?<ChevronRight size={17}/>:<ChevronLeft size={17}/>}</button>
 
-    {mobileMenuOpen && <div className="mobile-menu-overlay" onClick={()=>setMobileMenuOpen(false)}><aside className="mobile-menu" onClick={e=>e.stopPropagation()}><div className="mobile-menu-head"><div className="brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><button className="icon-btn" aria-label="Close navigation" onClick={()=>setMobileMenuOpen(false)}><X size={20}/></button></div><div className="mobile-workspace"><div className="avatar">LW</div><div><b>Customs Operations</b><span>Production</span></div></div><nav><NavItem icon={LayoutDashboard} label="Dashboard" active={page==="dashboard"} onClick={()=>navigate("dashboard")}/><NavItem icon={Inbox} label="Inbox" badge={livePacks.length} active={page==="inbox"} onClick={()=>navigate("inbox")}/><NavItem icon={Package} label="Packs" active={page==="packs"} onClick={()=>navigate("packs")}/><NavItem icon={Users} label="Customers" active={page==="customers"} onClick={()=>navigate("customers")}/><NavItem icon={Bot} label="AI Agent" active={page==="agent"} onClick={()=>navigate("agent")}/><NavItem icon={Settings} label="Settings" active={page==="settings"} onClick={()=>navigate("settings")}/></nav><div className="mobile-system-status"><span className="dot"></span><div><b>All systems operational</b><span>Last sync 16:02</span></div></div></aside></div>}
+    {mobileMenuOpen && <div className="mobile-menu-overlay" onClick={()=>setMobileMenuOpen(false)}><aside className="mobile-menu" onClick={e=>e.stopPropagation()}><div className="mobile-menu-head"><div className="brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><button className="icon-btn" aria-label="Close navigation" onClick={()=>setMobileMenuOpen(false)}><X size={20}/></button></div><div className="mobile-workspace"><div className="avatar">LW</div><div><b>Customs Operations</b><span>Production</span></div></div><nav><NavItem icon={Inbox} label="Inbox" badge={livePacks.length} active={page==="inbox"} onClick={()=>navigate("inbox")}/>{canViewManager && <NavItem icon={Activity} label="Manager" active={page==="manager"} onClick={()=>navigate("manager")}/>}<NavItem icon={Users} label="Customers" active={page==="customers"} onClick={()=>navigate("customers")}/><NavItem icon={Bot} label="AI Agent" active={page==="agent"} onClick={()=>navigate("agent")}/><NavItem icon={Settings} label="Settings" active={page==="settings"} onClick={()=>navigate("settings")}/></nav><div className="mobile-system-status"><span className="dot"></span><div><b>All systems operational</b><span>Last sync 16:02</span></div></div></aside></div>}
 
     <main className="main">
       <header className="topbar">
@@ -166,6 +165,44 @@ function Dashboard({navigate,notify,livePacks}){
     <div className="panel"><div className="panel-head"><div><h2>Extraction health</h2><p>Based on live packs currently loaded</p></div></div><div className="queue-list"><Queue label="Average confidence" value={avgConfidence+"%"} pct={avgConfidence} cls="good"/><Queue label="Documents" value={totalDocuments} pct={100} cls="blue"/><Queue label="Packs requiring attention" value={review} pct={totalPacks?((review/totalPacks)*100).toFixed(1):"0.0"} cls="warn"/></div><button className="text-btn" onClick={()=>navigate("agent")}>Open AI Agent <ArrowRight size={15}/></button></div>
   </div>
   <div className="panel recent"><div className="panel-head"><div><h2>Recent live packs</h2><p>Latest packs currently in the operation</p></div><button className="text-btn" onClick={()=>navigate("inbox")}>View inbox <ArrowRight size={15}/></button></div><PackTable packs={recent} onOpen={(p)=>{navigate("inbox")}}/></div>
+ </section>
+}
+
+function ManagerPage({livePacks}){
+ const totalPacks=livePacks.length;
+ const totalDocuments=livePacks.reduce((n,p)=>n+(Number(p.docs)||0),0);
+ const validated=livePacks.filter(p=>p.status==="Validated").length;
+ const review=livePacks.filter(p=>p.status==="Needs review").length;
+ const processing=livePacks.filter(p=>p.status==="Processing").length;
+ const avgConfidence=totalPacks?Math.round(livePacks.reduce((n,p)=>n+(Number(p.confidence)||0),0)/totalPacks):0;
+ const team=[
+  {name:"Liam Wingrove",role:"IDP Project Lead",packs:"—",docs:"—",review:"—",confidence:"—"},
+  {name:"Michael Houston",role:"Data Processor",packs:"—",docs:"—",review:"—",confidence:"—"},
+  {name:"Sophie Wingrove",role:"Data Processor",packs:"—",docs:"—",review:"—",confidence:"—"}
+ ];
+ const customersLive=[...new Set(livePacks.map(p=>p.customer).filter(Boolean))];
+ return <section>
+  <div className="page-head"><div><div className="eyebrow">Management · operational intelligence</div><h1>Manager</h1><p>Platform-wide processing and team performance. Team-level figures become live when pack ownership is assigned.</p></div><span className="online-pill"><span></span> Live platform</span></div>
+  <div className="metric-grid">
+   <Metric label="Packs processed" value={totalPacks.toLocaleString()} delta="Current platform inbox" icon={Package}/>
+   <Metric label="Documents processed" value={totalDocuments.toLocaleString()} delta="Across current packs" icon={FileText}/>
+   <Metric label="Average AI confidence" value={avgConfidence+"%"} delta={totalPacks?"Current loaded packs":"No live packs"} icon={Sparkles}/>
+   <Metric label="Human review queue" value={review.toLocaleString()} delta={processing+" still processing"} icon={AlertCircle} warning={review>0}/>
+  </div>
+  <div className="manager-grid">
+   <div className="panel"><div className="panel-head"><div><h2>Team performance</h2><p>Processor-level operational metrics</p></div></div>
+    <div className="manager-table-wrap"><table><thead><tr><th>TEAM MEMBER</th><th>ROLE</th><th>PACKS</th><th>DOCUMENTS</th><th>REVIEWS</th><th>AVG CONF.</th></tr></thead><tbody>{team.map(m=><tr key={m.name}><td><b>{m.name}</b></td><td>{m.role}</td><td>{m.packs}</td><td>{m.docs}</td><td>{m.review}</td><td>{m.confidence}</td></tr>)}</tbody></table></div>
+    <div className="manager-note"><ShieldCheck size={15}/><span>Ownership tracking is ready for these metrics. Assign each pack to a processor when the processing workflow is connected to the production data store.</span></div>
+   </div>
+   <div className="panel"><div className="panel-head"><div><h2>Platform health</h2><p>Current workload across the operation</p></div></div>
+    <div className="queue-list"><Queue label="Validated" value={validated} pct={totalPacks?((validated/totalPacks)*100).toFixed(1):"0.0"} cls="good"/><Queue label="Processing" value={processing} pct={totalPacks?((processing/totalPacks)*100).toFixed(1):"0.0"} cls="blue"/><Queue label="Needs review" value={review} pct={totalPacks?((review/totalPacks)*100).toFixed(1):"0.0"} cls="warn"/></div>
+   </div>
+  </div>
+  <div className="panel manager-section"><div className="panel-head"><div><h2>Customer workload</h2><p>Customers currently represented in the platform</p></div></div>
+   <div className="manager-customer-grid">{customersLive.length?customersLive.map(name=>{const rows=livePacks.filter(p=>p.customer===name);const docs=rows.reduce((n,p)=>n+(Number(p.docs)||0),0);const needs=rows.filter(p=>p.status==="Needs review").length;return <div className="manager-customer" key={name}><b>{name}</b><span>{rows.length} packs · {docs} documents</span><small>{needs} requiring review</small></div>}):<div className="manager-empty">No customer workload is currently loaded.</div>}</div>
+  </div>
+  <div className="manager-section-head"><div><h2>Management controls</h2><p>Reserved for operational administration and audit reporting.</p></div></div>
+  <div className="manager-control-grid"><div className="panel manager-control"><Activity size={18}/><div><b>Processing analytics</b><span>Daily, weekly and monthly pack/document volumes.</span></div></div><div className="panel manager-control"><Users size={18}/><div><b>Team allocation</b><span>Assign ownership and measure processor workload.</span></div></div><div className="panel manager-control"><ShieldCheck size={18}/><div><b>Quality & intervention</b><span>Track validation, corrections and human intervention.</span></div></div><div className="panel manager-control"><FileText size={18}/><div><b>Audit history</b><span>Review rule changes, corrections and approvals.</span></div></div></div>
  </section>
 }
 
