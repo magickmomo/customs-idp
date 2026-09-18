@@ -103,8 +103,8 @@ button{touch-action:manipulation}
 .sidebar{overflow-y:auto;overflow-x:visible;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
 .sidebar>*{flex-shrink:0}
 .sidebar nav{min-height:0}
-.sidebar-collapse-btn{position:fixed;left:237px;top:78px;z-index:1000}
-.sidebar-collapsed .sidebar-collapse-btn{left:61px;z-index:1000}
+.sidebar-collapse-btn{position:fixed;left:237px;top:78px;z-index:2000}
+.sidebar-collapsed .sidebar-collapse-btn{left:61px;z-index:2000}
 @media(max-width:650px){
   .sidebar{overflow-y:auto}
 }
