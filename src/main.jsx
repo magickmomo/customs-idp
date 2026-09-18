@@ -122,7 +122,7 @@ function App(){
 
       <input ref={uploadRef} className="hidden-upload" type="file" multiple accept=".pdf,.xlsx,.xls,.doc,.docx,.csv,.png,.jpg,.jpeg,.eml,.msg" onChange={e=>handleUpload(e.target.files)}/>
       <div className="content">
-        {page==="dashboard" && <Dashboard navigate={navigate} notify={notify}/>}
+        {page==="dashboard" && <Dashboard navigate={navigate} notify={notify} livePacks={livePacks}/>}
         {page==="inbox" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{setSelectedPack(p);navigate("review")}} onUpload={handleUpload}/>}
         {page==="packs" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{setSelectedPack(p);navigate("review")}} title="Packs" onUpload={handleUpload}/>}
         {page==="review" && <Review pack={selectedPack} back={()=>navigate("inbox")} notify={notify} approvePack={()=>{const approved={...selectedPack,status:"Validated"};setSelectedPack(approved);setLivePacks(prev=>prev.map(p=>p.id===approved.id?approved:p));notify("Pack approved and validated");navigate("inbox");}}/>}
@@ -139,20 +139,28 @@ function App(){
 
 function NavItem({icon:Icon,label,badge,active,onClick}){return <button className={"nav-item "+(active?"active":"")} onClick={onClick}><Icon size={18}/><span>{label}</span>{badge&&<em>{badge}</em>}</button>}
 
-function Dashboard({navigate,notify}){
+function Dashboard({navigate,notify,livePacks}){
+ const totalPacks=livePacks.length;
+ const totalDocuments=livePacks.reduce((n,p)=>n+(Number(p.docs)||0),0);
+ const validated=livePacks.filter(p=>p.status==="Validated").length;
+ const processing=livePacks.filter(p=>p.status==="Processing").length;
+ const review=livePacks.filter(p=>p.status==="Needs review").length;
+ const avgConfidence=totalPacks?Math.round(livePacks.reduce((n,p)=>n+(Number(p.confidence)||0),0)/totalPacks):0;
+ const validationRate=totalPacks?((validated/totalPacks)*100).toFixed(1):"0.0";
+ const recent=livePacks.slice(0,6);
  return <section>
-  <div className="page-head"><div><div className="eyebrow">Wednesday, 16 September 2026</div><h1>Good afternoon, Liam</h1><p>Here's what's happening across your customs document operation.</p></div><button className="primary" onClick={()=>navigate("inbox")}><Inbox size={17}/> Open inbox</button></div>
+  <div className="page-head"><div><div className="eyebrow">Live operation · {new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}</div><h1>Good afternoon, Liam</h1><p>Live metrics from the packs currently loaded into Customs IDP.</p></div><button className="primary" onClick={()=>navigate("inbox")}><Inbox size={17}/> Open inbox</button></div>
   <div className="metric-grid">
-    <Metric label="Packs today" value="184" delta="+12.4%" icon={Package}/>
-    <Metric label="Invoices processed" value="642" delta="+8.7%" icon={FileText}/>
-    <Metric label="Auto-validated" value="96.8%" delta="+1.9%" icon={ShieldCheck}/>
-    <Metric label="Needs review" value="7" delta="-3 today" icon={AlertCircle} warning/>
+    <Metric label="Live packs" value={totalPacks.toLocaleString()} delta="Current inbox" icon={Package}/>
+    <Metric label="Documents in packs" value={totalDocuments.toLocaleString()} delta="Current inbox" icon={FileText}/>
+    <Metric label="Auto-validated" value={validationRate+"%"} delta={validated+" validated"} icon={ShieldCheck}/>
+    <Metric label="Needs review" value={review.toLocaleString()} delta={processing+" processing"} icon={AlertCircle} warning={review>0}/>
   </div>
   <div className="dashboard-grid">
-    <div className="panel"><div className="panel-head"><div><h2>Processing activity</h2><p>Documents processed over the last 7 days</p></div><button className="select">Last 7 days <ChevronDown size={14}/></button></div><div className="chart"><div className="chart-y"><span>800</span><span>600</span><span>400</span><span>200</span><span>0</span></div><div className="bars">{[58,72,65,84,76,91,96].map((h,i)=><div className="bar-col" key={i}><div className="bar" style={{height:h+"%"}}></div><span>{["Thu","Fri","Sat","Sun","Mon","Tue","Wed"][i]}</span></div>)}</div></div></div>
-    <div className="panel"><div className="panel-head"><div><h2>Queue health</h2><p>Current pack status</p></div></div><div className="queue-list"><Queue label="Validated" value="171" pct="92.9" cls="good"/><Queue label="Processing" value="6" pct="3.3" cls="blue"/><Queue label="Needs review" value="7" pct="3.8" cls="warn"/></div><button className="text-btn" onClick={()=>navigate("inbox")}>View all packs <ArrowRight size={15}/></button></div>
+    <div className="panel"><div className="panel-head"><div><h2>Live processing queue</h2><p>Current status of every pack in the inbox</p></div><button className="text-btn" onClick={()=>navigate("inbox")}>Open inbox <ArrowRight size={15}/></button></div><div className="queue-list"><Queue label="Validated" value={validated} pct={validationRate} cls="good"/><Queue label="Processing" value={processing} pct={totalPacks?((processing/totalPacks)*100).toFixed(1):"0.0"} cls="blue"/><Queue label="Needs review" value={review} pct={totalPacks?((review/totalPacks)*100).toFixed(1):"0.0"} cls="warn"/></div></div>
+    <div className="panel"><div className="panel-head"><div><h2>Extraction health</h2><p>Based on live packs currently loaded</p></div></div><div className="queue-list"><Queue label="Average confidence" value={avgConfidence+"%"} pct={avgConfidence} cls="good"/><Queue label="Documents" value={totalDocuments} pct={100} cls="blue"/><Queue label="Packs requiring attention" value={review} pct={totalPacks?((review/totalPacks)*100).toFixed(1):"0.0"} cls="warn"/></div><button className="text-btn" onClick={()=>navigate("agent")}>Open AI Agent <ArrowRight size={15}/></button></div>
   </div>
-  <div className="panel recent"><div className="panel-head"><div><h2>Recent packs</h2><p>Latest documents entering the operation</p></div><button className="text-btn" onClick={()=>navigate("inbox")}>View inbox <ArrowRight size={15}/></button></div><PackTable packs={packs.slice(0,4)} onOpen={(p)=>navigate("inbox")}/></div>
+  <div className="panel recent"><div className="panel-head"><div><h2>Recent live packs</h2><p>Latest packs currently in the operation</p></div><button className="text-btn" onClick={()=>navigate("inbox")}>View inbox <ArrowRight size={15}/></button></div><PackTable packs={recent} onOpen={(p)=>{navigate("inbox")}}/></div>
  </section>
 }
 
