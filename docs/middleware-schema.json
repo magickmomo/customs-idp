@@ -1,0 +1,40 @@
+{
+  "header": [
+    "customerId",
+    "identifier",
+    "customerReference",
+    "customerCustomerNo",
+    "deliveryTerm_SAD20",
+    "deliveryTermPlace_SAD20",
+    "countryOfExport_SAD15",
+    "countryOfDestination_SAD17",
+    "totalTransportUnits",
+    "totalAmountInvoiced_SAD22",
+    "totalAmountInvoicedCurrency_SAD22",
+    "totalGrossMass",
+    "ticketNo"
+  ],
+  "positions": [
+    "sequentialNo_SAD32",
+    "noSupplementaryUnits2_SAD41",
+    "preference_SAD36",
+    "customsProcedure_SAD37ex",
+    "customsProcedure_SAD37im",
+    "customsProcedure_SAD37t",
+    "countryOfOrigin_SAD34",
+    "goodsDescription_SAD31ex",
+    "goodsDescription_SAD31im",
+    "goodsDescription_SAD31t",
+    "itemPrice_SAD42Currency",
+    "itemPrice_SAD42",
+    "netMass_SAD38",
+    "grossMass_SAD35",
+    "numberOfPackages",
+    "typeOfPackages"
+  ],
+  "normalisation": {
+    "countryCodes": "ISO 3166-1 alpha-2; middleware examples include HU and XS",
+    "procedureCodes": "IM values are 10 digits; pad with 00 where required",
+    "numericPrecision": "weights/amounts should be represented consistently for downstream middleware"
+  }
+}
