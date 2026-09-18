@@ -38,7 +38,9 @@ function App(){
   const [selectedPack,setSelectedPack]=useState(packs[0]);
   const [agentOpen,setAgentOpen]=useState(true);
   const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
-  const [sidebarCollapsed,setSidebarCollapsed]=useState(false);\n  const currentUserRole="manager";\n  const canViewManager=currentUserRole==="manager" || currentUserRole==="admin";
+  const [sidebarCollapsed,setSidebarCollapsed]=useState(false);
+  const currentUserRole="manager";
+  const canViewManager=currentUserRole==="manager" || currentUserRole==="admin";
   const [query,setQuery]=useState("");
   const [toast,setToast]=useState("");
   const [livePacks,setLivePacks]=useState(()=>{
