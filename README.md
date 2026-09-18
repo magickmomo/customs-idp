@@ -31,6 +31,9 @@ npm run build
 
 Connect the UI to production services for document ingestion, OCR/ML extraction, customer rule persistence, authentication, mailbox ingestion and middleware delivery. The current sample data is intentionally local so the interface can be developed independently of Base44.
 
+
 ## Deployment
 
 GitHub pushes to `main` are configured to trigger the connected Vercel deployment automatically.
+
+<!-- Vercel auto-deploy connection test -->
