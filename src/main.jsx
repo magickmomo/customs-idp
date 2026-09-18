@@ -105,7 +105,7 @@ function App(){
       <nav>
         <NavItem icon={LayoutDashboard} label="Dashboard" active={page==="dashboard"} onClick={()=>navigate("dashboard")}/>
         <NavItem icon={Inbox} label="Inbox" badge={livePacks.length} active={page==="inbox"} onClick={()=>navigate("inbox")}/>
-        <NavItem icon={Package} label="Packs" active={page==="packs"} onClick={()=>navigate("packs")}/>
+        
         <NavItem icon={Users} label="Customers" active={page==="customers"} onClick={()=>navigate("customers")}/>
         <NavItem icon={Bot} label="AI Agent" active={page==="agent"} onClick={()=>navigate("agent")}/>
       </nav>
@@ -129,7 +129,7 @@ function App(){
       <div className="content">
         {page==="dashboard" && <Dashboard navigate={navigate} notify={notify} livePacks={livePacks}/>}
         {page==="inbox" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{setSelectedPack(p);navigate("review")}} onUpload={handleUpload}/>}
-        {page==="packs" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{setSelectedPack(p);navigate("review")}} title="Packs" onUpload={handleUpload}/>}
+        
         {page==="review" && <Review pack={selectedPack} back={()=>navigate("inbox")} notify={notify} approvePack={()=>{const approved={...selectedPack,status:"Validated"};setSelectedPack(approved);setLivePacks(prev=>prev.map(p=>p.id===approved.id?approved:p));notify("Pack approved and validated");navigate("inbox");}}/>}
         {page==="customers" && <Customers notify={notify}/>}
         {page==="agent" && <AgentPage/>}
