@@ -56,3 +56,23 @@ button{touch-action:manipulation}
 }
 
 .doc-preview-overlay{position:fixed;inset:0;background:rgba(10,18,30,.72);display:flex;align-items:center;justify-content:center;padding:24px;z-index:1000}.doc-preview{width:min(1100px,96vw);height:min(850px,92vh);background:#fff;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.3)}.doc-preview-head{height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 14px 0 20px;border-bottom:1px solid #e6eaf0}.doc-preview iframe{border:0;flex:1;width:100%;background:#f4f6f8}
+
+.mobile-menu-btn{display:none;border:0;background:transparent;color:#243147;padding:5px;cursor:pointer}
+.mobile-menu-overlay{display:none}
+.mobile-menu{width:min(310px,86vw);height:100%;background:#101827;color:#aeb8ca;padding:18px 14px;box-shadow:12px 0 40px rgba(0,0,0,.22);overflow-y:auto}
+.mobile-menu-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.mobile-menu-head .brand{padding:0;color:#fff}
+.mobile-menu-head .icon-btn{color:#cbd5e1}
+.mobile-workspace{display:flex;align-items:center;gap:9px;background:#192334;border:1px solid #263246;border-radius:10px;padding:9px;margin-bottom:18px;font-size:11px}
+.mobile-workspace .avatar{width:28px;height:28px;border-radius:8px;background:#334155;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:700}
+.mobile-workspace div:nth-child(2){flex:1}
+.mobile-workspace b{font-size:11px;color:#d8dfeb}
+.mobile-system-status{margin:18px 4px 2px;padding:10px;background:#141f2e;border-radius:9px;display:flex;gap:8px}
+.mobile-system-status b{font-size:9px;color:#c8d1df}
+.mobile-system-status span{display:block;font-size:10px;color:#718096;margin-top:3px}
+@media(max-width:650px){
+  .mobile-menu-btn{display:grid;place-items:center}
+  .mobile-menu-overlay{display:block;position:fixed;inset:0;background:rgba(10,18,30,.45);z-index:900}
+  .mobile-menu{animation:mobileMenuIn .18s ease-out}
+}
+@keyframes mobileMenuIn{from{transform:translateX(-100%)}to{transform:translateX(0)}}
