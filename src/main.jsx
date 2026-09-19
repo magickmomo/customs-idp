@@ -345,7 +345,7 @@ function ManagerPage({livePacks,dataSource}){
  });
  const totalPacks=filtered.length;
  const totalDocuments=filtered.reduce((n,p)=>n+(Number(p.docs)||0),0);
- const validated=filtered.filter(p=>p.status==="Validated").length;
+ const validated=filtered.filter(p=>p.status==="Ready"||p.status==="Validated"||p.status==="Posted to LCA").length;
  const review=filtered.filter(p=>p.status==="Needs review").length;
  const processing=filtered.filter(p=>p.status==="Processing").length;
  const failed=filtered.filter(p=>p.status==="Failed"||p.status==="failed").length;
@@ -355,15 +355,15 @@ function ManagerPage({livePacks,dataSource}){
  const failureRate=totalPacks?((failed/totalPacks)*100).toFixed(1):"0.0";
  const periodLabel={today:"Today",yesterday:"Yesterday","7d":"Last 7 days","30d":"Last 30 days",thisWeek:"This week",lastWeek:"Last week",thisMonth:"This month",lastMonth:"Last month",all:"All time",custom:"Custom range"}[period];
  const formatDuration=(ms)=>{if(!Number.isFinite(ms)||ms<0)return "—";const mins=Math.round(ms/60000);if(mins<60)return mins+" min";const h=Math.floor(mins/60);const m=mins%60;return h+"h "+String(m).padStart(2,"0")+"m"};
- const team=["Liam Wingrove","Michael Houston","Sophie Wingrove"].map(name=>{
+ const team=["Liam Wingrove","Data Processor 1","Data Processor 2","Muhammad Amer"].map(name=>{
    const rows=filtered.filter(p=>p.assignedTo===name);
    const docs=rows.reduce((n,p)=>n+(Number(p.docs)||0),0);
    const reviews=rows.filter(p=>p.status==="Needs review").length;
-   const validatedBy=rows.filter(p=>p.status==="Validated").length;
+   const validatedBy=rows.filter(p=>p.status==="Ready"||p.status==="Validated"||p.status==="Posted to LCA").length;
    const timed=rows.filter(p=>p.processingStartedAt&&p.processingCompletedAt).map(p=>new Date(p.processingCompletedAt).getTime()-new Date(p.processingStartedAt).getTime()).filter(ms=>Number.isFinite(ms)&&ms>=0);
    const avgProcessingTime=timed.length?formatDuration(timed.reduce((a,b)=>a+b,0)/timed.length):"—";
    const confidence=rows.length?Math.round(rows.reduce((n,p)=>n+(Number(p.confidence)||0),0)/rows.length)+"%":"—";
-   return {name,role:name==="Liam Wingrove"?"IDP Project Lead":"Data Processor",packs:rows.length,docs,reviews,validated:validatedBy,confidence,avgProcessingTime};
+   return {name,role:name==="Liam Wingrove"||name==="Muhammad Amer"?"Manager":"Data Processor",packs:rows.length,docs,reviews,validated:validatedBy,confidence,avgProcessingTime};
   });
  const unassigned=filtered.filter(p=>!p.assignedTo||p.assignedTo==="Unassigned").length;
  const customersLive=[...new Set(filtered.map(p=>p.customer).filter(Boolean))];
