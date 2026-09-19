@@ -147,3 +147,14 @@ button{touch-action:manipulation}
 .review-owner{min-width:145px}
 .owner-select:focus{outline:2px solid #bfdbfe;outline-offset:1px}
 @media(max-width:650px){.owner-select{max-width:125px}.review-owner{min-width:125px}}
+
+
+/* Manager analytics */
+.manager-head-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.period-switch{display:flex;gap:2px;padding:3px;background:#f3f5f8;border:1px solid #e4e8ee;border-radius:8px}
+.period-switch button{border:0;background:transparent;padding:7px 10px;border-radius:6px;font-size:10px;font-weight:600;color:#687386;cursor:pointer}
+.period-switch button.active{background:#fff;color:#172033;box-shadow:0 1px 3px rgba(15,23,42,.12)}
+.manager-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.mini-kpi{padding:15px;display:flex;flex-direction:column;gap:5px}.mini-kpi span{font-size:10px;color:#778195}.mini-kpi strong{font-size:22px;letter-spacing:-.4px}.mini-kpi small{font-size:9px;color:#8a94a6}
+@media(max-width:1000px){.manager-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.manager-head-actions{justify-content:flex-start}}
+@media(max-width:650px){.manager-kpi-grid{grid-template-columns:1fr 1fr}.period-switch button{padding:6px 7px;font-size:9px}}
