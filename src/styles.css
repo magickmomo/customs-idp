@@ -293,3 +293,113 @@ button{touch-action:manipulation}
     border-radius:12px;
   }
 }
+
+
+/* Persistent document viewer in the review workspace. */
+.review-document-card{
+  appearance:none;
+  font:inherit;
+  color:inherit;
+  text-align:left;
+  cursor:pointer;
+}
+.review-document-card.selected{
+  border-color:#2563eb;
+  box-shadow:0 0 0 1px #2563eb;
+  background:#f8fbff;
+}
+.review-document-state{
+  flex:0 0 auto;
+  color:#6b7280;
+  font-size:8px;
+  font-weight:600;
+}
+.review-document-card.selected .review-document-state{
+  color:#2563eb;
+}
+.review-document-preview{
+  margin-top:12px;
+  border:1px solid #dfe5ee;
+  border-radius:10px;
+  overflow:hidden;
+  background:#f4f6f9;
+}
+.review-document-preview-head{
+  min-height:48px;
+  box-sizing:border-box;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:9px 12px;
+  background:#fff;
+  border-bottom:1px solid #e1e6ed;
+}
+.review-document-preview-head div{
+  min-width:0;
+}
+.review-document-preview-head span,
+.review-document-preview-head b{
+  display:block;
+}
+.review-document-preview-head span{
+  font-size:8px;
+  font-weight:700;
+  letter-spacing:.08em;
+  color:#8a95a5;
+}
+.review-document-preview-head b{
+  margin-top:2px;
+  font-size:10px;
+  color:#263147;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.review-document-preview-head small{
+  flex:0 0 auto;
+  color:#8a95a5;
+  font-size:8px;
+}
+.review-document-preview-body{
+  height:560px;
+  background:#eef1f5;
+}
+.review-document-preview-body iframe{
+  display:block;
+  width:100%;
+  height:100%;
+  border:0;
+  background:#fff;
+}
+.review-document-empty{
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:24px;
+  box-sizing:border-box;
+  text-align:center;
+  color:#8a95a5;
+}
+.review-document-empty b{
+  color:#4d596c;
+  font-size:11px;
+}
+.review-document-empty span{
+  max-width:430px;
+  font-size:9px;
+  line-height:1.5;
+}
+@media(max-width:900px){
+  .review-document-preview-body{
+    height:500px;
+  }
+}
+@media(max-width:650px){
+  .review-document-preview-body{
+    height:420px;
+  }
+}
