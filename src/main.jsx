@@ -203,27 +203,89 @@ function Dashboard({navigate,notify,livePacks}){
 function ManagerPage({livePacks,dataSource}){
  const [period,setPeriod]=useState("7d");
  const now=new Date();
- const parseReceived=p=>{if(!p?.received)return null;const d=new Date(p.received);if(!Number.isNaN(d.getTime()))return d;const m=String(p.received).match(/(\\d{1,2})\\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\s+(\\d{4})/i);if(!m)return null;return new Date(`${m[1]} ${m[2]} ${m[3]}`);};
- const cutoff=period==="today"?new Date(now.getFullYear(),now.getMonth(),now.getDate()):period==="7d"?new Date(now.getTime()-7*86400000):period==="30d"?new Date(now.getTime()-30*86400000):null;
- const filtered=livePacks.filter(p=>{if(!cutoff)return true;const d=parseReceived(p);return d && d>=cutoff;});
- const totalPacks=filtered.length,totalDocuments=filtered.reduce((n,p)=>n+(Number(p.docs)||0),0);
- const validated=filtered.filter(p=>p.status==="Validated").length,review=filtered.filter(p=>p.status==="Needs review").length,processing=filtered.filter(p=>p.status==="Processing").length;
+ const cutoff=period==="today"
+   ? new Date(now.getFullYear(),now.getMonth(),now.getDate())
+   : period==="7d"
+   ? new Date(now.getTime()-7*86400000)
+   : period==="30d"
+   ? new Date(now.getTime()-30*86400000)
+   : null;
+ const filtered=livePacks.filter(p=>{
+   if(!cutoff)return true;
+   const received=new Date(p.received);
+   return !Number.isNaN(received.getTime()) && received>=cutoff;
+ });
+ const totalPacks=filtered.length;
+ const totalDocuments=filtered.reduce((n,p)=>n+(Number(p.docs)||0),0);
+ const validated=filtered.filter(p=>p.status==="Validated").length;
+ const review=filtered.filter(p=>p.status==="Needs review").length;
+ const processing=filtered.filter(p=>p.status==="Processing").length;
  const failed=filtered.filter(p=>p.status==="Failed"||p.status==="failed").length;
  const avgConfidence=totalPacks?Math.round(filtered.reduce((n,p)=>n+(Number(p.confidence)||0),0)/totalPacks):0;
  const validationRate=totalPacks?((validated/totalPacks)*100).toFixed(1):"0.0";
  const reviewRate=totalPacks?((review/totalPacks)*100).toFixed(1):"0.0";
  const failureRate=totalPacks?((failed/totalPacks)*100).toFixed(1):"0.0";
- const team=["Liam Wingrove","Michael Houston","Sophie Wingrove"].map(name=>{const rows=filtered.filter(p=>p.assignedTo===name);const docs=rows.reduce((n,p)=>n+(Number(p.docs)||0),0);const reviews=rows.filter(p=>p.status==="Needs review").length;const validatedBy=rows.filter(p=>p.status==="Validated").length;const conf=rows.length?Math.round(rows.reduce((n,p)=>n+(Number(p.confidence)||0),0)/rows.length):0;return {name,role:name==="Liam Wingrove"?"IDP Project Lead":"Data Processor",packs:rows.length,docs,reviews,validated:validatedBy,confidence:rows.length?conf+"%":"—"};});
+ const periodLabel=period==="today"?"Today":period==="7d"?"Last 7 days":period==="30d"?"Last 30 days":"All time";
+ const team=["Liam Wingrove","Michael Houston","Sophie Wingrove"].map(name=>{
+   const rows=filtered.filter(p=>p.assignedTo===name);
+   const docs=rows.reduce((n,p)=>n+(Number(p.docs)||0),0);
+   const reviews=rows.filter(p=>p.status==="Needs review").length;
+   const validatedBy=rows.filter(p=>p.status==="Validated").length;
+   const confidence=rows.length?Math.round(rows.reduce((n,p)=>n+(Number(p.confidence)||0),0)/rows.length)+"%":"—";
+   return {name,role:name==="Liam Wingrove"?"IDP Project Lead":"Data Processor",packs:rows.length,docs,reviews,validated:validatedBy,confidence};
+ });
  const unassigned=filtered.filter(p=>!p.assignedTo||p.assignedTo==="Unassigned").length;
  const customersLive=[...new Set(filtered.map(p=>p.customer).filter(Boolean))];
- const periodLabel={today:"Today",7d:"Last 7 days",30d:"Last 30 days",all:"All time"}[period];
- return <section><div className="page-head"><div><div className="eyebrow">Management · operational intelligence</div><h1>Manager</h1><p>Live operational metrics from the central pack database.</p></div><div className="manager-head-actions"><span className="online-pill"><span></span> {dataSource==="database"?"Database connected":"Prototype storage"}</span><div className="period-switch">{["today","7d","30d","all"].map(v=><button key={v} className={period===v?"active":""} onClick={()=>setPeriod(v)}>{v==="today"?"Today":v==="7d"?"7 Days":v==="30d"?"30 Days":"All Time"}</button>)}</div></div></div>
- <div className="metric-grid"><Metric label="Packs processed" value={totalPacks.toLocaleString()} delta={validated+" validated"} icon={Package}/><Metric label="Documents processed" value={totalDocuments.toLocaleString()} delta={periodLabel} icon={FileText}/><Metric label="Average AI confidence" value={avgConfidence+"%"} delta={totalPacks?periodLabel:"No packs in period"} icon={Sparkles}/><Metric label="Human review queue" value={review.toLocaleString()} delta={processing+" still processing"} icon={AlertCircle} warning={review>0}/></div>
- <div className="manager-kpi-grid"><div className="panel mini-kpi"><span>Auto-validation rate</span><strong>{validationRate}%</strong><small>{validated} of {totalPacks} packs validated</small></div><div className="panel mini-kpi"><span>Human review rate</span><strong>{reviewRate}%</strong><small>{review} packs require review</small></div><div className="panel mini-kpi"><span>Failure rate</span><strong>{failureRate}%</strong><small>{failed} failed packs</small></div><div className="panel mini-kpi"><span>Documents / pack</span><strong>{totalPacks?(totalDocuments/totalPacks).toFixed(1):"0.0"}</strong><small>Average in selected period</small></div></div>
- <div className="manager-grid"><div className="panel"><div className="panel-head"><div><h2>Team performance</h2><p>{periodLabel} · based on pack ownership</p></div></div><div className="manager-table-wrap"><table><thead><tr><th>TEAM MEMBER</th><th>ROLE</th><th>PACKS</th><th>DOCUMENTS</th><th>VALIDATED</th><th>REVIEWS</th><th>AVG CONF.</th></tr></thead><tbody>{team.map(m=><tr key={m.name}><td><b>{m.name}</b></td><td>{m.role}</td><td>{m.packs}</td><td>{m.docs}</td><td>{m.validated}</td><td>{m.reviews}</td><td>{m.confidence}</td></tr>)}</tbody></table></div><div className="manager-note"><ShieldCheck size={15}/><span>{unassigned?unassigned+" pack"+(unassigned===1?" is":"s are")+" currently unassigned in this period.":"All packs in this period have an owner."} Assign ownership from Inbox to populate team performance.</span></div></div>
- <div className="panel"><div className="panel-head"><div><h2>Platform health</h2><p>{periodLabel} workload across the operation</p></div></div><div className="queue-list"><Queue label="Validated" value={validated} pct={totalPacks?((validated/totalPacks)*100).toFixed(1):"0.0"} cls="good"/><Queue label="Processing" value={processing} pct={totalPacks?((processing/totalPacks)*100).toFixed(1):"0.0"} cls="blue"/><Queue label="Needs review" value={review} pct={totalPacks?((review/totalPacks)*100).toFixed(1):"0.0"} cls="warn"/></div></div></div>
- <div className="panel manager-section"><div className="panel-head"><div><h2>Customer workload</h2><p>{periodLabel} customer activity</p></div></div><div className="manager-customer-grid">{customersLive.length?customersLive.map(name=>{const rows=filtered.filter(p=>p.customer===name);const docs=rows.reduce((n,p)=>n+(Number(p.docs)||0),0);const needs=rows.filter(p=>p.status==="Needs review").length;const avg=rows.length?Math.round(rows.reduce((n,p)=>n+(Number(p.confidence)||0),0)/rows.length):0;return <div className="manager-customer" key={name}><b>{name}</b><span>{rows.length} packs · {docs} documents</span><small>{needs} requiring review · {avg}% avg confidence</small></div>}):<div className="manager-empty">No customer activity is recorded for {periodLabel.toLowerCase()}.</div>}</div></div>
- <div className="manager-section-head"><div><h2>Management controls</h2><p>Operational controls connected to the central database.</p></div></div><div className="manager-control-grid"><div className="panel manager-control"><Activity size={18}/><div><b>Processing analytics</b><span>{totalPacks} packs and {totalDocuments} documents in {periodLabel.toLowerCase()}.</span></div></div><div className="panel manager-control"><Users size={18}/><div><b>Team allocation</b><span>Assign pack ownership from the Inbox owner column.</span></div></div><div className="panel manager-control"><ShieldCheck size={18}/><div><b>Quality & intervention</b><span>{review} packs currently require human review.</span></div></div><div className="panel manager-control"><FileText size={18}/><div><b>Processing time</b><span>Timing fields will populate once start/completion timestamps are recorded.</span></div></div></div></section>
+ return <section>
+  <div className="page-head">
+   <div><div className="eyebrow">Management · operational intelligence</div><h1>Manager</h1><p>Live operational metrics from the central pack database.</p></div>
+   <div className="manager-head-actions">
+    <span className="online-pill"><span></span>{dataSource==="database"?"Database connected":"Prototype storage"}</span>
+    <div className="period-switch">
+     {["today","7d","30d","all"].map(v=><button key={v} className={period===v?"active":""} onClick={()=>setPeriod(v)}>{v==="today"?"Today":v==="7d"?"7 Days":v==="30d"?"30 Days":"All Time"}</button>)}
+    </div>
+   </div>
+  </div>
+  <div className="metric-grid">
+   <Metric label="Packs processed" value={totalPacks.toLocaleString()} delta={validated+" validated"} icon={Package}/>
+   <Metric label="Documents processed" value={totalDocuments.toLocaleString()} delta={periodLabel} icon={FileText}/>
+   <Metric label="Average AI confidence" value={avgConfidence+"%"} delta={totalPacks?periodLabel:"No packs in period"} icon={Sparkles}/>
+   <Metric label="Human review queue" value={review.toLocaleString()} delta={processing+" still processing"} icon={AlertCircle} warning={review>0}/>
+  </div>
+  <div className="manager-kpi-grid">
+   <div className="panel mini-kpi"><span>Auto-validation rate</span><strong>{validationRate}%</strong><small>{validated} of {totalPacks} packs validated</small></div>
+   <div className="panel mini-kpi"><span>Human review rate</span><strong>{reviewRate}%</strong><small>{review} packs require review</small></div>
+   <div className="panel mini-kpi"><span>Failure rate</span><strong>{failureRate}%</strong><small>{failed} failed packs</small></div>
+   <div className="panel mini-kpi"><span>Documents / pack</span><strong>{totalPacks?(totalDocuments/totalPacks).toFixed(1):"0.0"}</strong><small>Average in selected period</small></div>
+  </div>
+  <div className="manager-grid">
+   <div className="panel">
+    <div className="panel-head"><div><h2>Team performance</h2><p>{periodLabel} · based on pack ownership</p></div></div>
+    <div className="manager-table-wrap"><table><thead><tr><th>TEAM MEMBER</th><th>ROLE</th><th>PACKS</th><th>DOCUMENTS</th><th>VALIDATED</th><th>REVIEWS</th><th>AVG CONF.</th></tr></thead><tbody>{team.map(m=><tr key={m.name}><td><b>{m.name}</b></td><td>{m.role}</td><td>{m.packs}</td><td>{m.docs}</td><td>{m.validated}</td><td>{m.reviews}</td><td>{m.confidence}</td></tr>)}</tbody></table></div>
+    <div className="manager-note"><ShieldCheck size={15}/><span>{unassigned?unassigned+" pack"+(unassigned===1?" is":"s are")+" currently unassigned in this period.":"All packs in this period have an owner."} Assign ownership from Inbox to populate team performance.</span></div>
+   </div>
+   <div className="panel"><div className="panel-head"><div><h2>Platform health</h2><p>{periodLabel} workload across the operation</p></div></div><div className="queue-list"><Queue label="Validated" value={validated} pct={totalPacks?((validated/totalPacks)*100).toFixed(1):"0.0"} cls="good"/><Queue label="Processing" value={processing} pct={totalPacks?((processing/totalPacks)*100).toFixed(1):"0.0"} cls="blue"/><Queue label="Needs review" value={review} pct={totalPacks?((review/totalPacks)*100).toFixed(1):"0.0"} cls="warn"/></div></div>
+  </div>
+  <div className="panel manager-section">
+   <div className="panel-head"><div><h2>Customer workload</h2><p>{periodLabel} customer activity</p></div></div>
+   <div className="manager-customer-grid">
+    {customersLive.length?customersLive.map(name=>{
+      const rows=filtered.filter(p=>p.customer===name);
+      const docs=rows.reduce((n,p)=>n+(Number(p.docs)||0),0);
+      const needs=rows.filter(p=>p.status==="Needs review").length;
+      const avg=rows.length?Math.round(rows.reduce((n,p)=>n+(Number(p.confidence)||0),0)/rows.length):0;
+      return <div className="manager-customer" key={name}><b>{name}</b><span>{rows.length} packs · {docs} documents</span><small>{needs} requiring review · {avg}% avg confidence</small></div>;
+    }):<div className="manager-empty">No customer activity is recorded for {periodLabel.toLowerCase()}.</div>}
+   </div>
+  </div>
+  <div className="manager-section-head"><div><h2>Management controls</h2><p>Operational controls connected to the central database.</p></div></div>
+  <div className="manager-control-grid">
+   <div className="panel manager-control"><Activity size={18}/><div><b>Processing analytics</b><span>{totalPacks} packs and {totalDocuments} documents in {periodLabel.toLowerCase()}.</span></div></div>
+   <div className="panel manager-control"><Users size={18}/><div><b>Team allocation</b><span>Assign pack ownership from the Inbox owner column.</span></div></div>
+   <div className="panel manager-control"><ShieldCheck size={18}/><div><b>Quality & intervention</b><span>{review} packs currently require human review.</span></div></div>
+   <div className="panel manager-control"><FileText size={18}/><div><b>Processing time</b><span>Timing fields will populate once start/completion timestamps are recorded.</span></div></div>
+  </div>
+ </section>;
 }
 function Metric({label,value,delta,icon:Icon,warning}){return <div className="metric"><div className={"metric-icon "+(warning?"warning":"")}><Icon size={19}/></div><div className="metric-copy"><span>{label}</span><strong>{value}</strong><small className={delta.startsWith("-")?"positive":""}>{delta}</small></div></div>}
 function Queue({label,value,pct,cls}){return <div className="queue"><div><span className={"queue-dot "+cls}></span><b>{label}</b><strong>{value}</strong></div><div className="progress"><i className={cls} style={{width:pct+"%"}}></i></div><small>{pct}%</small></div>}
