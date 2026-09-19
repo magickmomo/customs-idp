@@ -10,8 +10,8 @@ export default async function handler(req,res){
       const pack=req.body||{};
       if(!pack.id) return res.status(400).json({error:"Pack id is required"});
       const extractedData=pack.extractedData?{...pack.extractedData}:{};
-      const managerMeta={processingStartedAt:pack.processingStartedAt||null,processingCompletedAt:pack.processingCompletedAt||null};
-      if(managerMeta.processingStartedAt||managerMeta.processingCompletedAt) extractedData._manager=managerMeta;
+      const managerMeta={processingStartedAt:pack.processingStartedAt||null,processingCompletedAt:pack.processingCompletedAt||null,uploadedFiles:Array.isArray(pack.uploadedFiles)?pack.uploadedFiles:[]};
+      if(managerMeta.processingStartedAt||managerMeta.processingCompletedAt||managerMeta.uploadedFiles.length) extractedData._manager=managerMeta;
       const row={id:pack.id,customer:pack.customer||"Unassigned customer",docs:Number(pack.docs)||0,status:pack.status||"Processing",confidence:Number(pack.confidence)||0,received:pack.received||new Date().toISOString(),ticket:pack.ticket||null,assigned_to:pack.assignedTo||"Unassigned",extracted_data:Object.keys(extractedData).length?extractedData:null,processing_error:pack.processingError||null,updated_at:new Date().toISOString()};
       await supabaseFetch("document_packs",{method:"POST",body:JSON.stringify(row),headers:{"Prefer":"resolution=merge-duplicates,return=minimal"}});
       return res.status(200).json({pack:normalizePack(row)});
@@ -31,5 +31,5 @@ function normalizePack(row){
   const meta=data?._manager||{};
   let extractedData=data;
   if(data){const rest={...data};delete rest._manager;extractedData=Object.keys(rest).length?rest:undefined;}
-  return {...row,assignedTo:row.assigned_to||"Unassigned",extractedData,processingStartedAt:meta.processingStartedAt||undefined,processingCompletedAt:meta.processingCompletedAt||undefined,processingError:row.processing_error||undefined};
+  return {...row,assignedTo:row.assigned_to||"Unassigned",extractedData,uploadedFiles:Array.isArray(meta.uploadedFiles)?meta.uploadedFiles:undefined,processingStartedAt:meta.processingStartedAt||undefined,processingCompletedAt:meta.processingCompletedAt||undefined,processingError:row.processing_error||undefined};
 }
