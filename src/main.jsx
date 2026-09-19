@@ -203,17 +203,20 @@ function Dashboard({navigate,notify,livePacks}){
 function ManagerPage({livePacks,dataSource}){
  const [period,setPeriod]=useState("7d");
  const now=new Date();
- const cutoff=period==="today"
-   ? new Date(now.getFullYear(),now.getMonth(),now.getDate())
-   : period==="7d"
-   ? new Date(now.getTime()-7*86400000)
-   : period==="30d"
-   ? new Date(now.getTime()-30*86400000)
-   : null;
+ const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+ let rangeStart=null,rangeEnd=null;
+ if(period==="today"){rangeStart=today;rangeEnd=new Date(today.getTime()+86400000-1);}
+ if(period==="yesterday"){rangeStart=new Date(today.getTime()-86400000);rangeEnd=new Date(today.getTime()-1);}
+ if(period==="7d"){rangeStart=new Date(today.getTime()-6*86400000);rangeEnd=new Date(today.getTime()+86400000-1);}
+ if(period==="30d"){rangeStart=new Date(today.getTime()-29*86400000);rangeEnd=new Date(today.getTime()+86400000-1);}
+ if(period==="thisMonth"){rangeStart=new Date(today.getFullYear(),today.getMonth(),1);rangeEnd=new Date(today.getTime()+86400000-1);}
+ if(period==="lastMonth"){rangeStart=new Date(today.getFullYear(),today.getMonth()-1,1);rangeEnd=new Date(today.getFullYear(),today.getMonth(),1)-1;rangeEnd=new Date(rangeEnd);}
+ if(period==="thisWeek"){const day=today.getDay()||7;rangeStart=new Date(today.getTime()-(day-1)*86400000);rangeEnd=new Date(today.getTime()+86400000-1);}
+ if(period==="lastWeek"){const day=today.getDay()||7;rangeStart=new Date(today.getTime()-(day+6)*86400000);rangeEnd=new Date(today.getTime()-(day-1)*86400000-1);}
  const filtered=livePacks.filter(p=>{
-   if(!cutoff)return true;
+   if(!rangeStart)return true;
    const received=new Date(p.received);
-   return !Number.isNaN(received.getTime()) && received>=cutoff;
+   return !Number.isNaN(received.getTime()) && received>=rangeStart && received<=rangeEnd;
  });
  const totalPacks=filtered.length;
  const totalDocuments=filtered.reduce((n,p)=>n+(Number(p.docs)||0),0);
@@ -225,7 +228,7 @@ function ManagerPage({livePacks,dataSource}){
  const validationRate=totalPacks?((validated/totalPacks)*100).toFixed(1):"0.0";
  const reviewRate=totalPacks?((review/totalPacks)*100).toFixed(1):"0.0";
  const failureRate=totalPacks?((failed/totalPacks)*100).toFixed(1):"0.0";
- const periodLabel=period==="today"?"Today":period==="7d"?"Last 7 days":period==="30d"?"Last 30 days":"All time";
+ const periodLabel={today:"Today",yesterday:"Yesterday",7d:"Last 7 days",30d:"Last 30 days",thisWeek:"This week",lastWeek:"Last week",thisMonth:"This month",lastMonth:"Last month",all:"All time"}[period];
  const team=["Liam Wingrove","Michael Houston","Sophie Wingrove"].map(name=>{
    const rows=filtered.filter(p=>p.assignedTo===name);
    const docs=rows.reduce((n,p)=>n+(Number(p.docs)||0),0);
@@ -241,9 +244,9 @@ function ManagerPage({livePacks,dataSource}){
    <div><div className="eyebrow">Management · operational intelligence</div><h1>Manager</h1><p>Live operational metrics from the central pack database.</p></div>
    <div className="manager-head-actions">
     <span className="online-pill"><span></span>{dataSource==="database"?"Database connected":"Prototype storage"}</span>
-    <div className="period-switch">
-     {["today","7d","30d","all"].map(v=><button key={v} className={period===v?"active":""} onClick={()=>setPeriod(v)}>{v==="today"?"Today":v==="7d"?"7 Days":v==="30d"?"30 Days":"All Time"}</button>)}
-    </div>
+    <select className="manager-period-select" value={period} onChange={e=>setPeriod(e.target.value)}>
+     <option value="today">Today</option><option value="yesterday">Yesterday</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="thisWeek">This week</option><option value="lastWeek">Last week</option><option value="thisMonth">This month</option><option value="lastMonth">Last month</option><option value="all">All time</option>
+    </select>
    </div>
   </div>
   <div className="metric-grid">
