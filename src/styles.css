@@ -403,3 +403,25 @@ button{touch-action:manipulation}
     height:420px;
   }
 }
+
+/* Make the persistent document viewer use the available viewport and fit PDF pages to width. */
+.review-document-preview-body{
+  height:clamp(420px,65vh,760px);
+  min-height:420px;
+}
+.review-document-preview-body iframe{
+  min-width:100%;
+  min-height:100%;
+}
+@media(max-width:900px){
+  .review-document-preview-body{
+    height:65vh;
+    min-height:380px;
+  }
+}
+@media(max-width:650px){
+  .review-document-preview-body{
+    height:58vh;
+    min-height:340px;
+  }
+}
