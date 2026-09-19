@@ -156,8 +156,9 @@ function App(){
 
       <input ref={uploadRef} className="hidden-upload" type="file" multiple accept=".pdf,.xlsx,.xls,.doc,.docx,.csv,.png,.jpg,.jpeg,.eml,.msg" onChange={e=>handleUpload(e.target.files)}/>
       <div className="content">
+        {page==="manager" && canViewManager && <ManagerPage livePacks={livePacks} dataSource={dataSource}/>} 
         {page==="dashboard" && <Dashboard navigate={navigate} notify={notify} livePacks={livePacks}/>}
-        {page==="inbox" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{setSelectedPack(p);navigate("review")}} onUpload={handleUpload}/>}
+        {page==="inbox" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{setSelectedPack(p);navigate("review")}} onUpload={handleUpload} onAssign={assignPack}/>}
         
         {page==="review" && <Review pack={selectedPack} back={()=>navigate("inbox")} notify={notify} onAssign={assignPack} approvePack={()=>{const approved={...selectedPack,status:"Validated"};setSelectedPack(approved);setLivePacks(prev=>prev.map(p=>p.id===approved.id?approved:p));
       persistPack(approved);notify("Pack approved and validated");navigate("inbox");}}/>}
