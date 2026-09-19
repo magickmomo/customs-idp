@@ -40,6 +40,7 @@ function App(){
   const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
   const [sidebarCollapsed,setSidebarCollapsed]=useState(false);
   const currentUserRole="manager";
+  const currentUserName="Liam Wingrove";
   const canViewManager=currentUserRole==="manager" || currentUserRole==="admin";
   const [query,setQuery]=useState("");
   const [toast,setToast]=useState("");
@@ -84,7 +85,8 @@ function App(){
     const file=selected[0];
     const highest=livePacks.reduce((max,p)=>Math.max(max,Number(String(p.id||"").replace("PK-",""))||0),10482);
     const id=`PK-${highest+1}`;
-    const newPack={id,customer:"Unassigned customer",docs:selected.length,status:"Processing",confidence:0,received:"Just now",ticket:`UPLOAD-${Date.now().toString().slice(-5)}`,assignedTo:"Liam Wingrove",uploadedFiles:selected.map((f,index)=>({id:`${id}-${index}`,name:f.name,size:f.size,type:f.type}))};
+    const processingStartedAt=new Date().toISOString();
+    const newPack={id,customer:"Unassigned customer",docs:selected.length,status:"Processing",confidence:0,received:processingStartedAt,processingStartedAt,ticket:`UPLOAD-${Date.now().toString().slice(-5)}`,assignedTo:"Unassigned",uploadedFiles:selected.map((f,index)=>({id:`${id}-${index}`,name:f.name,size:f.size,type:f.type}))};
     await Promise.all(selected.map((f,index)=>saveUploadedDocument(`${id}-${index}`,f)));
     setLivePacks(prev=>[newPack,...prev]);
     persistPack(newPack);
@@ -127,6 +129,7 @@ function App(){
   const navigate=(p)=>{setPage(p);setMobileMenuOpen(false);};
   const notify=(msg)=>{setToast(msg);setTimeout(()=>setToast(""),2500)};
   const assignPack=(packId,assignedTo)=>{const updated={...livePacks.find(p=>p.id===packId),assignedTo};setLivePacks(prev=>prev.map(p=>p.id===packId?updated:p));if(selectedPack?.id===packId)setSelectedPack(prev=>({...prev,assignedTo}));persistPack(updated);notify(`Pack ${packId} assigned to ${assignedTo}`)};
+  const approvePack=()=>{if(!selectedPack)return;const now=new Date().toISOString();const assignedTo=selectedPack.assignedTo&&selectedPack.assignedTo!=="Unassigned"?selectedPack.assignedTo:currentUserName;const approved={...selectedPack,status:"Validated",assignedTo,processingCompletedAt:selectedPack.processingCompletedAt||now};setSelectedPack(approved);setLivePacks(prev=>prev.map(p=>p.id===approved.id?approved:p));persistPack(approved);notify(`Pack approved and validated${assignedTo===currentUserName?" — assigned to "+currentUserName:""}`);navigate("inbox")};
 
   return <div className={"app-shell "+(sidebarCollapsed?"sidebar-collapsed":"")}>
     <aside className="sidebar">
@@ -160,8 +163,7 @@ function App(){
         {page==="dashboard" && <Dashboard navigate={navigate} notify={notify} livePacks={livePacks}/>}
         {page==="inbox" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{setSelectedPack(p);navigate("review")}} onUpload={handleUpload} onAssign={assignPack}/>}
         
-        {page==="review" && <Review pack={selectedPack} back={()=>navigate("inbox")} notify={notify} onAssign={assignPack} approvePack={()=>{const approved={...selectedPack,status:"Validated"};setSelectedPack(approved);setLivePacks(prev=>prev.map(p=>p.id===approved.id?approved:p));
-      persistPack(approved);notify("Pack approved and validated");navigate("inbox");}}/>}
+        {page==="review" && <Review pack={selectedPack} back={()=>navigate("inbox")} notify={notify} onAssign={assignPack} approvePack={approvePack}/>}
         {page==="customers" && <Customers notify={notify}/>}
         {page==="agent" && <AgentPage/>}
         {page==="settings" && <SettingsPage/>}
@@ -234,14 +236,17 @@ function ManagerPage({livePacks,dataSource}){
  const reviewRate=totalPacks?((review/totalPacks)*100).toFixed(1):"0.0";
  const failureRate=totalPacks?((failed/totalPacks)*100).toFixed(1):"0.0";
  const periodLabel={today:"Today",yesterday:"Yesterday","7d":"Last 7 days","30d":"Last 30 days",thisWeek:"This week",lastWeek:"Last week",thisMonth:"This month",lastMonth:"Last month",all:"All time",custom:"Custom range"}[period];
+ const formatDuration=(ms)=>{if(!Number.isFinite(ms)||ms<0)return "—";const mins=Math.round(ms/60000);if(mins<60)return mins+" min";const h=Math.floor(mins/60);const m=mins%60;return h+"h "+String(m).padStart(2,"0")+"m"};
  const team=["Liam Wingrove","Michael Houston","Sophie Wingrove"].map(name=>{
    const rows=filtered.filter(p=>p.assignedTo===name);
    const docs=rows.reduce((n,p)=>n+(Number(p.docs)||0),0);
    const reviews=rows.filter(p=>p.status==="Needs review").length;
    const validatedBy=rows.filter(p=>p.status==="Validated").length;
+   const timed=rows.filter(p=>p.processingStartedAt&&p.processingCompletedAt).map(p=>new Date(p.processingCompletedAt).getTime()-new Date(p.processingStartedAt).getTime()).filter(ms=>Number.isFinite(ms)&&ms>=0);
+   const avgProcessingTime=timed.length?formatDuration(timed.reduce((a,b)=>a+b,0)/timed.length):"—";
    const confidence=rows.length?Math.round(rows.reduce((n,p)=>n+(Number(p.confidence)||0),0)/rows.length)+"%":"—";
-   return {name,role:name==="Liam Wingrove"?"IDP Project Lead":"Data Processor",packs:rows.length,docs,reviews,validated:validatedBy,confidence};
- });
+   return {name,role:name==="Liam Wingrove"?"IDP Project Lead":"Data Processor",packs:rows.length,docs,reviews,validated:validatedBy,confidence,avgProcessingTime};
+  });
  const unassigned=filtered.filter(p=>!p.assignedTo||p.assignedTo==="Unassigned").length;
  const customersLive=[...new Set(filtered.map(p=>p.customer).filter(Boolean))];
  return <section>
@@ -270,7 +275,7 @@ function ManagerPage({livePacks,dataSource}){
   <div className="manager-grid">
    <div className="panel">
     <div className="panel-head"><div><h2>Team performance</h2><p>{periodLabel} · based on pack ownership</p></div></div>
-    <div className="manager-table-wrap"><table><thead><tr><th>TEAM MEMBER</th><th>ROLE</th><th>PACKS</th><th>DOCUMENTS</th><th>VALIDATED</th><th>REVIEWS</th><th>AVG CONF.</th></tr></thead><tbody>{team.map(m=><tr key={m.name}><td><b>{m.name}</b></td><td>{m.role}</td><td>{m.packs}</td><td>{m.docs}</td><td>{m.validated}</td><td>{m.reviews}</td><td>{m.confidence}</td></tr>)}</tbody></table></div>
+    <div className="manager-table-wrap"><table><thead><tr><th>TEAM MEMBER</th><th>ROLE</th><th>PACKS</th><th>DOCUMENTS</th><th>VALIDATED</th><th>REVIEWS</th><th>AVG CONF.</th><th>AVG PROCESSING</th></tr></thead><tbody>{team.map(m=><tr key={m.name}><td><b>{m.name}</b></td><td>{m.role}</td><td>{m.packs}</td><td>{m.docs}</td><td>{m.validated}</td><td>{m.reviews}</td><td>{m.confidence}</td><td>{m.avgProcessingTime}</td></tr>)}</tbody></table></div>
     <div className="manager-note"><ShieldCheck size={15}/><span>{unassigned?unassigned+" pack"+(unassigned===1?" is":"s are")+" currently unassigned in this period.":"All packs in this period have an owner."} Assign ownership from Inbox to populate team performance.</span></div>
    </div>
    <div className="panel"><div className="panel-head"><div><h2>Platform health</h2><p>{periodLabel} workload across the operation</p></div></div><div className="queue-list"><Queue label="Validated" value={validated} pct={totalPacks?((validated/totalPacks)*100).toFixed(1):"0.0"} cls="good"/><Queue label="Processing" value={processing} pct={totalPacks?((processing/totalPacks)*100).toFixed(1):"0.0"} cls="blue"/><Queue label="Needs review" value={review} pct={totalPacks?((review/totalPacks)*100).toFixed(1):"0.0"} cls="warn"/></div></div>
