@@ -433,7 +433,10 @@ function Status({status}){let c=status==="Validated"?"good":status==="Processing
 
 function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}){
  const [docUrls,setDocUrls]=useState({});
- const [preview,setPreview]=useState(null);
+ const [tab,setTab]=useState("extraction");
+ const [chat,setChat]=useState("");
+ const [selectedDocumentId,setSelectedDocumentId]=useState(null);
+
  useEffect(()=>{let active=true;(async()=>{
    const entries=await Promise.all((pack.uploadedFiles||[]).map(async f=>{
      const file=await getUploadedDocument(f.id);
@@ -441,8 +444,6 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
    }));
    if(active)setDocUrls(Object.fromEntries(entries.filter(Boolean)));
  })();return()=>{active=false;};},[pack.id,pack.uploadedFiles]);
- const [tab,setTab]=useState("extraction");
- const [chat,setChat]=useState("");
 
  const documentRows=pack.uploadedFiles?.length
    ? pack.uploadedFiles
@@ -452,6 +453,14 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
        {id:"sample-3",name:"Certificate of Origin.pdf"},
        {id:"sample-4",name:"Transport Document.pdf"}
      ];
+
+ useEffect(()=>{
+   if(!documentRows.length){setSelectedDocumentId(null);return;}
+   setSelectedDocumentId(current=>documentRows.some(d=>(d.id||d.name)===current)?current:(documentRows[0].id||documentRows[0].name));
+ },[pack.id,pack.uploadedFiles?.length]);
+
+ const selectedDocument=documentRows.find(d=>(d.id||d.name)===selectedDocumentId)||documentRows[0];
+ const selectedDocumentUrl=selectedDocument ? docUrls[selectedDocument.id] : null;
 
  return <section>
    <button className="back" onClick={back}>← Back to inbox</button>
@@ -483,20 +492,41 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
          <div className="review-documents-head">
            <div>
              <h3>Documents</h3>
-             <span>{documentRows.length} documents in this pack · open a source document to review the extraction</span>
+             <span>{documentRows.length} documents in this pack · select a document to review it above the extracted data</span>
            </div>
          </div>
          <div className="review-document-list">
-           {documentRows.map((f,i)=><div className="review-document-card" key={f.id||f.name}>
-             <div className="review-document-icon"><FileText size={18}/></div>
-             <div className="review-document-copy">
-               <b>{f.name}</b>
-               <span>{pack.uploadedFiles?.length?"Stored with this pack":"Example document"}</span>
+           {documentRows.map(f=>{
+             const id=f.id||f.name;
+             const selected=id===selectedDocumentId;
+             return <button type="button" className={"review-document-card "+(selected?"selected":"")} key={id} onClick={()=>setSelectedDocumentId(id)}>
+               <div className="review-document-icon"><FileText size={18}/></div>
+               <div className="review-document-copy">
+                 <b>{f.name}</b>
+                 <span>{pack.uploadedFiles?.length?"Stored with this pack":"Example document"}</span>
+               </div>
+               <span className="review-document-state">{selected?"Viewing":"View"}</span>
+             </button>;
+           })}
+         </div>
+
+         <div className="review-document-preview">
+           <div className="review-document-preview-head">
+             <div>
+               <span>DOCUMENT PREVIEW</span>
+               <b>{selectedDocument?.name||"No document selected"}</b>
              </div>
-             {docUrls[f.id]
-               ? <button className="secondary review-document-action" onClick={()=>setPreview({url:docUrls[f.id],name:f.name})}>Preview</button>
-               : <button className="secondary review-document-action" onClick={()=>notify("Document file is not available in this browser")}>Open</button>}
-           </div>)}
+             <small>{selectedDocumentUrl?"Live source document":"Preview unavailable"}</small>
+           </div>
+           <div className="review-document-preview-body">
+             {selectedDocumentUrl
+               ? <iframe src={selectedDocumentUrl} title={selectedDocument?.name||"Document preview"} />
+               : <div className="review-document-empty">
+                   <FileText size={28}/>
+                   <b>{selectedDocument?.name||"No document available"}</b>
+                   <span>The document is not stored in this browser, so a live preview cannot be displayed. Uploaded documents will appear here automatically.</span>
+                 </div>}
+           </div>
          </div>
        </div>
 
@@ -566,13 +596,6 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
        </div>
      </aside>
    </div>
-
-   {preview&&<div className="doc-preview-overlay" onClick={()=>setPreview(null)}>
-     <div className="doc-preview" onClick={e=>e.stopPropagation()}>
-       <div className="doc-preview-head"><b>{preview.name}</b><button className="row-btn" onClick={()=>setPreview(null)}><X size={18}/></button></div>
-       <iframe src={preview.url} title={preview.name}/>
-     </div>
-   </div>}
  </section>
 }
 function Customers({notify}){return <section><div className="page-head"><div><div className="eyebrow">Configuration</div><h1>Customers</h1><p>Customer-specific extraction strategies, mailboxes and validation rules.</p></div><button className="primary" onClick={()=>notify("Customer creation flow opened")}><Plus size={17}/> Add customer</button></div><div className="customer-grid">{customers.map(c=><div className="customer-card" key={c.code}><div className="customer-top"><div className="customer-logo">{c.name.split(" ").map(x=>x[0]).slice(0,2).join("")}</div><button className="row-btn"><MoreHorizontal size={17}/></button></div><h3>{c.name}</h3><span className="code">{c.code}</span><div className="customer-info"><div><Mail size={15}/><span>{c.mailbox}</span></div><div><Settings size={15}/><span>{c.rules} extraction rules</span></div><div><Activity size={15}/><span>{c.processed} documents processed</span></div></div><button className="full-btn">Open strategy <ArrowRight size={15}/></button></div>)}</div></section>}
