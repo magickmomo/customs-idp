@@ -124,6 +124,43 @@ function App(){
     }catch{return false;}
   };
   const uploadRef=useRef(null);
+  const reprocessPack=async(pack)=>{
+    if(!pack)return;
+    const files=pack.uploadedFiles||[];
+    if(!files.length){
+      notify("No uploaded documents are available to reprocess");
+      return;
+    }
+    const processing={...pack,status:"Processing",processingError:undefined,validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined,processingStartedAt:new Date().toISOString()};
+    setSelectedPack(processing);
+    setLivePacks(prev=>prev.map(p=>p.id===processing.id?processing:p));
+    persistPack(processing);
+    notify("Re-processing documents — AI extraction started");
+    try{
+      const source=await getUploadedDocument(files[0].id);
+      if(!source)throw new Error("The uploaded document is no longer available in this browser");
+      const buffer=await source.arrayBuffer();
+      const bytes=new Uint8Array(buffer);
+      let binary="";
+      const chunk=0x8000;
+      for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+chunk,bytes.length)));
+      const dataUrl=`data:${source.type||"application/octet-stream"};base64,${btoa(binary)}`;
+      const response=await fetch("/api/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({fileData:dataUrl,filename:files[0].name,mimeType:source.type})});
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.error||"Re-processing failed");
+      const processed={...processing,status:"Needs review",confidence:Math.round((result.extraction.confidence||0)*100),extractedData:result.extraction};
+      setSelectedPack(processed);
+      setLivePacks(prev=>prev.map(p=>p.id===processed.id?processed:p));
+      persistPack(processed);
+      notify("Re-processing complete — review the new extraction");
+    }catch(error){
+      const failed={...processing,status:"Needs review",processingError:error.message};
+      setSelectedPack(failed);
+      setLivePacks(prev=>prev.map(p=>p.id===failed.id?failed:p));
+      persistPack(failed);
+      notify("Re-processing failed — check the pack for details");
+    }
+  };
 
   const handleUpload=async(files)=>{
     const selected=Array.from(files||[]);
@@ -244,7 +281,7 @@ const postToLCA=()=>{
         {page==="dashboard" && <Dashboard navigate={navigate} notify={notify} livePacks={livePacks}/>}
         {page==="inbox" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{setSelectedPack(p);navigate("review")}} onUpload={handleUpload} onAssign={assignPack}/>}
         
-        {page==="review" && <Review pack={selectedPack} back={()=>navigate("inbox")} notify={notify} onAssign={assignPack} validatePack={validatePack} postToLCA={postToLCA}/>}
+        {page==="review" && <Review pack={selectedPack} back={()=>navigate("inbox")} notify={notify} onAssign={assignPack} validatePack={validatePack} postToLCA={postToLCA} reprocessPack={reprocessPack}/>}
         {page==="customers" && <Customers notify={notify}/>}
         {page==="agent" && <AgentPage/>}
         {page==="settings" && <SettingsPage/>}
