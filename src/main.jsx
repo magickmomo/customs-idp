@@ -202,6 +202,8 @@ function Dashboard({navigate,notify,livePacks}){
 
 function ManagerPage({livePacks,dataSource}){
  const [period,setPeriod]=useState("7d");
+ const [customFrom,setCustomFrom]=useState("");
+ const [customTo,setCustomTo]=useState("");
  const now=new Date();
  const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
  let rangeStart=null,rangeEnd=null;
@@ -213,6 +215,7 @@ function ManagerPage({livePacks,dataSource}){
  if(period==="lastMonth"){rangeStart=new Date(today.getFullYear(),today.getMonth()-1,1);rangeEnd=new Date(today.getFullYear(),today.getMonth(),1)-1;rangeEnd=new Date(rangeEnd);}
  if(period==="thisWeek"){const day=today.getDay()||7;rangeStart=new Date(today.getTime()-(day-1)*86400000);rangeEnd=new Date(today.getTime()+86400000-1);}
  if(period==="lastWeek"){const day=today.getDay()||7;rangeStart=new Date(today.getTime()-(day+6)*86400000);rangeEnd=new Date(today.getTime()-(day-1)*86400000-1);}
+ if(period==="custom" && customFrom){rangeStart=new Date(customFrom+"T00:00:00");rangeEnd=customTo?new Date(customTo+"T23:59:59.999"):new Date(customFrom+"T23:59:59.999");}
  const filtered=livePacks.filter(p=>{
    if(!rangeStart)return true;
    const received=new Date(p.received);
@@ -228,7 +231,7 @@ function ManagerPage({livePacks,dataSource}){
  const validationRate=totalPacks?((validated/totalPacks)*100).toFixed(1):"0.0";
  const reviewRate=totalPacks?((review/totalPacks)*100).toFixed(1):"0.0";
  const failureRate=totalPacks?((failed/totalPacks)*100).toFixed(1):"0.0";
- const periodLabel={today:"Today",yesterday:"Yesterday","7d":"Last 7 days","30d":"Last 30 days",thisWeek:"This week",lastWeek:"Last week",thisMonth:"This month",lastMonth:"Last month",all:"All time"}[period];
+ const periodLabel={today:"Today",yesterday:"Yesterday","7d":"Last 7 days","30d":"Last 30 days",thisWeek:"This week",lastWeek:"Last week",thisMonth:"This month",lastMonth:"Last month",all:"All time",custom:"Custom range"}[period];
  const team=["Liam Wingrove","Michael Houston","Sophie Wingrove"].map(name=>{
    const rows=filtered.filter(p=>p.assignedTo===name);
    const docs=rows.reduce((n,p)=>n+(Number(p.docs)||0),0);
@@ -245,8 +248,9 @@ function ManagerPage({livePacks,dataSource}){
    <div className="manager-head-actions">
     <span className="online-pill"><span></span>{dataSource==="database"?"Database connected":"Prototype storage"}</span>
     <select className="manager-period-select" value={period} onChange={e=>setPeriod(e.target.value)}>
-     <option value="today">Today</option><option value="yesterday">Yesterday</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="thisWeek">This week</option><option value="lastWeek">Last week</option><option value="thisMonth">This month</option><option value="lastMonth">Last month</option><option value="all">All time</option>
+     <option value="today">Today</option><option value="yesterday">Yesterday</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="thisWeek">This week</option><option value="lastWeek">Last week</option><option value="thisMonth">This month</option><option value="lastMonth">Last month</option><option value="all">All time</option><option value="custom">Custom range</option>
     </select>
+    {period==="custom" && <div className="manager-custom-range"><label>From<input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}/></label><label>To<input type="date" value={customTo} min={customFrom||undefined} onChange={e=>setCustomTo(e.target.value)}/></label></div>}
    </div>
   </div>
   <div className="metric-grid">
