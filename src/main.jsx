@@ -204,6 +204,8 @@ function ManagerPage({livePacks,dataSource}){
  const [period,setPeriod]=useState("7d");
  const [customFrom,setCustomFrom]=useState("");
  const [customTo,setCustomTo]=useState("");
+ const [appliedFrom,setAppliedFrom]=useState("");
+ const [appliedTo,setAppliedTo]=useState("");
  const now=new Date();
  const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
  let rangeStart=null,rangeEnd=null;
@@ -215,7 +217,7 @@ function ManagerPage({livePacks,dataSource}){
  if(period==="lastMonth"){rangeStart=new Date(today.getFullYear(),today.getMonth()-1,1);rangeEnd=new Date(today.getFullYear(),today.getMonth(),1)-1;rangeEnd=new Date(rangeEnd);}
  if(period==="thisWeek"){const day=today.getDay()||7;rangeStart=new Date(today.getTime()-(day-1)*86400000);rangeEnd=new Date(today.getTime()+86400000-1);}
  if(period==="lastWeek"){const day=today.getDay()||7;rangeStart=new Date(today.getTime()-(day+6)*86400000);rangeEnd=new Date(today.getTime()-(day-1)*86400000-1);}
- if(period==="custom" && customFrom){rangeStart=new Date(customFrom+"T00:00:00");rangeEnd=customTo?new Date(customTo+"T23:59:59.999"):new Date(customFrom+"T23:59:59.999");}
+ if(period==="custom" && appliedFrom){rangeStart=new Date(appliedFrom+"T00:00:00");rangeEnd=appliedTo?new Date(appliedTo+"T23:59:59.999"):new Date(appliedFrom+"T23:59:59.999");}
  const filtered=livePacks.filter(p=>{
    if(!rangeStart)return true;
    const received=new Date(p.received);
@@ -250,7 +252,7 @@ function ManagerPage({livePacks,dataSource}){
     <select className="manager-period-select" value={period} onChange={e=>setPeriod(e.target.value)}>
      <option value="today">Today</option><option value="yesterday">Yesterday</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="thisWeek">This week</option><option value="lastWeek">Last week</option><option value="thisMonth">This month</option><option value="lastMonth">Last month</option><option value="all">All time</option><option value="custom">Custom range</option>
     </select>
-    {period==="custom" && <div className="manager-custom-range"><label>From<input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}/></label><label>To<input type="date" value={customTo} min={customFrom||undefined} onChange={e=>setCustomTo(e.target.value)}/></label></div>}
+    {period==="custom" && <div className="manager-custom-range"><label>From<input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}/></label><label>To<input type="date" value={customTo} min={customFrom||undefined} onChange={e=>setCustomTo(e.target.value)}/></label><button type="button" className="manager-apply-range" disabled={!customFrom} onClick={()=>{setAppliedFrom(customFrom);setAppliedTo(customTo||customFrom);}}>Apply</button></div>}
    </div>
   </div>
   <div className="metric-grid">
