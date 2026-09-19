@@ -878,3 +878,34 @@ body.review-resizing .review-horizontal-resizer span{
     min-height:340px;
   }
 }
+
+/* Readability and pack action polish. */
+:root{font-family:Arial,Helvetica,sans-serif;font-size:16px}
+body,button,input,select,textarea{font-family:Arial,Helvetica,sans-serif}
+body{font-size:15px}
+.brand strong{font-size:15px}.brand span,.workspace span,.system-status span{font-size:11px}
+.workspace{font-size:13px}.workspace b{font-size:13px}.nav-item{font-size:14px}.nav-item em{font-size:11px}
+.crumb{font-size:13px}.page-head p{font-size:14px}.eyebrow{font-size:11px}
+.primary,.secondary,.filter,.select{font-size:13px}.metric-copy span{font-size:12px}.metric-copy small{font-size:11px}
+.panel h2{font-size:15px}.panel p{font-size:12px}.queue b{font-size:12px}.queue>small{font-size:10px}.text-btn{font-size:12px}
+th{font-size:10px}td{font-size:12px}td b{font-size:12px}td small{font-size:10px}.status{font-size:11px}.back{font-size:12px}
+.tabs button{font-size:12px}.data-summary span{font-size:10px}.section-title h3{font-size:14px}.section-title span{font-size:11px}
+.line-table th,.line-table td{font-size:10px}.line-table td b{font-size:11px}.json{font-size:11px}
+.agent-title b{font-size:13px}.agent-title span{font-size:10px}.agent-insight b{font-size:11px}.agent-insight p{font-size:10px}
+.agent-rule span{font-size:9px}.agent-rule b{font-size:11px}.agent-rule small{font-size:10px}.message{font-size:11px}.chat-input input{font-size:11px}
+.customer-card h3{font-size:15px}.code{font-size:10px}.customer-info div{font-size:11px}.full-btn{font-size:11px}.capability{font-size:12px}
+.suggestions button{font-size:10px}.online-pill{font-size:11px}.settings-card>label{font-size:11px}.settings-card>input,.settings-card>select{font-size:11px}.toggle-row{font-size:12px}
+.agent-fab,.toast{font-size:12px}.extraction-error{font-size:12px}.owner-select{font-size:11px}
+.manager-note{font-size:11px}.manager-customer b{font-size:12px}.manager-customer span{font-size:11px}.manager-customer small{font-size:10px}.manager-empty{font-size:12px}
+.manager-section-head h2{font-size:15px}.manager-section-head p{font-size:12px}.manager-control b{font-size:12px}.manager-control span{font-size:11px}
+.period-switch button{font-size:12px}.mini-kpi span{font-size:12px}.mini-kpi small{font-size:11px}.manager-period-select{font-size:12px}
+.manager-date-filter label,.manager-custom-range label{font-size:11px}.manager-date-filter input,.manager-custom-range input{font-size:12px}.manager-apply-range{font-size:12px}
+.test-login-brand strong{font-size:15px}.test-login-brand span{font-size:11px}.test-login-copy p{font-size:13px}.test-user-button b{font-size:13px}.test-user-button small{font-size:11px}.switch-user-btn{font-size:12px}
+.review-documents-head h3{font-size:14px}.review-documents-head span{font-size:11px}
+.row-menu{position:relative;display:inline-flex}.row-menu .row-btn{width:34px;height:34px;display:grid;place-items:center;border:1px solid transparent;border-radius:7px;padding:0;color:#526176}
+.row-menu:hover .row-btn,.row-menu .row-btn:focus-visible{background:#eff6ff;border-color:#2563eb;color:#1d4ed8;outline:none}
+tbody tr:has(.row-menu:hover){background:transparent}
+.row-menu-popover{position:absolute;right:0;top:100%;z-index:30;min-width:145px;padding:5px;background:#fff;border:1px solid #dfe5ee;border-radius:8px;box-shadow:0 10px 24px rgba(15,23,42,.14)}
+.row-menu-popover button{width:100%;border:0;background:transparent;color:#b42318;text-align:left;border-radius:5px;padding:9px 10px;font-size:12px;display:flex;align-items:center;gap:7px;cursor:pointer}
+.row-menu-popover button:hover{background:#fff1f0}
+.table-wrap th{font-size:11px}.table-wrap td{font-size:13px}.table-wrap td b{font-size:13px}.table-wrap td small{font-size:11px}
