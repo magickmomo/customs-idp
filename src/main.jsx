@@ -88,11 +88,17 @@ function App(){
         const data=await response.json();
         if(active && Array.isArray(data.packs)){
   if(data.packs.length){
-    let nextPacks=data.packs;
+    // Keep browser-stored document metadata when older database rows pre-date
+    // persistent uploadedFiles support, and prefer database metadata once present.
+    const localPackMap=new Map((livePacks||[]).map(pack=>[pack.id,pack]));
+    let nextPacks=data.packs.map(pack=>{
+      const local=localPackMap.get(pack.id);
+      return pack.uploadedFiles?.length ? pack : (local?.uploadedFiles?.length ? {...pack,uploadedFiles:local.uploadedFiles} : pack);
+    });
     try{
       const resetKey="customs-idp-inbox-reset-v2";
       if(!localStorage.getItem(resetKey)){
-        nextPacks=data.packs.map(pack=>({
+        nextPacks=nextPacks.map(pack=>({
           ...pack,
           status:pack.status==="Validated"||pack.status==="Posted to LCA"?"Needs review":pack.status,
           processingCompletedAt:undefined,
