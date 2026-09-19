@@ -461,6 +461,8 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
 
  const selectedDocument=documentRows.find(d=>(d.id||d.name)===selectedDocumentId)||documentRows[0];
  const selectedDocumentUrl=selectedDocument ? docUrls[selectedDocument.id] : null;
+ const selectedDocumentIsPdf=/\.pdf$/i.test(selectedDocument?.name||"");
+ const selectedDocumentFrameUrl=selectedDocumentUrl && selectedDocumentIsPdf ? `${selectedDocumentUrl}#view=FitH&zoom=page-width` : selectedDocumentUrl;
 
  return <section>
    <button className="back" onClick={back}>← Back to inbox</button>
@@ -520,7 +522,7 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
            </div>
            <div className="review-document-preview-body">
              {selectedDocumentUrl
-               ? <iframe src={selectedDocumentUrl} title={selectedDocument?.name||"Document preview"} />
+               ? <iframe src={selectedDocumentFrameUrl} title={selectedDocument?.name||"Document preview"} />
                : <div className="review-document-empty">
                    <FileText size={28}/>
                    <b>{selectedDocument?.name||"No document available"}</b>
