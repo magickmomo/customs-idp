@@ -111,6 +111,18 @@ function App(){
       }
     }catch{}
     setLivePacks(nextPacks);
+    // Backfill document metadata to Supabase for packs restored from local browser storage.
+    const restoredWithDocuments=nextPacks.filter(pack=>{
+      const local=localPackMap.get(pack.id);
+      return !data.packs.find(dbPack=>dbPack.id===pack.id)?.uploadedFiles?.length && local?.uploadedFiles?.length;
+    });
+    if(restoredWithDocuments.length){
+      await Promise.all(restoredWithDocuments.map(pack=>fetch("/api/packs",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(pack)
+      })));
+    }
   } else if(livePacks.length){
     await Promise.all(livePacks.map(pack=>fetch("/api/packs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pack)})));
   }
