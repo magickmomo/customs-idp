@@ -228,7 +228,7 @@ function ManagerPage({livePacks,dataSource}){
  const validationRate=totalPacks?((validated/totalPacks)*100).toFixed(1):"0.0";
  const reviewRate=totalPacks?((review/totalPacks)*100).toFixed(1):"0.0";
  const failureRate=totalPacks?((failed/totalPacks)*100).toFixed(1):"0.0";
- const periodLabel={today:"Today",yesterday:"Yesterday",7d:"Last 7 days",30d:"Last 30 days",thisWeek:"This week",lastWeek:"Last week",thisMonth:"This month",lastMonth:"Last month",all:"All time"}[period];
+ const periodLabel={today:"Today",yesterday:"Yesterday","7d":"Last 7 days","30d":"Last 30 days",thisWeek:"This week",lastWeek:"Last week",thisMonth:"This month",lastMonth:"Last month",all:"All time"}[period];
  const team=["Liam Wingrove","Michael Houston","Sophie Wingrove"].map(name=>{
    const rows=filtered.filter(p=>p.assignedTo===name);
    const docs=rows.reduce((n,p)=>n+(Number(p.docs)||0),0);
