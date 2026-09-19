@@ -88,7 +88,23 @@ function App(){
         const data=await response.json();
         if(active && Array.isArray(data.packs)){
   if(data.packs.length){
-    setLivePacks(data.packs);
+    let nextPacks=data.packs;
+    try{
+      const resetKey="customs-idp-inbox-reset-v2";
+      if(!localStorage.getItem(resetKey)){
+        nextPacks=data.packs.map(pack=>({
+          ...pack,
+          status:pack.status==="Validated"||pack.status==="Posted to LCA"?"Needs review":pack.status,
+          processingCompletedAt:undefined,
+          validationStatus:undefined,
+          validationChecks:undefined,
+          postedToLCAAt:undefined
+        }));
+        await Promise.all(nextPacks.map(pack=>fetch("/api/packs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pack)})));
+        localStorage.setItem(resetKey,"1");
+      }
+    }catch{}
+    setLivePacks(nextPacks);
   } else if(livePacks.length){
     await Promise.all(livePacks.map(pack=>fetch("/api/packs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pack)})));
   }
