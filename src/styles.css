@@ -171,3 +171,125 @@ button{touch-action:manipulation}
 /* Test user access */
 .test-login{min-height:100vh;background:#f5f7fb;display:grid;place-items:center;padding:24px}.test-login-card{width:min(430px,100%);background:#fff;border:1px solid #e4e9f0;border-radius:14px;padding:28px;box-shadow:0 18px 55px rgba(15,23,42,.10)}.test-login-brand{display:flex;gap:11px;align-items:center;margin-bottom:34px}.test-login-brand strong{display:block;color:#172033;font-size:14px}.test-login-brand span{display:block;color:#7c8799;font-size:10px;margin-top:3px}.test-login-copy{margin-bottom:18px}.test-login-copy h1{font-size:25px;margin:0 0 6px;color:#172033}.test-login-copy p{font-size:11px;color:#788498;line-height:1.5;margin:0}.test-user-list{display:flex;flex-direction:column;gap:8px}.test-user-button{width:100%;border:1px solid #e1e6ee;background:#fff;border-radius:9px;padding:11px 12px;display:flex;align-items:center;gap:11px;text-align:left;color:#243147;cursor:pointer}.test-user-button:hover{border-color:#9dbcf0;background:#f8fbff}.test-user-button>span:nth-child(2){flex:1}.test-user-button b,.test-user-button small{display:block}.test-user-button b{font-size:11px}.test-user-button small{font-size:9px;color:#8791a2;margin-top:3px;text-transform:capitalize}.test-user-button>svg{color:#8a96a8}.test-user-avatar{width:34px;height:34px;border-radius:9px;background:#edf4ff;color:#2563eb;display:grid;place-items:center;font-size:10px;font-weight:700;flex:0 0 auto}.switch-user-btn{width:100%;border:1px solid #263246;background:#141f2e;color:#9eabbe;border-radius:8px;padding:9px 11px;display:flex;align-items:center;gap:10px;font-size:10px;cursor:pointer;margin-top:8px}.switch-user-btn:hover{background:#1b2739;color:#fff}.mobile-switch-user{margin:16px 4px 0;width:calc(100% - 8px)}
 @media(max-width:650px){.test-login{padding:18px}.test-login-card{padding:22px}.test-login-brand{margin-bottom:28px}}
+
+
+/* Review workspace: documents first, extracted data second, AI agent underneath. */
+.review-layout.review-layout-stack{
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+.review-layout.review-layout-stack .extraction-panel{
+  width:100%;
+}
+.review-layout.review-layout-stack .agent-panel{
+  width:100%;
+  position:static;
+  min-height:0;
+  align-self:stretch;
+}
+.review-documents{
+  padding:16px 17px 15px;
+  border-bottom:1px solid #e8ecf2;
+  background:#fbfcfe;
+}
+.review-documents-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:11px;
+}
+.review-documents-head h3{
+  margin:0;
+  font-size:12px;
+  color:#263147;
+}
+.review-documents-head span{
+  display:block;
+  margin-top:4px;
+  color:#8a95a5;
+  font-size:9px;
+}
+.review-document-list{
+  display:flex;
+  gap:9px;
+  overflow-x:auto;
+  padding-bottom:2px;
+  -webkit-overflow-scrolling:touch;
+}
+.review-document-card{
+  min-width:220px;
+  flex:1 1 0;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  padding:10px;
+  border:1px solid #e1e7ef;
+  border-radius:8px;
+  background:#fff;
+}
+.review-document-icon{
+  width:32px;
+  height:32px;
+  flex:0 0 32px;
+  display:grid;
+  place-items:center;
+  border-radius:7px;
+  background:#edf4ff;
+  color:#2563eb;
+}
+.review-document-copy{
+  min-width:0;
+  flex:1;
+}
+.review-document-copy b,
+.review-document-copy span{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.review-document-copy b{
+  color:#263147;
+  font-size:9px;
+}
+.review-document-copy span{
+  color:#8a95a5;
+  font-size:8px;
+  margin-top:3px;
+}
+.review-document-action{
+  flex:0 0 auto;
+  padding:7px 9px;
+  white-space:nowrap;
+}
+.review-agent-panel{
+  box-sizing:border-box;
+}
+.review-agent-panel .chat{
+  margin-top:16px;
+}
+@media(max-width:900px){
+  .review-document-card{
+    min-width:230px;
+    flex:0 0 230px;
+  }
+}
+@media(max-width:650px){
+  .review-documents{
+    padding:13px;
+  }
+  .review-documents-head{
+    align-items:flex-start;
+  }
+  .review-documents-head span{
+    line-height:1.4;
+  }
+  .review-document-card{
+    min-width:255px;
+    flex-basis:255px;
+  }
+  .review-agent-panel{
+    border-radius:12px;
+  }
+}
