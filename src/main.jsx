@@ -55,7 +55,14 @@ function App(){
         const response=await fetch("/api/packs");
         if(!response.ok) throw new Error("Database unavailable");
         const data=await response.json();
-        if(active && Array.isArray(data.packs) && data.packs.length){ setLivePacks(data.packs); setDataSource("database"); }
+        if(active && Array.isArray(data.packs)){
+  if(data.packs.length){
+    setLivePacks(data.packs);
+  } else if(livePacks.length){
+    await Promise.all(livePacks.map(pack=>fetch("/api/packs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pack)})));
+  }
+  setDataSource("database");
+}
       } catch { /* keep local prototype data until database credentials are configured */ }
     })();
     return()=>{active=false;};
@@ -192,7 +199,7 @@ function Dashboard({navigate,notify,livePacks}){
  </section>
 }
 
-function ManagerPage({livePacks}){
+function ManagerPage({livePacks,dataSource}){
  const totalPacks=livePacks.length,totalDocuments=livePacks.reduce((n,p)=>n+(Number(p.docs)||0),0);
  const validated=livePacks.filter(p=>p.status==="Validated").length,review=livePacks.filter(p=>p.status==="Needs review").length,processing=livePacks.filter(p=>p.status==="Processing").length;
  const avgConfidence=totalPacks?Math.round(livePacks.reduce((n,p)=>n+(Number(p.confidence)||0),0)/totalPacks):0;
