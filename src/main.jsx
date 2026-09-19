@@ -33,14 +33,44 @@ const sampleLines = [
   {line:3,description:"Protective timber spacers",hs:"4415 10 90",origin:"HU",qty:18,net:"7.560",gross:"8.410",value:"216.00",confidence:94}
 ];
 
+const TEST_USERS=[
+  {id:"liam",name:"Liam Wingrove",role:"manager",initials:"LW"},
+  {id:"muhammad",name:"Muhammad Amer",role:"manager",initials:"MA"},
+  {id:"michael",name:"Michael Houston",role:"user",initials:"MH"},
+  {id:"sophie",name:"Sophie Wingrove",role:"user",initials:"SW"}
+];
+
+function TestUserLogin({onSelect}){
+  return <div className="test-login">
+    <div className="test-login-card">
+      <div className="test-login-brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div>
+      <div className="test-login-copy"><div className="eyebrow">Test environment</div><h1>Select user</h1><p>No email or password is required. Choose the test user you want to work as.</p></div>
+      <div className="test-user-list">
+        {TEST_USERS.map(user=><button className="test-user-button" key={user.id} onClick={()=>onSelect(user)}>
+          <span className="test-user-avatar">{user.initials}</span>
+          <span><b>{user.name}</b><small>{user.role==="manager"?"Manager":"Data Processor"}</small></span>
+          <ArrowRight size={16}/>
+        </button>)}
+      </div>
+    </div>
+  </div>;
+}
+
 function App(){
+  const [currentUser,setCurrentUser]=useState(()=>{
+    try{
+      const saved=localStorage.getItem("customs-idp-user");
+      return TEST_USERS.find(u=>u.id===saved)||null;
+    }catch{return null;}
+  });
   const [page,setPage]=useState("inbox");
   const [selectedPack,setSelectedPack]=useState(packs[0]);
   const [agentOpen,setAgentOpen]=useState(true);
   const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
   const [sidebarCollapsed,setSidebarCollapsed]=useState(false);
-  const currentUserRole="manager";
-  const currentUserName="Liam Wingrove";
+  const currentUserRole=currentUser?.role||"";
+  const currentUserName=currentUser?.name||"";
+  const currentUserInitials=currentUser?.initials||"";
   const canViewManager=currentUserRole==="manager" || currentUserRole==="admin";
   const [query,setQuery]=useState("");
   const [toast,setToast]=useState("");
@@ -131,10 +161,16 @@ function App(){
   const assignPack=(packId,assignedTo)=>{const updated={...livePacks.find(p=>p.id===packId),assignedTo};setLivePacks(prev=>prev.map(p=>p.id===packId?updated:p));if(selectedPack?.id===packId)setSelectedPack(prev=>({...prev,assignedTo}));persistPack(updated);notify(`Pack ${packId} assigned to ${assignedTo}`)};
   const approvePack=()=>{if(!selectedPack)return;const now=new Date().toISOString();const assignedTo=selectedPack.assignedTo&&selectedPack.assignedTo!=="Unassigned"?selectedPack.assignedTo:currentUserName;const approved={...selectedPack,status:"Validated",assignedTo,processingCompletedAt:selectedPack.processingCompletedAt||now};setSelectedPack(approved);setLivePacks(prev=>prev.map(p=>p.id===approved.id?approved:p));persistPack(approved);notify(`Pack approved and validated${assignedTo===currentUserName?" — assigned to "+currentUserName:""}`);navigate("inbox")};
 
+  if(!currentUser)return <TestUserLogin onSelect={user=>{
+    setCurrentUser(user);
+    try{localStorage.setItem("customs-idp-user",user.id);}catch{}
+    setPage("inbox");
+  }}/>;
+
   return <div className={"app-shell "+(sidebarCollapsed?"sidebar-collapsed":"")}>
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div>
-      <div className="workspace"><div className="avatar">LW</div><div><b>Customs Operations</b><span>{dataSource==="database"?"Database connected":"Prototype storage"}</span></div><ChevronDown size={15}/></div>
+      <div className="workspace"><div className="avatar">{currentUserInitials}</div><div><b>{currentUserName}</b><span>{currentUserRole==="manager"?"Manager":"Data Processor"} · {dataSource==="database"?"Database connected":"Prototype storage"}</span></div></div>
       <nav>
         <NavItem icon={Inbox} label="Inbox" badge={livePacks.length} active={page==="inbox"} onClick={()=>navigate("inbox")}/>
         {canViewManager && <NavItem icon={Activity} label="Manager" active={page==="manager"} onClick={()=>navigate("manager")}/>}
@@ -143,18 +179,19 @@ function App(){
       </nav>
       <div className="side-bottom">
         <NavItem icon={Settings} label="Settings" active={page==="settings"} onClick={()=>navigate("settings")}/>
+        <button className="switch-user-btn" onClick={()=>{setCurrentUser(null);try{localStorage.removeItem("customs-idp-user");}catch{};setPage("inbox")}}><Users size={16}/><span>Switch user</span></button>
         <div className="system-status"><span className="dot"></span><div><b>All systems operational</b><span>Last sync 16:02</span></div></div>
       </div>
     </aside>
     <button className="sidebar-collapse-btn" aria-label={sidebarCollapsed?"Expand sidebar":"Collapse sidebar"} onClick={()=>setSidebarCollapsed(v=>!v)}>{sidebarCollapsed?<ChevronRight size={17}/>:<ChevronLeft size={17}/>}</button>
 
-    {mobileMenuOpen && <div className="mobile-menu-overlay" onClick={()=>setMobileMenuOpen(false)}><aside className="mobile-menu" onClick={e=>e.stopPropagation()}><div className="mobile-menu-head"><div className="brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><button className="icon-btn" aria-label="Close navigation" onClick={()=>setMobileMenuOpen(false)}><X size={20}/></button></div><div className="mobile-workspace"><div className="avatar">LW</div><div><b>Customs Operations</b><span>{dataSource==="database"?"Database connected":"Prototype storage"}</span></div></div><nav><NavItem icon={Inbox} label="Inbox" badge={livePacks.length} active={page==="inbox"} onClick={()=>navigate("inbox")}/>{canViewManager && <NavItem icon={Activity} label="Manager" active={page==="manager"} onClick={()=>navigate("manager")}/>}<NavItem icon={Users} label="Customers" active={page==="customers"} onClick={()=>navigate("customers")}/><NavItem icon={Bot} label="AI Agent" active={page==="agent"} onClick={()=>navigate("agent")}/><NavItem icon={Settings} label="Settings" active={page==="settings"} onClick={()=>navigate("settings")}/></nav><div className="mobile-system-status"><span className="dot"></span><div><b>All systems operational</b><span>Last sync 16:02</span></div></div></aside></div>}
+    {mobileMenuOpen && <div className="mobile-menu-overlay" onClick={()=>setMobileMenuOpen(false)}><aside className="mobile-menu" onClick={e=>e.stopPropagation()}><div className="mobile-menu-head"><div className="brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><button className="icon-btn" aria-label="Close navigation" onClick={()=>setMobileMenuOpen(false)}><X size={20}/></button></div><div className="mobile-workspace"><div className="avatar">{currentUserInitials}</div><div><b>{currentUserName}</b><span>{currentUserRole==="manager"?"Manager":"Data Processor"} · {dataSource==="database"?"Database connected":"Prototype storage"}</span></div></div><nav><NavItem icon={Inbox} label="Inbox" badge={livePacks.length} active={page==="inbox"} onClick={()=>navigate("inbox")}/>{canViewManager && <NavItem icon={Activity} label="Manager" active={page==="manager"} onClick={()=>navigate("manager")}/>}<NavItem icon={Users} label="Customers" active={page==="customers"} onClick={()=>navigate("customers")}/><NavItem icon={Bot} label="AI Agent" active={page==="agent"} onClick={()=>navigate("agent")}/><NavItem icon={Settings} label="Settings" active={page==="settings"} onClick={()=>navigate("settings")}/></nav><button className="switch-user-btn mobile-switch-user" onClick={()=>{setCurrentUser(null);try{localStorage.removeItem("customs-idp-user");}catch{};setPage("inbox")}}><Users size={16}/><span>Switch user</span></button><div className="mobile-system-status"><span className="dot"></span><div><b>All systems operational</b><span>Last sync 16:02</span></div></div></aside></div>}
 
     <main className="main">
       <header className="topbar">
         <button className="mobile-menu-btn" aria-label="Open navigation" onClick={()=>setMobileMenuOpen(true)}><Menu size={20}/></button><div className="mobile-brand"><strong>Customs IDP</strong></div>
         <div className="crumb">Operations <span>/</span> {page[0].toUpperCase()+page.slice(1)}</div>
-        <div className="top-actions"><button className="icon-btn" aria-label="Open inbox" onClick={()=>navigate("inbox")}><Mail size={18}/></button><div className="top-avatar">LW</div></div>
+        <div className="top-actions"><button className="icon-btn" aria-label="Open inbox" onClick={()=>navigate("inbox")}><Mail size={18}/></button><div className="top-avatar" title={currentUserName}>{currentUserInitials}</div></div>
       </header>
 
       <input ref={uploadRef} className="hidden-upload" type="file" multiple accept=".pdf,.xlsx,.xls,.doc,.docx,.csv,.png,.jpg,.jpeg,.eml,.msg" onChange={e=>handleUpload(e.target.files)}/>
@@ -310,7 +347,7 @@ function InboxPage({packs,query,setQuery,openPack,title="Inbox",onUpload,onAssig
  <div className="panel"><PackTable packs={packs} onOpen={openPack} onAssign={onAssign}/></div></section>
 }
 
-function PackTable({packs,onOpen,onAssign}){return <div className="table-wrap"><table><thead><tr><th>PACK</th><th>CUSTOMER</th><th>OWNER</th><th>DOCUMENTS</th><th>STATUS</th><th>CONFIDENCE</th><th>RECEIVED</th><th></th></tr></thead><tbody>{packs.map(p=><tr key={p.id} onClick={()=>onOpen(p)}><td><b>{p.id}</b><small>{p.ticket}</small></td><td>{p.customer}</td><td><select className="owner-select" value={p.assignedTo||"Unassigned"} onClick={e=>e.stopPropagation()} onChange={e=>onAssign?.(p.id,e.target.value)}><option>Unassigned</option><option>Liam Wingrove</option><option>Michael Houston</option><option>Sophie Wingrove</option></select></td><td>{p.docs} documents</td><td><Status status={p.status}/></td><td><div className="confidence"><span>{p.confidence}%</span><div><i style={{width:p.confidence+"%"}}></i></div></div></td><td>{p.received}</td><td><button className="row-btn"><MoreHorizontal size={17}/></button></td></tr>)}</tbody></table></div>}
+function PackTable({packs,onOpen,onAssign}){return <div className="table-wrap"><table><thead><tr><th>PACK</th><th>CUSTOMER</th><th>OWNER</th><th>DOCUMENTS</th><th>STATUS</th><th>CONFIDENCE</th><th>RECEIVED</th><th></th></tr></thead><tbody>{packs.map(p=><tr key={p.id} onClick={()=>onOpen(p)}><td><b>{p.id}</b><small>{p.ticket}</small></td><td>{p.customer}</td><td><select className="owner-select" value={p.assignedTo||"Unassigned"} onClick={e=>e.stopPropagation()} onChange={e=>onAssign?.(p.id,e.target.value)}><option>Unassigned</option><option>Liam Wingrove</option><option>Michael Houston</option><option>Sophie Wingrove</option><option>Muhammad Amer</option></select></td><td>{p.docs} documents</td><td><Status status={p.status}/></td><td><div className="confidence"><span>{p.confidence}%</span><div><i style={{width:p.confidence+"%"}}></i></div></div></td><td>{p.received}</td><td><button className="row-btn"><MoreHorizontal size={17}/></button></td></tr>)}</tbody></table></div>}
 
 function Status({status}){let c=status==="Validated"?"good":status==="Processing"?"processing":"review";return <span className={"status "+c}><span></span>{status}</span>}
 
@@ -328,7 +365,7 @@ function Review({pack,back,notify,onAssign,approvePack}){
 function Customers({notify}){return <section><div className="page-head"><div><div className="eyebrow">Configuration</div><h1>Customers</h1><p>Customer-specific extraction strategies, mailboxes and validation rules.</p></div><button className="primary" onClick={()=>notify("Customer creation flow opened")}><Plus size={17}/> Add customer</button></div><div className="customer-grid">{customers.map(c=><div className="customer-card" key={c.code}><div className="customer-top"><div className="customer-logo">{c.name.split(" ").map(x=>x[0]).slice(0,2).join("")}</div><button className="row-btn"><MoreHorizontal size={17}/></button></div><h3>{c.name}</h3><span className="code">{c.code}</span><div className="customer-info"><div><Mail size={15}/><span>{c.mailbox}</span></div><div><Settings size={15}/><span>{c.rules} extraction rules</span></div><div><Activity size={15}/><span>{c.processed} documents processed</span></div></div><button className="full-btn">Open strategy <ArrowRight size={15}/></button></div>)}</div></section>}
 
 function AgentPage(){
- const [messages,setMessages]=useState([{role:"agent",text:"Hi Liam. I can inspect extracted customs data, explain decisions, validate fields, and prepare corrections. Try asking about HU, gross weight, HS codes or customer rules."}]);
+ const [messages,setMessages]=useState([{role:"agent",text:"Hi. I can inspect extracted customs data, explain decisions, validate fields, and prepare corrections. Try asking about HU, gross weight, HS codes or customer rules."}]);
  const [input,setInput]=useState("");
  const send=(textValue=input)=>{
    const q=textValue.trim(); if(!q) return;
