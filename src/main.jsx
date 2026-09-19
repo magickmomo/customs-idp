@@ -202,89 +202,53 @@ function Dashboard({navigate,notify,livePacks}){
 
 function ManagerPage({livePacks,dataSource}){
  const [period,setPeriod]=useState("7d");
+ const [customStart,setCustomStart]=useState("");
+ const [customEnd,setCustomEnd]=useState("");
  const now=new Date();
- const cutoff=period==="today"
-   ? new Date(now.getFullYear(),now.getMonth(),now.getDate())
-   : period==="7d"
-   ? new Date(now.getTime()-7*86400000)
-   : period==="30d"
-   ? new Date(now.getTime()-30*86400000)
-   : null;
+ const dateOnly=d=>new Date(d.getFullYear(),d.getMonth(),d.getDate());
+ const startOfWeek=d=>{const x=dateOnly(d);const day=x.getDay();const diff=day===0?-6:1-day;x.setDate(x.getDate()+diff);return x;};
+ const endOfWeek=d=>{const x=startOfWeek(d);x.setDate(x.getDate()+6);return x;};
+ const bounds=()=>{
+   const today=dateOnly(now);
+   if(period==="today") return [today,today];
+   if(period==="yesterday"){const d=new Date(today);d.setDate(d.getDate()-1);return [d,d];}
+   if(period==="7d"){const d=new Date(today);d.setDate(d.getDate()-6);return [d,today];}
+   if(period==="30d"){const d=new Date(today);d.setDate(d.getDate()-29);return [d,today];}
+   if(period==="thisWeek") return [startOfWeek(today),today];
+   if(period==="lastWeek"){const end=startOfWeek(today);end.setDate(end.getDate()-1);const start=new Date(end);start.setDate(start.getDate()-6);return [start,end];}
+   if(period==="thisMonth") return [new Date(today.getFullYear(),today.getMonth(),1),today];
+   if(period==="lastMonth"){const start=new Date(today.getFullYear(),today.getMonth()-1,1);const end=new Date(today.getFullYear(),today.getMonth(),0);return [start,end];}
+   if(period==="custom" && customStart){const start=new Date(customStart+"T00:00:00");const end=customEnd?new Date(customEnd+"T23:59:59"):today;return [start,end];}
+   return [null,null];
+ };
+ const [rangeStart,rangeEnd]=bounds();
  const filtered=livePacks.filter(p=>{
-   if(!cutoff)return true;
+   if(!rangeStart)return true;
    const received=new Date(p.received);
-   return !Number.isNaN(received.getTime()) && received>=cutoff;
+   return !Number.isNaN(received.getTime()) && received>=rangeStart && received<=rangeEnd;
  });
- const totalPacks=filtered.length;
- const totalDocuments=filtered.reduce((n,p)=>n+(Number(p.docs)||0),0);
- const validated=filtered.filter(p=>p.status==="Validated").length;
- const review=filtered.filter(p=>p.status==="Needs review").length;
- const processing=filtered.filter(p=>p.status==="Processing").length;
- const failed=filtered.filter(p=>p.status==="Failed"||p.status==="failed").length;
+ const totalPacks=filtered.length,totalDocuments=filtered.reduce((n,p)=>n+(Number(p.docs)||0),0);
+ const validated=filtered.filter(p=>p.status==="Validated").length,review=filtered.filter(p=>p.status==="Needs review").length,processing=filtered.filter(p=>p.status==="Processing").length,failed=filtered.filter(p=>p.status==="Failed"||p.status==="failed").length;
  const avgConfidence=totalPacks?Math.round(filtered.reduce((n,p)=>n+(Number(p.confidence)||0),0)/totalPacks):0;
- const validationRate=totalPacks?((validated/totalPacks)*100).toFixed(1):"0.0";
- const reviewRate=totalPacks?((review/totalPacks)*100).toFixed(1):"0.0";
- const failureRate=totalPacks?((failed/totalPacks)*100).toFixed(1):"0.0";
- const periodLabel=period==="today"?"Today":period==="7d"?"Last 7 days":period==="30d"?"Last 30 days":"All time";
- const team=["Liam Wingrove","Michael Houston","Sophie Wingrove"].map(name=>{
-   const rows=filtered.filter(p=>p.assignedTo===name);
-   const docs=rows.reduce((n,p)=>n+(Number(p.docs)||0),0);
-   const reviews=rows.filter(p=>p.status==="Needs review").length;
-   const validatedBy=rows.filter(p=>p.status==="Validated").length;
-   const confidence=rows.length?Math.round(rows.reduce((n,p)=>n+(Number(p.confidence)||0),0)/rows.length)+"%":"—";
-   return {name,role:name==="Liam Wingrove"?"IDP Project Lead":"Data Processor",packs:rows.length,docs,reviews,validated:validatedBy,confidence};
- });
+ const validationRate=totalPacks?((validated/totalPacks)*100).toFixed(1):"0.0",reviewRate=totalPacks?((review/totalPacks)*100).toFixed(1):"0.0",failureRate=totalPacks?((failed/totalPacks)*100).toFixed(1):"0.0";
+ const labels={today:"Today",yesterday:"Yesterday",7d:"Last 7 days",30d:"Last 30 days",thisWeek:"This week",lastWeek:"Last week",thisMonth:"This month",lastMonth:"Last month",all:"All time",custom:"Custom range"};
+ const periodLabel=labels[period];
+ const team=["Liam Wingrove","Michael Houston","Sophie Wingrove"].map(name=>{const rows=filtered.filter(p=>p.assignedTo===name);const docs=rows.reduce((n,p)=>n+(Number(p.docs)||0),0);const reviews=rows.filter(p=>p.status==="Needs review").length;const validatedBy=rows.filter(p=>p.status==="Validated").length;const confidence=rows.length?Math.round(rows.reduce((n,p)=>n+(Number(p.confidence)||0),0)/rows.length)+"%":"—";return {name,role:name==="Liam Wingrove"?"IDP Project Lead":"Data Processor",packs:rows.length,docs,reviews,validated:validatedBy,confidence};});
  const unassigned=filtered.filter(p=>!p.assignedTo||p.assignedTo==="Unassigned").length;
  const customersLive=[...new Set(filtered.map(p=>p.customer).filter(Boolean))];
  return <section>
-  <div className="page-head">
-   <div><div className="eyebrow">Management · operational intelligence</div><h1>Manager</h1><p>Live operational metrics from the central pack database.</p></div>
-   <div className="manager-head-actions">
-    <span className="online-pill"><span></span>{dataSource==="database"?"Database connected":"Prototype storage"}</span>
-    <div className="period-switch">
-     {["today","7d","30d","all"].map(v=><button key={v} className={period===v?"active":""} onClick={()=>setPeriod(v)}>{v==="today"?"Today":v==="7d"?"7 Days":v==="30d"?"30 Days":"All Time"}</button>)}
-    </div>
+  <div className="page-head"><div><div className="eyebrow">Management · operational intelligence</div><h1>Manager</h1><p>Live operational metrics from the central pack database.</p></div>
+   <div className="manager-head-actions"><span className="online-pill"><span></span>{dataSource==="database"?"Database connected":"Prototype storage"}</span>
+    <select className="manager-period-select" value={period} onChange={e=>setPeriod(e.target.value)}><option value="today">Today</option><option value="yesterday">Yesterday</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="thisWeek">This week</option><option value="lastWeek">Last week</option><option value="thisMonth">This month</option><option value="lastMonth">Last month</option><option value="all">All time</option><option value="custom">Custom range</option></select>
    </div>
   </div>
-  <div className="metric-grid">
-   <Metric label="Packs processed" value={totalPacks.toLocaleString()} delta={validated+" validated"} icon={Package}/>
-   <Metric label="Documents processed" value={totalDocuments.toLocaleString()} delta={periodLabel} icon={FileText}/>
-   <Metric label="Average AI confidence" value={avgConfidence+"%"} delta={totalPacks?periodLabel:"No packs in period"} icon={Sparkles}/>
-   <Metric label="Human review queue" value={review.toLocaleString()} delta={processing+" still processing"} icon={AlertCircle} warning={review>0}/>
-  </div>
-  <div className="manager-kpi-grid">
-   <div className="panel mini-kpi"><span>Auto-validation rate</span><strong>{validationRate}%</strong><small>{validated} of {totalPacks} packs validated</small></div>
-   <div className="panel mini-kpi"><span>Human review rate</span><strong>{reviewRate}%</strong><small>{review} packs require review</small></div>
-   <div className="panel mini-kpi"><span>Failure rate</span><strong>{failureRate}%</strong><small>{failed} failed packs</small></div>
-   <div className="panel mini-kpi"><span>Documents / pack</span><strong>{totalPacks?(totalDocuments/totalPacks).toFixed(1):"0.0"}</strong><small>Average in selected period</small></div>
-  </div>
-  <div className="manager-grid">
-   <div className="panel">
-    <div className="panel-head"><div><h2>Team performance</h2><p>{periodLabel} · based on pack ownership</p></div></div>
-    <div className="manager-table-wrap"><table><thead><tr><th>TEAM MEMBER</th><th>ROLE</th><th>PACKS</th><th>DOCUMENTS</th><th>VALIDATED</th><th>REVIEWS</th><th>AVG CONF.</th></tr></thead><tbody>{team.map(m=><tr key={m.name}><td><b>{m.name}</b></td><td>{m.role}</td><td>{m.packs}</td><td>{m.docs}</td><td>{m.validated}</td><td>{m.reviews}</td><td>{m.confidence}</td></tr>)}</tbody></table></div>
-    <div className="manager-note"><ShieldCheck size={15}/><span>{unassigned?unassigned+" pack"+(unassigned===1?" is":"s are")+" currently unassigned in this period.":"All packs in this period have an owner."} Assign ownership from Inbox to populate team performance.</span></div>
-   </div>
-   <div className="panel"><div className="panel-head"><div><h2>Platform health</h2><p>{periodLabel} workload across the operation</p></div></div><div className="queue-list"><Queue label="Validated" value={validated} pct={totalPacks?((validated/totalPacks)*100).toFixed(1):"0.0"} cls="good"/><Queue label="Processing" value={processing} pct={totalPacks?((processing/totalPacks)*100).toFixed(1):"0.0"} cls="blue"/><Queue label="Needs review" value={review} pct={totalPacks?((review/totalPacks)*100).toFixed(1):"0.0"} cls="warn"/></div></div>
-  </div>
-  <div className="panel manager-section">
-   <div className="panel-head"><div><h2>Customer workload</h2><p>{periodLabel} customer activity</p></div></div>
-   <div className="manager-customer-grid">
-    {customersLive.length?customersLive.map(name=>{
-      const rows=filtered.filter(p=>p.customer===name);
-      const docs=rows.reduce((n,p)=>n+(Number(p.docs)||0),0);
-      const needs=rows.filter(p=>p.status==="Needs review").length;
-      const avg=rows.length?Math.round(rows.reduce((n,p)=>n+(Number(p.confidence)||0),0)/rows.length):0;
-      return <div className="manager-customer" key={name}><b>{name}</b><span>{rows.length} packs · {docs} documents</span><small>{needs} requiring review · {avg}% avg confidence</small></div>;
-    }):<div className="manager-empty">No customer activity is recorded for {periodLabel.toLowerCase()}.</div>}
-   </div>
-  </div>
-  <div className="manager-section-head"><div><h2>Management controls</h2><p>Operational controls connected to the central database.</p></div></div>
-  <div className="manager-control-grid">
-   <div className="panel manager-control"><Activity size={18}/><div><b>Processing analytics</b><span>{totalPacks} packs and {totalDocuments} documents in {periodLabel.toLowerCase()}.</span></div></div>
-   <div className="panel manager-control"><Users size={18}/><div><b>Team allocation</b><span>Assign pack ownership from the Inbox owner column.</span></div></div>
-   <div className="panel manager-control"><ShieldCheck size={18}/><div><b>Quality & intervention</b><span>{review} packs currently require human review.</span></div></div>
-   <div className="panel manager-control"><FileText size={18}/><div><b>Processing time</b><span>Timing fields will populate once start/completion timestamps are recorded.</span></div></div>
-  </div>
+  {period==="custom"&&<div className="manager-date-filter panel"><label>From<input type="date" value={customStart} onChange={e=>setCustomStart(e.target.value)}/></label><label>To<input type="date" value={customEnd} onChange={e=>setCustomEnd(e.target.value)}/></label><button className="secondary" onClick={()=>{setCustomStart("");setCustomEnd("");setPeriod("all")}}>Clear</button></div>}
+  <div className="metric-grid"><Metric label="Packs processed" value={totalPacks.toLocaleString()} delta={validated+" validated"} icon={Package}/><Metric label="Documents processed" value={totalDocuments.toLocaleString()} delta={periodLabel} icon={FileText}/><Metric label="Average AI confidence" value={avgConfidence+"%"} delta={totalPacks?periodLabel:"No packs in period"} icon={Sparkles}/><Metric label="Human review queue" value={review.toLocaleString()} delta={processing+" still processing"} icon={AlertCircle} warning={review>0}/></div>
+  <div className="manager-kpi-grid"><div className="panel mini-kpi"><span>Auto-validation rate</span><strong>{validationRate}%</strong><small>{validated} of {totalPacks} packs validated</small></div><div className="panel mini-kpi"><span>Human review rate</span><strong>{reviewRate}%</strong><small>{review} packs require review</small></div><div className="panel mini-kpi"><span>Failure rate</span><strong>{failureRate}%</strong><small>{failed} failed packs</small></div><div className="panel mini-kpi"><span>Documents / pack</span><strong>{totalPacks?(totalDocuments/totalPacks).toFixed(1):"0.0"}</strong><small>Average in selected period</small></div></div>
+  <div className="manager-grid"><div className="panel"><div className="panel-head"><div><h2>Team performance</h2><p>{periodLabel} · based on pack ownership</p></div></div><div className="manager-table-wrap"><table><thead><tr><th>TEAM MEMBER</th><th>ROLE</th><th>PACKS</th><th>DOCUMENTS</th><th>VALIDATED</th><th>REVIEWS</th><th>AVG CONF.</th></tr></thead><tbody>{team.map(m=><tr key={m.name}><td><b>{m.name}</b></td><td>{m.role}</td><td>{m.packs}</td><td>{m.docs}</td><td>{m.validated}</td><td>{m.reviews}</td><td>{m.confidence}</td></tr>)}</tbody></table></div><div className="manager-note"><ShieldCheck size={15}/><span>{unassigned?unassigned+" pack"+(unassigned===1?" is":"s are")+" currently unassigned in this period.":"All packs in this period have an owner."} Assign ownership from Inbox to populate team performance.</span></div></div>
+   <div className="panel"><div className="panel-head"><div><h2>Platform health</h2><p>{periodLabel} workload across the operation</p></div></div><div className="queue-list"><Queue label="Validated" value={validated} pct={totalPacks?((validated/totalPacks)*100).toFixed(1):"0.0"} cls="good"/><Queue label="Processing" value={processing} pct={totalPacks?((processing/totalPacks)*100).toFixed(1):"0.0"} cls="blue"/><Queue label="Needs review" value={review} pct={totalPacks?((review/totalPacks)*100).toFixed(1):"0.0"} cls="warn"/></div></div></div>
+  <div className="panel manager-section"><div className="panel-head"><div><h2>Customer workload</h2><p>{periodLabel} customer activity</p></div></div><div className="manager-customer-grid">{customersLive.length?customersLive.map(name=>{const rows=filtered.filter(p=>p.customer===name);const docs=rows.reduce((n,p)=>n+(Number(p.docs)||0),0);const needs=rows.filter(p=>p.status==="Needs review").length;const avg=rows.length?Math.round(rows.reduce((n,p)=>n+(Number(p.confidence)||0),0)/rows.length):0;return <div className="manager-customer" key={name}><b>{name}</b><span>{rows.length} packs · {docs} documents</span><small>{needs} requiring review · {avg}% avg confidence</small></div>}):<div className="manager-empty">No customer activity is recorded for {periodLabel.toLowerCase()}.</div>}</div></div>
+  <div className="manager-section-head"><div><h2>Management controls</h2><p>Operational controls connected to the central database.</p></div></div><div className="manager-control-grid"><div className="panel manager-control"><Activity size={18}/><div><b>Processing analytics</b><span>{totalPacks} packs and {totalDocuments} documents in {periodLabel.toLowerCase()}.</span></div></div><div className="panel manager-control"><Users size={18}/><div><b>Team allocation</b><span>Assign pack ownership from the Inbox owner column.</span></div></div><div className="panel manager-control"><ShieldCheck size={18}/><div><b>Quality & intervention</b><span>{review} packs currently require human review.</span></div></div><div className="panel manager-control"><FileText size={18}/><div><b>Processing time</b><span>Timing fields will populate once start/completion timestamps are recorded.</span></div></div></div>
  </section>;
 }
 function Metric({label,value,delta,icon:Icon,warning}){return <div className="metric"><div className={"metric-icon "+(warning?"warning":"")}><Icon size={19}/></div><div className="metric-copy"><span>{label}</span><strong>{value}</strong><small className={delta.startsWith("-")?"positive":""}>{delta}</small></div></div>}
