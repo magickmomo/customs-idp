@@ -540,6 +540,9 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
  const [tab,setTab]=useState("extraction");
  const [chat,setChat]=useState("");
  const [selectedDocumentId,setSelectedDocumentId]=useState(null);
+ const [showPreview,setShowPreview]=useState(()=>{
+   try{return localStorage.getItem("customs-idp-review-preview")!=="off";}catch{return true;}
+ });
  const [reviewSplit,setReviewSplit]=useState(()=>{
    try{
      const saved=Number(localStorage.getItem("customs-idp-review-split"));
@@ -581,35 +584,122 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
  const selectedDocumentUrl=selectedDocument ? docUrls[selectedDocument.id] : null;
  const selectedDocumentIsPdf=/\.pdf$/i.test(selectedDocument?.name||"");
  const selectedDocumentIsImage=/^image\//i.test(selectedDocument?.type||"") || /\.(png|jpe?g|webp|gif)$/i.test(selectedDocument?.name||"");
- const selectedDocumentFrameUrl=selectedDocumentUrl && selectedDocumentIsPdf ? `${selectedDocumentUrl}#page=1&view=FitH&zoom=page-width` : selectedDocumentUrl;
+ const selectedDocumentFrameUrl=selectedDocumentUrl&&selectedDocumentIsPdf?`${selectedDocumentUrl}#page=1&view=FitH&zoom=page-width`:selectedDocumentUrl;
 
- useEffect(()=>{
-   try{localStorage.setItem("customs-idp-review-split",String(reviewSplit));}catch{}
- },[reviewSplit]);
+ useEffect(()=>{try{localStorage.setItem("customs-idp-review-preview",showPreview?"on":"off");}catch{}},[showPreview]);
+ useEffect(()=>{try{localStorage.setItem("customs-idp-review-split",String(reviewSplit));}catch{}},[reviewSplit]);
 
  useEffect(()=>{
    if(!resizing)return;
    const onMove=e=>{
-     const workspace=document.querySelector(".review-workspace-top");
+     const workspace=document.querySelector(".review-workspace-split");
      if(!workspace)return;
      const rect=workspace.getBoundingClientRect();
-     const ratio=((e.clientY-rect.top)/Math.max(1,window.innerHeight-rect.top))*100;
-     setReviewSplit(Math.max(35,Math.min(75,ratio)));
+     const divider=18;
+     const usable=Math.max(1,rect.width-divider);
+     const ratio=((e.clientX-rect.left-(divider/2))/usable)*100;
+     setReviewSplit(Math.max(32,Math.min(68,ratio)));
    };
+   const onMouseMove=e=>onMove(e);
    const onUp=()=>setResizing(false);
-   window.addEventListener("pointermove",onMove);
-   window.addEventListener("pointerup",onUp);
+   window.addEventListener("pointermove",onMove,{capture:true});
+   window.addEventListener("pointerup",onUp,{capture:true});
+   window.addEventListener("mousemove",onMouseMove,{capture:true});
+   window.addEventListener("mouseup",onUp,{capture:true});
    document.body.classList.add("review-resizing");
    return()=>{
-     window.removeEventListener("pointermove",onMove);
-     window.removeEventListener("pointerup",onUp);
+     window.removeEventListener("pointermove",onMove,{capture:true});
+     window.removeEventListener("pointerup",onUp,{capture:true});
+     window.removeEventListener("mousemove",onMouseMove,{capture:true});
+     window.removeEventListener("mouseup",onUp,{capture:true});
      document.body.classList.remove("review-resizing");
    };
  },[resizing]);
 
+ const extractedPanel=<div className="review-left-column">
+   <div className="panel extraction-panel review-data-panel">
+     <div className="tabs">
+       <button className={tab==="extraction"?"selected":""} onClick={()=>setTab("extraction")}>Extracted data</button>
+       <button className={tab==="json"?"selected":""} onClick={()=>setTab("json")}>Middleware JSON</button>
+     </div>
+     {tab==="extraction"&&<>
+       <div className="data-summary">
+         {pack.processingError&&<div className="extraction-error"><b>Extraction failed:</b> {pack.processingError}</div>}
+         <div><span>Invoice total</span><b>{pack.extractedData?.currency?`${pack.extractedData.currency} ${Number(pack.extractedData.totalInvoiceValue||0).toLocaleString(undefined,{minimumFractionDigits:2})}`:"Awaiting extraction"}</b></div>
+         <div><span>Gross mass</span><b>{pack.extractedData?.totalGrossWeight!=null?`${pack.extractedData.totalGrossWeight} kg`:"Awaiting extraction"}</b></div>
+         <div><span>Country export</span><b>{pack.extractedData?.countryOfExport||"Awaiting extraction"}</b></div>
+         <div><span>Destination</span><b>{pack.extractedData?.sourceCountryOfDestination||"Awaiting extraction"}</b></div>
+       </div>
+       <div className="section-title">
+         <div><h3>Invoice positions</h3><span>{pack.extractedData?.lines?.length||0} lines extracted · AI confidence shown per line</span></div>
+         <button className="secondary" onClick={()=>notify("Correction workflow ready — next step is persistent editing")}>Save corrections</button>
+       </div>
+       <div className="line-table">
+         <table>
+           <thead><tr><th>#</th><th>DESCRIPTION</th><th>HS CODE</th><th>ORIGIN</th><th>PKGS</th><th>QTY</th><th>WEIGHT KG</th><th>VALUE</th><th></th></tr></thead>
+           <tbody>{(pack.extractedData?.lines||[]).map(l=><tr key={l.lineNo}>
+             <td>{l.lineNo}</td><td><b>{l.description||"—"}</b><small>{Math.round((l.confidence||0)*100)}% confidence</small></td>
+             <td>{l.hsCode||"—"}</td><td><span className="country">{l.sourceCountryCode||"—"}</span></td>
+             <td>{l.packages??"—"} {l.packagingType||""}</td><td>{l.quantity??"—"} {l.unitOfMeasure||""}</td><td>{l.weightKg??"—"}</td>
+             <td>{pack.extractedData?.currency||""} {l.totalValue??"—"}</td><td><MoreHorizontal size={16}/></td>
+           </tr>)}</tbody>
+         </table>
+       </div>
+     </>}
+     {tab==="json"&&<pre className="json">{JSON.stringify({
+       customerId:"ACME-001",identifier:pack.id,customerReference:"88421",customerCustomerNo:"ACME-UK",
+       deliveryTerm_SAD20:"DDP",deliveryTermPlace_SAD20:"Maldon",countryOfExport_SAD15:"HU",
+       countryOfDestination_SAD17:"GB",totalAmountInvoiced_SAD22:720,totalAmountInvoicedCurrency_SAD22:"GBP",
+       totalGrossMass:23.01,ticketNo:pack.ticket,positions:[]
+     },null,2)}</pre>}
+   </div>
+   <aside className="agent-panel review-agent-panel">
+     <div className="agent-title"><div className="agent-orb"><Sparkles size={18}/></div><div><b>Extraction Agent</b><span>Online · customer-aware</span></div></div>
+     <div className="agent-insight"><Sparkles size={15}/><div><b>Validation complete</b><p>I found 1 field that may need review: the gross mass was apportioned across the three lines using the configured net-weight ratio.</p></div></div>
+     <div className="agent-rule"><span>Applied customer rule</span><b>Gross weight apportionment</b><small>Net-weight ratio · Bancale Legno excluded from net weight</small></div>
+     <div className="chat"><div className="message agent">I can correct extracted fields, explain why a value was chosen, or save a correction as a customer rule.</div><div className="chat-input"><input value={chat} onChange={e=>setChat(e.target.value)} placeholder="Ask the agent to change something..."/><button onClick={()=>{setChat("");notify("Agent request queued")}}><ArrowRight size={16}/></button></div></div>
+   </aside>
+ </div>;
+
+ const documentPanel=<div className="review-right-column">
+   <div className="panel review-documents-panel">
+     <div className="review-documents">
+       <div className="review-documents-head">
+         <div><h3>Documents</h3><span>{documentRows.length} documents · select a document to preview it</span></div>
+       </div>
+       <div className="review-document-list">
+         {documentRows.map(f=>{
+           const id=f.id||f.name, selected=id===selectedDocumentId;
+           const isPdf=/\.pdf$/i.test(f.name||"");
+           const isImage=/^image\//i.test(f.type||"") || /\.(png|jpe?g|webp|gif)$/i.test(f.name||"");
+           const thumbUrl=docUrls[id];
+           return <button type="button" className={"review-document-card "+(selected?"selected":"")} key={id} onClick={()=>setSelectedDocumentId(id)}>
+             <div className="review-document-icon">{thumbUrl&&isImage?<img src={thumbUrl} alt="" />:thumbUrl&&isPdf?<iframe src={`${thumbUrl}#page=1&view=FitH&zoom=page-width`} title="" tabIndex="-1"/>:<div className="review-document-placeholder"><FileText size={22}/><span>{isPdf?"PDF":"DOC"}</span></div>}</div>
+             <div className="review-document-copy"><b>{f.name}</b><span>{isPdf?"PDF":(f.type||"Document").split("/").pop().toUpperCase()} · {f.storagePath?"Stored in Supabase":"Browser fallback"}</span></div>
+           </button>;
+         })}
+       </div>
+     </div>
+     <div className="review-document-preview">
+       <div className="review-document-preview-head">
+         <div><span>DOCUMENT PREVIEW</span><b>{selectedDocument?.name||"No document selected"}</b></div>
+         <small>{selectedDocumentUrl?"Live source document":"Preview unavailable"}</small>
+       </div>
+       <div className="review-document-viewer">
+         <div className="review-viewer-toolbar">
+           <div className="review-viewer-file"><FileText size={14}/><span>{selectedDocument?.name||"No document selected"}</span></div>
+           <div className="review-viewer-controls"><span>1 / 1</span><button type="button">−</button><span>100%</span><button type="button">+</button><button type="button">↗</button></div>
+         </div>
+         <div className={"review-document-preview-body "+(selectedDocumentIsImage?"image-document":"pdf-document")}>
+           {selectedDocumentUrl?(selectedDocumentIsImage?<img src={selectedDocumentUrl} alt={selectedDocument?.name||"Document preview"}/>:<iframe src={selectedDocumentFrameUrl} title={selectedDocument?.name||"Document preview"}/>):<div className="review-document-empty"><FileText size={28}/><b>{selectedDocument?.name||"No document available"}</b><span>The document is not available for preview yet. New uploads are stored in the private Supabase document store.</span></div>}
+         </div>
+       </div>
+     </div>
+   </div>
+ </div>;
+
  return <section>
    <button className="back" onClick={back}>← Back to inbox</button>
-
    <div className="review-head">
      <div>
        <div className="eyebrow">{pack.id} · {pack.ticket}</div>
@@ -618,11 +708,7 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
      </div>
      <div className="review-actions">
        <select className="owner-select review-owner" value={pack.assignedTo||"Unassigned"} onChange={e=>onAssign?.(pack.id,e.target.value)}>
-         <option>Unassigned</option>
-         <option>Liam Wingrove</option>
-         <option>Data Processor 1</option>
-         <option>Data Processor 2</option>
-         <option>Muhammad Amer</option>
+         <option>Unassigned</option><option>Liam Wingrove</option><option>Data Processor 1</option><option>Data Processor 2</option><option>Muhammad Amer</option>
        </select>
        <Status status={pack.status}/>
        <button className="secondary" onClick={()=>reprocessPack?.(pack)}>Re-process</button>
@@ -630,147 +716,19 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
        <button className={pack.status==="Ready"?"primary":"secondary"} onClick={postToLCA}>Post to LCA</button>
      </div>
    </div>
-
-   <div className="review-workspace-top" style={{"--review-doc-height":`${reviewSplit}vh`}}>
-     <div className="review-right-column review-document-top">
-       <div className="panel review-documents-panel">
-         <div className="review-documents">
-           <div className="review-documents-head">
-             <div>
-               <h3>Documents</h3>
-               <span>{documentLabel(documentRows.length)} · select a document to preview it</span>
-             </div>
-           </div>
-           <div className="review-document-list">
-             {documentRows.map(f=>{
-               const id=f.id||f.name;
-               const selected=id===selectedDocumentId;
-               const isPdf=/\.pdf$/i.test(f.name||"");
-               const isImage=/^image\//i.test(f.type||"") || /\.(png|jpe?g|webp|gif)$/i.test(f.name||"");
-               const thumbUrl=docUrls[id];
-               return <button type="button" className={"review-document-card "+(selected?"selected":"")} key={id} onClick={()=>setSelectedDocumentId(id)}>
-                 <div className="review-document-icon">
-                   {thumbUrl && isImage
-                     ? <img src={thumbUrl} alt="" />
-                     : thumbUrl && isPdf
-                       ? <iframe src={`${thumbUrl}#page=1&view=FitH&zoom=page-width`} title="" tabIndex="-1" />
-                       : <div className="review-document-placeholder"><FileText size={22}/><span>{isPdf?"PDF":"DOC"}</span></div>}
-                 </div>
-                 <div className="review-document-copy">
-                   <b>{f.name}</b>
-                   <span>{isPdf?"PDF":(f.type||"Document").split("/").pop().toUpperCase()} · {f.storagePath?"Stored in Supabase":"Browser fallback"}</span>
-                 </div>
-                 <span className="review-document-state">{selected?"Viewing":"View"}</span>
-               </button>;
-             })}
-           </div>
-         </div>
-
-         <div className="review-document-preview">
-           <div className="review-document-preview-head">
-             <div>
-               <span>DOCUMENT PREVIEW</span>
-               <b>{selectedDocument?.name||"No document selected"}</b>
-             </div>
-             <small>{selectedDocumentUrl?"Live source document":"Preview unavailable"}</small>
-           </div>
-           <div className="review-document-viewer">
-             <div className="review-viewer-toolbar">
-               <div className="review-viewer-file">
-                 <FileText size={14}/>
-                 <span>{selectedDocument?.name||"No document selected"}</span>
-               </div>
-               <div className="review-viewer-controls">
-                 <span>1 / 1</span>
-                 <button type="button" aria-label="Zoom out">−</button>
-                 <button type="button" aria-label="Zoom in">+</button>
-                 <button type="button" aria-label="Open document">↗</button>
-               </div>
-             </div>
-             <div className={"review-document-preview-body "+(selectedDocumentIsImage?"image-document":"pdf-document")}>
-               {selectedDocumentUrl
-                 ? selectedDocumentIsImage
-                   ? <img src={selectedDocumentUrl} alt={selectedDocument?.name||"Document preview"} />
-                   : <iframe src={selectedDocumentFrameUrl} title={selectedDocument?.name||"Document preview"} />
-                 : <div className="review-document-empty">
-                     <FileText size={28}/>
-                     <b>{selectedDocument?.name||"No document available"}</b>
-                     <span>The document is not available for preview yet. New uploads are stored in the private Supabase document store.</span>
-                   </div>}
-             </div>
-           </div>
-         </div>
-       </div>
-     </div>
+   <div className="review-preview-toggle-row">
+     <label className="review-preview-toggle"><input type="checkbox" checked={showPreview} onChange={e=>setShowPreview(e.target.checked)}/><span className="review-toggle-track"><i></i></span><span>Show preview</span></label>
+     <button className="secondary review-fit-btn" onClick={()=>setReviewSplit(50)}>Reset split</button>
    </div>
-
-   <div className="review-horizontal-resizer" role="separator" aria-label="Resize document and extracted data" title="Drag to resize document and extracted data" onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture?.(e.pointerId);setResizing(true);}}>
-     <span></span>
-   </div>
-
-   <div className="review-workspace-bottom" style={{"--review-data-height":`clamp(220px,calc(70vh - var(--review-doc-height)),620px)`}}>
-     <div className="review-left-column">
-       <div className="panel extraction-panel review-data-panel">
-         <div className="tabs">
-           <button className={tab==="extraction"?"selected":""} onClick={()=>setTab("extraction")}>Extracted data</button>
-           <button className={tab==="json"?"selected":""} onClick={()=>setTab("json")}>Middleware JSON</button>
-           <button className={tab==="ai"?"selected":""} onClick={()=>setTab("ai")}>AI payload</button>
-         </div>
-         {tab==="extraction"&&<>
-           <div className="data-summary">
-             {pack.processingError&&<div className="extraction-error"><b>Extraction failed:</b> {pack.processingError}</div>}
-             <div><span>Invoice total</span><b>{pack.extractedData?.currency ? `${pack.extractedData.currency} ${Number(pack.extractedData.totalInvoiceValue||0).toLocaleString(undefined,{minimumFractionDigits:2})}` : "Awaiting extraction"}</b></div>
-             <div><span>Gross mass</span><b>{pack.extractedData?.totalGrossWeight!=null ? `${pack.extractedData.totalGrossWeight} kg` : "Awaiting extraction"}</b></div>
-             <div><span>Country export</span><b>{pack.extractedData?.countryOfExport || "Awaiting extraction"}</b></div>
-             <div><span>Destination</span><b>{pack.extractedData?.sourceCountryOfDestination || "Awaiting extraction"}</b></div>
-           </div>
-           <div className="section-title">
-             <div><h3>Invoice positions</h3><span>{pack.extractedData?.lines?.length||0} lines extracted · AI confidence shown per line</span></div>
-             <button className="secondary" onClick={()=>notify("Correction workflow ready — next step is persistent editing")}>Save corrections</button>
-           </div>
-           <div className="line-table">
-             <table>
-               <thead><tr><th>#</th><th>DESCRIPTION</th><th>HS CODE</th><th>ORIGIN</th><th>PKGS</th><th>QTY</th><th>WEIGHT KG</th><th>VALUE</th><th></th></tr></thead>
-               <tbody>{(pack.extractedData?.lines||[]).map(l=><tr key={l.lineNo}>
-                 <td>{l.lineNo}</td>
-                 <td><b>{l.description||"—"}</b><small>{Math.round((l.confidence||0)*100)}% confidence</small></td>
-                 <td>{l.hsCode||"—"}</td>
-                 <td><span className="country">{l.sourceCountryCode||"—"}</span></td>
-                 <td>{l.packages??"—"} {l.packagingType||""}</td>
-                 <td>{l.quantity??"—"} {l.unitOfMeasure||""}</td>
-                 <td>{l.weightKg??"—"}</td>
-                 <td>{pack.extractedData?.currency||""} {l.totalValue??"—"}</td>
-                 <td><MoreHorizontal size={16}/></td>
-               </tr>)}</tbody>
-             </table>
-           </div>
-         </>}
-         {tab==="json"&&<pre className="json">{JSON.stringify(buildMiddlewarePayload(pack),null,2)}</pre>}
-         {tab==="ai"&&<pre className="json">{JSON.stringify(pack.extractedData||{status:"Awaiting extraction"},null,2)}</pre>}
+   <div className={"review-workspace-split "+(!showPreview?"preview-hidden":"")} style={{"--review-split":`${showPreview?reviewSplit:100}%`}}>
+     {extractedPanel}
+     {showPreview&&<>
+       <div className={"review-resizer "+(resizing?"active":"")} role="separator" aria-label="Resize extracted data and document preview" title="Drag to resize">
+         <input className="review-split-range" type="range" min="32" max="68" step="1" value={reviewSplit} onChange={e=>setReviewSplit(Number(e.target.value))} aria-label="Data and document split"/>
+         <span className="review-resizer-grip"></span>
        </div>
-       <aside className="agent-panel review-agent-panel">
-         <div className="agent-title">
-           <div className="agent-orb"><Sparkles size={18}/></div>
-           <div><b>Extraction Agent</b><span>Online · customer-aware</span></div>
-         </div>
-         <div className="agent-insight">
-           <Sparkles size={15}/>
-           <div><b>Validation complete</b><p>I found 1 field that may need review: the gross mass was apportioned across the three lines using the configured net-weight ratio.</p></div>
-         </div>
-         <div className="agent-rule">
-           <span>Applied customer rule</span>
-           <b>Gross weight apportionment</b>
-           <small>Net-weight ratio · Bancale Legno excluded from net weight</small>
-         </div>
-         <div className="chat">
-           <div className="message agent">I can correct extracted fields, explain why a value was chosen, or save a correction as a customer rule.</div>
-           <div className="chat-input">
-             <input value={chat} onChange={e=>setChat(e.target.value)} placeholder="Ask the agent to change something..."/>
-             <button onClick={()=>{setChat("");notify("Agent request queued")}}><ArrowRight size={16}/></button>
-           </div>
-         </div>
-       </aside>
-     </div>
+       {documentPanel}
+     </>}
    </div>
  </section>
 }
