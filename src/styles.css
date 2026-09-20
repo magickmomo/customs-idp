@@ -425,3 +425,132 @@ button{touch-action:manipulation}
     min-height:340px;
   }
 }
+
+
+/* Review split workspace: extracted data left, live document preview right. */
+.review-workspace-split{
+  display:grid;
+  grid-template-columns:minmax(0,1.08fr) minmax(430px,.92fr);
+  gap:16px;
+  align-items:start;
+}
+.review-left-column,.review-right-column{
+  min-width:0;
+}
+.review-left-column{
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+.review-right-column{
+  position:sticky;
+  top:76px;
+}
+.review-data-panel{
+  min-width:0;
+}
+.review-documents-panel{
+  overflow:hidden;
+}
+.review-documents-panel .review-documents{
+  border-bottom:1px solid #e8ecf2;
+}
+.review-documents-panel .review-document-list{
+  flex-wrap:nowrap;
+}
+.review-documents-panel .review-document-card{
+  min-width:145px;
+  flex:0 0 145px;
+  flex-direction:column;
+  align-items:flex-start;
+  padding:9px;
+  gap:7px;
+}
+.review-documents-panel .review-document-icon{
+  width:100%;
+  height:110px;
+  border-radius:6px;
+  background:#f3f6fa;
+}
+.review-documents-panel .review-document-icon svg{
+  width:26px;
+  height:26px;
+}
+.review-documents-panel .review-document-copy{
+  width:100%;
+}
+.review-documents-panel .review-document-copy b{
+  font-size:9px;
+}
+.review-documents-panel .review-document-state{
+  display:none;
+}
+.review-documents-panel .review-document-preview{
+  margin:0;
+  border:0;
+  border-radius:0;
+}
+.review-documents-panel .review-document-preview-head{
+  min-height:52px;
+  padding:10px 13px;
+}
+.review-documents-panel .review-document-preview-body{
+  height:calc(100vh - 255px);
+  min-height:560px;
+  max-height:900px;
+}
+.review-documents-panel .review-document-preview iframe{
+  background:#eef1f5;
+}
+.review-agent-panel{
+  width:100%;
+  min-height:0;
+}
+@media(max-width:1100px){
+  .review-workspace-split{
+    grid-template-columns:minmax(0,1fr) minmax(360px,.9fr);
+  }
+  .review-documents-panel .review-document-card{
+    min-width:125px;
+    flex-basis:125px;
+  }
+  .review-documents-panel .review-document-icon{
+    height:90px;
+  }
+}
+@media(max-width:900px){
+  .review-workspace-split{
+    grid-template-columns:1fr;
+  }
+  .review-right-column{
+    position:static;
+  }
+  .review-documents-panel .review-document-card{
+    min-width:145px;
+    flex-basis:145px;
+  }
+  .review-documents-panel .review-document-icon{
+    height:105px;
+  }
+  .review-documents-panel .review-document-preview-body{
+    height:65vh;
+    min-height:420px;
+    max-height:none;
+  }
+}
+@media(max-width:650px){
+  .review-workspace-split{
+    gap:12px;
+  }
+  .review-documents-panel .review-document-card{
+    min-width:135px;
+    flex-basis:135px;
+  }
+  .review-documents-panel .review-document-icon{
+    height:95px;
+  }
+  .review-documents-panel .review-document-preview-body{
+    height:58vh;
+    min-height:340px;
+  }
+}
