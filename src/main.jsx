@@ -534,7 +534,9 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
      const workspace=document.querySelector(".review-workspace-split");
      if(!workspace)return;
      const rect=workspace.getBoundingClientRect();
-     const ratio=((e.clientX-rect.left)/rect.width)*100;
+     const divider=18;
+     const usable=Math.max(1,rect.width-divider);
+     const ratio=((e.clientX-rect.left-(divider/2))/usable)*100;
      setReviewSplit(Math.max(32,Math.min(68,ratio)));
    };
    const onMouseMove=e=>onMove(e);
@@ -656,7 +658,7 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
    <div className={"review-workspace-split "+(!showPreview?"preview-hidden":"")} style={{"--review-split":showPreview?reviewSplit:100}}>
      {extractedPanel}
      {showPreview&&<>
-       <div className={"review-resizer "+(resizing?"active":"")} role="separator" aria-label="Resize extracted data and document preview" onPointerDown={e=>{e.preventDefault();e.stopPropagation();e.currentTarget.setPointerCapture?.(e.pointerId);setResizing(true);}} onMouseDown={e=>{e.preventDefault();e.stopPropagation();setResizing(true);}} onDoubleClick={()=>setReviewSplit(50)} title="Drag to resize"></div>
+       <button type="button" className={"review-resizer "+(resizing?"active":"")} role="separator" aria-label="Resize extracted data and document preview" onPointerDown={e=>{e.preventDefault();e.stopPropagation();setResizing(true);}} onMouseDown={e=>{e.preventDefault();e.stopPropagation();setResizing(true);}} onTouchStart={e=>{e.preventDefault();setResizing(true);}} onDoubleClick={()=>setReviewSplit(50)} title="Drag to resize"><span className="review-resizer-grip"></span></button>
        {documentPanel}
      </>}
    </div>
