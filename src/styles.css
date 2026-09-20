@@ -1165,3 +1165,47 @@ body.review-resizing .review-horizontal-resizer span{
     box-shadow:0 0 0 4px #dbeafe;
   }
 }
+
+
+/* Final review splitter: full-width interactive grid track */
+@media(min-width:901px){
+  .review-workspace-split:not(.preview-hidden){
+    grid-template-columns:minmax(0,var(--review-split)) 18px minmax(0,calc(100% - var(--review-split) - 18px));
+  }
+  .review-workspace-split:not(.preview-hidden) .review-resizer{
+    box-sizing:border-box;
+    margin:0;
+    padding:0;
+    border:0;
+    outline:0;
+    background:transparent;
+    appearance:none;
+    -webkit-appearance:none;
+    width:18px;
+    min-width:18px;
+    height:100%;
+    min-height:700px;
+    align-self:stretch;
+    justify-self:stretch;
+    pointer-events:auto !important;
+    cursor:col-resize !important;
+    touch-action:none !important;
+    user-select:none;
+    z-index:100;
+  }
+  .review-workspace-split:not(.preview-hidden) .review-resizer-grip{
+    display:block;
+    width:5px;
+    height:72px;
+    margin:0 auto;
+    border-radius:999px;
+    background:#9aa8bb;
+    box-shadow:0 0 0 1px #e1e7ef;
+    pointer-events:none;
+  }
+  .review-workspace-split:not(.preview-hidden) .review-resizer:hover .review-resizer-grip,
+  .review-workspace-split:not(.preview-hidden) .review-resizer.active .review-resizer-grip{
+    background:#2563eb;
+    box-shadow:0 0 0 4px #dbeafe;
+  }
+}
