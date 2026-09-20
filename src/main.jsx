@@ -553,7 +553,7 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
      {tab==="extraction"&&<>
        <div className="data-summary">
          {pack.processingError&&<div className="extraction-error"><b>Extraction failed:</b> {pack.processingError}</div>}
-         <div><span>Invoice total</span><b>{pack.extractedData?.currency?`${pack.extractedData.currency} ${Number(pack.extractedData.totalInvoiceValue||0).toLocaleString(undefined,{minimumFractionDigits:2})"}`:"Awaiting extraction"}</b></div>
+         <div><span>Invoice total</span><b>{pack.extractedData?.currency?`${pack.extractedData.currency} ${Number(pack.extractedData.totalInvoiceValue||0).toLocaleString(undefined,{minimumFractionDigits:2})}`:"Awaiting extraction"}</b></div>
          <div><span>Gross mass</span><b>{pack.extractedData?.totalGrossWeight!=null?`${pack.extractedData.totalGrossWeight} kg`:"Awaiting extraction"}</b></div>
          <div><span>Country export</span><b>{pack.extractedData?.countryOfExport||"Awaiting extraction"}</b></div>
          <div><span>Destination</span><b>{pack.extractedData?.sourceCountryOfDestination||"Awaiting extraction"}</b></div>
