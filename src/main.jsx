@@ -529,11 +529,11 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
  useEffect(()=>{
    if(!resizing)return;
    const onMove=e=>{
-     const workspace=document.querySelector(".review-workspace-split");
+     const workspace=document.querySelector(".review-workspace-top");
      if(!workspace)return;
      const rect=workspace.getBoundingClientRect();
-     const ratio=((e.clientX-rect.left)/rect.width)*100;
-     setReviewSplit(Math.max(32,Math.min(68,ratio)));
+     const ratio=((e.clientY-rect.top)/Math.max(1,window.innerHeight-rect.top))*100;
+     setReviewSplit(Math.max(35,Math.min(75,ratio)));
    };
    const onUp=()=>setResizing(false);
    window.addEventListener("pointermove",onMove);
@@ -643,7 +643,7 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
      </div>
    </div>
 
-   <div className="review-horizontal-resizer" title="Drag to resize document and extracted data" onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture?.(e.pointerId);setResizing(true);}}>
+   <div className="review-horizontal-resizer" role="separator" aria-label="Resize document and extracted data" title="Drag to resize document and extracted data" onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture?.(e.pointerId);setResizing(true);}}>
      <span></span>
    </div>
 
