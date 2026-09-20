@@ -771,20 +771,22 @@ body.review-resizing *{
 }
 .review-document-preview-body.image-document{
   display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:16px;
-  background:#202a3a;
-  overflow:auto;
+  align-items:stretch;
+  justify-content:stretch;
+  padding:0;
+  background:#fff;
+  overflow:hidden;
 }
 .review-document-preview-body.image-document img{
   display:block;
   width:100%;
   height:100%;
+  max-width:none;
+  max-height:none;
   object-fit:contain;
   object-position:center;
   background:#fff;
-  border-radius:2px;
+  border-radius:0;
 }
 .review-document-preview-body.pdf-document{
   overflow:hidden;

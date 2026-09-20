@@ -550,6 +550,7 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
    }catch{return 50;}
  });
  const [resizing,setResizing]=useState(false);
+ const [previewFixedStyle,setPreviewFixedStyle]=useState({});
 
  useEffect(()=>{let active=true;(async()=>{
    const entries=await Promise.all((pack.uploadedFiles||[]).map(async f=>{
@@ -586,7 +587,23 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
  const selectedDocumentIsImage=/^image\//i.test(selectedDocument?.type||"") || /\.(png|jpe?g|webp|gif)$/i.test(selectedDocument?.name||"");
  const selectedDocumentFrameUrl=selectedDocumentUrl&&selectedDocumentIsPdf?`${selectedDocumentUrl}#page=1&view=FitH&zoom=page-width`:selectedDocumentUrl;
 
- useEffect(()=>{try{localStorage.setItem("customs-idp-review-preview",showPreview?"on":"off");}catch{}},[showPreview]);
+ useEffect(()=>{try{localStorage.setItem("customs-idp-review-preview",showPreview?"on":"off");}catch{}},[showPreview]); useEffect(()=>{
+   if(!showPreview){setPreviewFixedStyle({});return;}
+   const updatePreviewPosition=()=>{
+     if(window.innerWidth<=900){setPreviewFixedStyle({});return;}
+     const workspace=document.querySelector(".review-workspace-split");
+     if(!workspace)return;
+     const rect=workspace.getBoundingClientRect();
+     const divider=18;
+     const left=rect.left+(rect.width*(reviewSplit/100))+divider;
+     const width=Math.max(280,rect.width-(rect.width*(reviewSplit/100))-divider);
+     setPreviewFixedStyle({position:"fixed",left:`${left}px`,top:"76px",width:`${width}px`,height:"calc(100vh - 92px)",zIndex:20});
+   };
+   updatePreviewPosition();
+   window.addEventListener("resize",updatePreviewPosition);
+   return()=>window.removeEventListener("resize",updatePreviewPosition);
+ },[showPreview,reviewSplit]);
+
  useEffect(()=>{try{localStorage.setItem("customs-idp-review-split",String(reviewSplit));}catch{}},[reviewSplit]);
 
  useEffect(()=>{
@@ -661,7 +678,7 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
    </aside>
  </div>;
 
- const documentPanel=<div className="review-right-column">
+ const documentPanel=<div className="review-right-column" style={previewFixedStyle}>
    <div className="panel review-documents-panel">
      <div className="review-documents">
        <div className="review-documents-head">
