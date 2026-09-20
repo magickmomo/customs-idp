@@ -1324,3 +1324,42 @@ body.review-resizing .review-horizontal-resizer span{
     max-height:none;
   }
 }
+
+
+/* Keep the global navigation and review controls anchored while the page scrolls. */
+.topbar{
+  position:sticky;
+  top:0;
+  z-index:1000;
+}
+@media(min-width:901px){
+  .review-head{
+    position:sticky;
+    top:60px;
+    z-index:900;
+    background:#fff;
+    padding:12px 0;
+    margin-top:-30px;
+    margin-bottom:18px;
+    border-bottom:1px solid #e7ebf2;
+    box-shadow:0 4px 12px rgba(15,23,42,.04);
+  }
+  .review-preview-toggle-row{
+    position:sticky;
+    top:123px;
+    z-index:899;
+    background:#fff;
+    padding:8px 0 10px;
+    margin:-18px 0 12px;
+  }
+}
+@media(max-width:900px){
+  .review-head{
+    position:sticky;
+    top:60px;
+    z-index:900;
+    background:#fff;
+    padding:10px 0;
+    border-bottom:1px solid #e7ebf2;
+  }
+}
