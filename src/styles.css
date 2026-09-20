@@ -816,8 +816,8 @@ body.review-resizing *{
   width:100%;
 }
 .review-document-top .review-document-preview-body{
-  height:clamp(500px,62vh,900px);
-  min-height:500px;
+  height:clamp(420px,var(--review-doc-height),900px);
+  min-height:420px;
 }
 .review-horizontal-resizer{
   height:16px;
