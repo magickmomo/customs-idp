@@ -659,7 +659,7 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
      {extractedPanel}
      {showPreview&&<>
        <div className={"review-resizer "+(resizing?"active":"")} role="separator" aria-label="Resize extracted data and document preview" title="Drag to resize">
-         <input className="review-split-range" type="range" min="32" max="68" step="0.5" value={reviewSplit} onChange={e=>setReviewSplit(Number(e.target.value))} aria-label="Data and document split"/>
+         <input className="review-split-range" type="range" min="32" max="68" step="1" value={reviewSplit} onChange={e=>setReviewSplit(Number(e.target.value))} aria-label="Data and document split"/>
          <span className="review-resizer-grip"></span>
        </div>
        {documentPanel}
