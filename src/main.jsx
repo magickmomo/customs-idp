@@ -155,8 +155,18 @@ function App(){
     persistPack(processing);
     notify("Re-processing documents — AI extraction started");
     try{
-      const source=await getUploadedDocument(files[0].id);
-      if(!source)throw new Error("The uploaded document is no longer available in this browser");
+      let source=null;
+      if(files[0].storagePath){
+        const storageResponse=await fetch("/api/storage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"signed-url",path:files[0].storagePath})});
+        const storageData=await storageResponse.json();
+        if(!storageResponse.ok) throw new Error(storageData.error||"Stored document could not be opened");
+        const fileResponse=await fetch(storageData.signedUrl);
+        if(!fileResponse.ok) throw new Error("Stored document could not be downloaded");
+        source=await fileResponse.blob();
+      }else{
+        source=await getUploadedDocument(files[0].id);
+      }
+      if(!source)throw new Error("The uploaded document is no longer available");
       const buffer=await source.arrayBuffer();
       const bytes=new Uint8Array(buffer);
       let binary="";
@@ -187,8 +197,23 @@ function App(){
     const highest=livePacks.reduce((max,p)=>Math.max(max,Number(String(p.id||"").replace("PK-",""))||0),10482);
     const id=`PK-${highest+1}`;
     const processingStartedAt=new Date().toISOString();
-    const newPack={id,customer:"Unassigned customer",docs:selected.length,status:"Processing",confidence:0,received:processingStartedAt,processingStartedAt,ticket:`UPLOAD-${Date.now().toString().slice(-5)}`,assignedTo:"Unassigned",uploadedFiles:selected.map((f,index)=>({id:`${id}-${index}`,name:f.name,size:f.size,type:f.type}))};
-    await Promise.all(selected.map((f,index)=>saveUploadedDocument(`${id}-${index}`,f)));
+    let uploadedFiles;
+    try{
+      uploadedFiles=await Promise.all(selected.map(async(f,index)=>{
+        const localId=`${id}-${index}`;
+        await saveUploadedDocument(localId,f);
+        const storageResponse=await fetch("/api/storage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"upload-url",packId:id,filename:f.name,contentType:f.type})});
+        const storageData=await storageResponse.json();
+        if(!storageResponse.ok) throw new Error(storageData.error||"Could not create storage upload URL");
+        const uploadResponse=await fetch(storageData.signedUrl,{method:"PUT",headers:{"Content-Type":f.type||"application/octet-stream"},body:f});
+        if(!uploadResponse.ok) throw new Error(`Could not upload ${f.name} to document storage`);
+        return {id:localId,name:f.name,size:f.size,type:f.type,storagePath:storageData.path};
+      }));
+    }catch(error){
+      notify(`Document storage upload failed: ${error.message}`);
+      return;
+    }
+    const newPack={id,customer:"Unassigned customer",docs:selected.length,status:"Processing",confidence:0,received:processingStartedAt,processingStartedAt,ticket:`UPLOAD-${Date.now().toString().slice(-5)}`,assignedTo:"Unassigned",uploadedFiles};
     setLivePacks(prev=>[newPack,...prev]);
     persistPack(newPack);
     setSelectedPack(newPack);
@@ -457,8 +482,15 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
 
  useEffect(()=>{let active=true;(async()=>{
    const entries=await Promise.all((pack.uploadedFiles||[]).map(async f=>{
-     const file=await getUploadedDocument(f.id);
-     return file?[f.id,URL.createObjectURL(file)]:null;
+     try{
+       if(f.storagePath){
+         const response=await fetch("/api/storage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"signed-url",path:f.storagePath})});
+         const data=await response.json();
+         if(response.ok&&data.signedUrl)return [f.id,data.signedUrl];
+       }
+       const file=await getUploadedDocument(f.id);
+       return file?[f.id,URL.createObjectURL(file)]:null;
+     }catch{return null;}
    }));
    if(active)setDocUrls(Object.fromEntries(entries.filter(Boolean)));
  })();return()=>{active=false;};},[pack.id,pack.uploadedFiles]);
@@ -523,7 +555,7 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
                <div className="review-document-icon"><FileText size={18}/></div>
                <div className="review-document-copy">
                  <b>{f.name}</b>
-                 <span>{pack.uploadedFiles?.length?"Stored with this pack":"Example document"}</span>
+                 <span>{f.storagePath?"Stored in Supabase":"Browser fallback / example"}</span>
                </div>
                <span className="review-document-state">{selected?"Viewing":"View"}</span>
              </button>;
