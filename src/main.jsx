@@ -621,11 +621,20 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
              {documentRows.map(f=>{
                const id=f.id||f.name;
                const selected=id===selectedDocumentId;
+               const isPdf=/\.pdf$/i.test(f.name||"");
+               const isImage=/^image\//i.test(f.type||"") || /\.(png|jpe?g|webp|gif)$/i.test(f.name||"");
+               const thumbUrl=docUrls[id];
                return <button type="button" className={"review-document-card "+(selected?"selected":"")} key={id} onClick={()=>setSelectedDocumentId(id)}>
-                 <div className="review-document-icon"><FileText size={18}/></div>
+                 <div className="review-document-icon">
+                   {thumbUrl && isImage
+                     ? <img src={thumbUrl} alt="" />
+                     : thumbUrl && isPdf
+                       ? <iframe src={`${thumbUrl}#page=1&view=FitH&zoom=page-width`} title="" tabIndex="-1" />
+                       : <div className="review-document-placeholder"><FileText size={22}/><span>{isPdf?"PDF":"DOC"}</span></div>}
+                 </div>
                  <div className="review-document-copy">
                    <b>{f.name}</b>
-                   <span>{f.storagePath?"Stored in Supabase":"Browser fallback / example"}</span>
+                   <span>{isPdf?"PDF":(f.type||"Document").split("/").pop().toUpperCase()} · {f.storagePath?"Stored in Supabase":"Browser fallback"}</span>
                  </div>
                  <span className="review-document-state">{selected?"Viewing":"View"}</span>
                </button>;
@@ -641,14 +650,28 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
              </div>
              <small>{selectedDocumentUrl?"Live source document":"Preview unavailable"}</small>
            </div>
-           <div className="review-document-preview-body">
-             {selectedDocumentUrl
-               ? <iframe src={selectedDocumentFrameUrl} title={selectedDocument?.name||"Document preview"} />
-               : <div className="review-document-empty">
-                   <FileText size={28}/>
-                   <b>{selectedDocument?.name||"No document available"}</b>
-                   <span>The document is not available for preview yet. New uploads are stored in the private Supabase document store.</span>
-                 </div>}
+           <div className="review-document-viewer">
+             <div className="review-viewer-toolbar">
+               <div className="review-viewer-file">
+                 <FileText size={14}/>
+                 <span>{selectedDocument?.name||"No document selected"}</span>
+               </div>
+               <div className="review-viewer-controls">
+                 <span>1 / 1</span>
+                 <button type="button" aria-label="Zoom out">−</button>
+                 <button type="button" aria-label="Zoom in">+</button>
+                 <button type="button" aria-label="Open document">↗</button>
+               </div>
+             </div>
+             <div className="review-document-preview-body">
+               {selectedDocumentUrl
+                 ? <iframe src={selectedDocumentFrameUrl} title={selectedDocument?.name||"Document preview"} />
+                 : <div className="review-document-empty">
+                     <FileText size={28}/>
+                     <b>{selectedDocument?.name||"No document available"}</b>
+                     <span>The document is not available for preview yet. New uploads are stored in the private Supabase document store.</span>
+                   </div>}
+             </div>
            </div>
          </div>
        </div>
