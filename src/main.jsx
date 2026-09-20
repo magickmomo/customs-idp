@@ -570,82 +570,8 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
      </div>
    </div>
 
-   <div className="review-workspace-split" style={{"--review-split":`${reviewSplit}%`}}>
-
-     <div className="review-left-column">
-       <div className="panel extraction-panel review-data-panel">
-         <div className="tabs">
-           <button className={tab==="extraction"?"selected":""} onClick={()=>setTab("extraction")}>Extracted data</button>
-           <button className={tab==="json"?"selected":""} onClick={()=>setTab("json")}>Middleware JSON</button>
-         </div>
-
-         {tab==="extraction"&&<>
-           <div className="data-summary">
-             {pack.processingError&&<div className="extraction-error"><b>Extraction failed:</b> {pack.processingError}</div>}
-             <div><span>Invoice total</span><b>{pack.extractedData?.currency ? `${pack.extractedData.currency} ${Number(pack.extractedData.totalInvoiceValue||0).toLocaleString(undefined,{minimumFractionDigits:2})}` : "Awaiting extraction"}</b></div>
-             <div><span>Gross mass</span><b>{pack.extractedData?.totalGrossWeight!=null ? `${pack.extractedData.totalGrossWeight} kg` : "Awaiting extraction"}</b></div>
-             <div><span>Country export</span><b>{pack.extractedData?.countryOfExport || "Awaiting extraction"}</b></div>
-             <div><span>Destination</span><b>{pack.extractedData?.sourceCountryOfDestination || "Awaiting extraction"}</b></div>
-           </div>
-           <div className="section-title">
-             <div><h3>Invoice positions</h3><span>{pack.extractedData?.lines?.length||0} lines extracted · AI confidence shown per line</span></div>
-             <button className="secondary" onClick={()=>notify("Correction workflow ready — next step is persistent editing")}>Save corrections</button>
-           </div>
-           <div className="line-table">
-             <table>
-               <thead><tr><th>#</th><th>DESCRIPTION</th><th>HS CODE</th><th>ORIGIN</th><th>PKGS</th><th>QTY</th><th>WEIGHT KG</th><th>VALUE</th><th></th></tr></thead>
-               <tbody>{(pack.extractedData?.lines||[]).map(l=><tr key={l.lineNo}>
-                 <td>{l.lineNo}</td>
-                 <td><b>{l.description||"—"}</b><small>{Math.round((l.confidence||0)*100)}% confidence</small></td>
-                 <td>{l.hsCode||"—"}</td>
-                 <td><span className="country">{l.sourceCountryCode||"—"}</span></td>
-                 <td>{l.packages??"—"} {l.packagingType||""}</td>
-                 <td>{l.quantity??"—"} {l.unitOfMeasure||""}</td>
-                 <td>{l.weightKg??"—"}</td>
-                 <td>{pack.extractedData?.currency||""} {l.totalValue??"—"}</td>
-                 <td><MoreHorizontal size={16}/></td>
-               </tr>)}</tbody>
-             </table>
-           </div>
-         </>}
-
-         {tab==="json"&&<pre className="json">{JSON.stringify({
-           customerId:"ACME-001",identifier:pack.id,customerReference:"88421",customerCustomerNo:"ACME-UK",
-           deliveryTerm_SAD20:"DDP",deliveryTermPlace_SAD20:"Maldon",countryOfExport_SAD15:"HU",
-           countryOfDestination_SAD17:"GB",totalAmountInvoiced_SAD22:720,totalAmountInvoicedCurrency_SAD22:"GBP",
-           totalGrossMass:23.01,ticketNo:pack.ticket,positions:[]
-         },null,2)}</pre>}
-       </div>
-
-       <aside className="agent-panel review-agent-panel">
-         <div className="agent-title">
-           <div className="agent-orb"><Sparkles size={18}/></div>
-           <div><b>Extraction Agent</b><span>Online · customer-aware</span></div>
-         </div>
-         <div className="agent-insight">
-           <Sparkles size={15}/>
-           <div><b>Validation complete</b><p>I found 1 field that may need review: the gross mass was apportioned across the three lines using the configured net-weight ratio.</p></div>
-         </div>
-         <div className="agent-rule">
-           <span>Applied customer rule</span>
-           <b>Gross weight apportionment</b>
-           <small>Net-weight ratio · Bancale Legno excluded from net weight</small>
-         </div>
-         <div className="chat">
-           <div className="message agent">I can correct extracted fields, explain why a value was chosen, or save a correction as a customer rule.</div>
-           <div className="chat-input">
-             <input value={chat} onChange={e=>setChat(e.target.value)} placeholder="Ask the agent to change something..."/>
-             <button onClick={()=>{setChat("");notify("Agent request queued")}}><ArrowRight size={16}/></button>
-           </div>
-         </div>
-       </aside>
-     </div>
-
-     <div className={"review-resizer "+(resizing?"active":"")} role="separator" aria-label="Resize extracted data and document preview" aria-orientation="vertical" onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture?.(e.pointerId);setResizing(true);}} title="Drag to resize">
-       <span></span>
-     </div>
-
-     <div className="review-right-column">
+   <div className="review-workspace-top">
+     <div className="review-right-column review-document-top">
        <div className="panel review-documents-panel">
          <div className="review-documents">
            <div className="review-documents-head">
@@ -716,6 +642,78 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
        </div>
      </div>
    </div>
+
+   <div className="review-horizontal-resizer" title="Drag to resize document and extracted data" onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture?.(e.pointerId);setResizing(true);}}>
+     <span></span>
+   </div>
+
+   <div className="review-workspace-bottom" style={{"--review-data-height":`${Math.max(280,Math.min(760,(100-reviewSplit)*7))}px`}}>
+     <div className="review-left-column">
+       <div className="panel extraction-panel review-data-panel">
+         <div className="tabs">
+           <button className={tab==="extraction"?"selected":""} onClick={()=>setTab("extraction")}>Extracted data</button>
+           <button className={tab==="json"?"selected":""} onClick={()=>setTab("json")}>Middleware JSON</button>
+         </div>
+         {tab==="extraction"&&<>
+           <div className="data-summary">
+             {pack.processingError&&<div className="extraction-error"><b>Extraction failed:</b> {pack.processingError}</div>}
+             <div><span>Invoice total</span><b>{pack.extractedData?.currency ? `${pack.extractedData.currency} ${Number(pack.extractedData.totalInvoiceValue||0).toLocaleString(undefined,{minimumFractionDigits:2})}` : "Awaiting extraction"}</b></div>
+             <div><span>Gross mass</span><b>{pack.extractedData?.totalGrossWeight!=null ? `${pack.extractedData.totalGrossWeight} kg` : "Awaiting extraction"}</b></div>
+             <div><span>Country export</span><b>{pack.extractedData?.countryOfExport || "Awaiting extraction"}</b></div>
+             <div><span>Destination</span><b>{pack.extractedData?.sourceCountryOfDestination || "Awaiting extraction"}</b></div>
+           </div>
+           <div className="section-title">
+             <div><h3>Invoice positions</h3><span>{pack.extractedData?.lines?.length||0} lines extracted · AI confidence shown per line</span></div>
+             <button className="secondary" onClick={()=>notify("Correction workflow ready — next step is persistent editing")}>Save corrections</button>
+           </div>
+           <div className="line-table">
+             <table>
+               <thead><tr><th>#</th><th>DESCRIPTION</th><th>HS CODE</th><th>ORIGIN</th><th>PKGS</th><th>QTY</th><th>WEIGHT KG</th><th>VALUE</th><th></th></tr></thead>
+               <tbody>{(pack.extractedData?.lines||[]).map(l=><tr key={l.lineNo}>
+                 <td>{l.lineNo}</td>
+                 <td><b>{l.description||"—"}</b><small>{Math.round((l.confidence||0)*100)}% confidence</small></td>
+                 <td>{l.hsCode||"—"}</td>
+                 <td><span className="country">{l.sourceCountryCode||"—"}</span></td>
+                 <td>{l.packages??"—"} {l.packagingType||""}</td>
+                 <td>{l.quantity??"—"} {l.unitOfMeasure||""}</td>
+                 <td>{l.weightKg??"—"}</td>
+                 <td>{pack.extractedData?.currency||""} {l.totalValue??"—"}</td>
+                 <td><MoreHorizontal size={16}/></td>
+               </tr>)}</tbody>
+             </table>
+           </div>
+         </>}
+         {tab==="json"&&<pre className="json">{JSON.stringify({
+           customerId:"ACME-001",identifier:pack.id,customerReference:"88421",customerCustomerNo:"ACME-UK",
+           deliveryTerm_SAD20:"DDP",deliveryTermPlace_SAD20:"Maldon",countryOfExport_SAD15:"HU",
+           countryOfDestination_SAD17:"GB",totalAmountInvoiced_SAD22:720,totalAmountInvoicedCurrency_SAD22:"GBP",
+           totalGrossMass:23.01,ticketNo:pack.ticket,positions:[]
+         },null,2)}</pre>}
+       </div>
+       <aside className="agent-panel review-agent-panel">
+         <div className="agent-title">
+           <div className="agent-orb"><Sparkles size={18}/></div>
+           <div><b>Extraction Agent</b><span>Online · customer-aware</span></div>
+         </div>
+         <div className="agent-insight">
+           <Sparkles size={15}/>
+           <div><b>Validation complete</b><p>I found 1 field that may need review: the gross mass was apportioned across the three lines using the configured net-weight ratio.</p></div>
+         </div>
+         <div className="agent-rule">
+           <span>Applied customer rule</span>
+           <b>Gross weight apportionment</b>
+           <small>Net-weight ratio · Bancale Legno excluded from net weight</small>
+         </div>
+         <div className="chat">
+           <div className="message agent">I can correct extracted fields, explain why a value was chosen, or save a correction as a customer rule.</div>
+           <div className="chat-input">
+             <input value={chat} onChange={e=>setChat(e.target.value)} placeholder="Ask the agent to change something..."/>
+             <button onClick={()=>{setChat("");notify("Agent request queued")}}><ArrowRight size={16}/></button>
+           </div>
+         </div>
+       </aside>
+     </div>
+   </div>v>
  </section>
 }
 function Customers({notify}){return <section><div className="page-head"><div><div className="eyebrow">Configuration</div><h1>Customers</h1><p>Customer-specific extraction strategies, mailboxes and validation rules.</p></div><button className="primary" onClick={()=>notify("Customer creation flow opened")}><Plus size={17}/> Add customer</button></div><div className="customer-grid">{customers.map(c=><div className="customer-card" key={c.code}><div className="customer-top"><div className="customer-logo">{c.name.split(" ").map(x=>x[0]).slice(0,2).join("")}</div><button className="row-btn"><MoreHorizontal size={17}/></button></div><h3>{c.name}</h3><span className="code">{c.code}</span><div className="customer-info"><div><Mail size={15}/><span>{c.mailbox}</span></div><div><Settings size={15}/><span>{c.rules} extraction rules</span></div><div><Activity size={15}/><span>{c.processed} documents processed</span></div></div><button className="full-btn">Open strategy <ArrowRight size={15}/></button></div>)}</div></section>}
