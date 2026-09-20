@@ -1133,3 +1133,35 @@ body.review-resizing .review-horizontal-resizer span{
     align-self:start;
   }
 }
+
+
+/* Stronger interactive handle for the review split divider */
+@media(min-width:901px){
+  .review-workspace-split:not(.preview-hidden) .review-resizer{
+    width:18px;
+    min-height:700px;
+    cursor:col-resize;
+    touch-action:none;
+    pointer-events:auto;
+    position:relative;
+    z-index:20;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .review-workspace-split:not(.preview-hidden) .review-resizer::after{
+    content:"";
+    width:5px;
+    height:64px;
+    border-radius:999px;
+    background:#b8c3d1;
+    box-shadow:0 0 0 1px #e3e8ef;
+    transition:background .15s,transform .15s,box-shadow .15s;
+  }
+  .review-workspace-split:not(.preview-hidden) .review-resizer:hover::after,
+  .review-workspace-split:not(.preview-hidden) .review-resizer.active::after{
+    background:#2563eb;
+    transform:scaleX(1.25);
+    box-shadow:0 0 0 4px #dbeafe;
+  }
+}
