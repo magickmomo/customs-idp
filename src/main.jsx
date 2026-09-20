@@ -538,28 +538,99 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
      </div>
    </div>
 
-   <div className="review-layout review-layout-stack">
-     <div className="panel extraction-panel">
-       <div className="review-documents">
-         <div className="review-documents-head">
-           <div>
-             <h3>Documents</h3>
-             <span>{documentRows.length} documents in this pack · select a document to review it above the extracted data</span>
+   <div className="review-workspace-split">
+     <div className="review-left-column">
+       <div className="panel extraction-panel review-data-panel">
+         <div className="tabs">
+           <button className={tab==="extraction"?"selected":""} onClick={()=>setTab("extraction")}>Extracted data</button>
+           <button className={tab==="json"?"selected":""} onClick={()=>setTab("json")}>Middleware JSON</button>
+         </div>
+
+         {tab==="extraction"&&<>
+           <div className="data-summary">
+             {pack.processingError&&<div className="extraction-error"><b>Extraction failed:</b> {pack.processingError}</div>}
+             <div><span>Invoice total</span><b>{pack.extractedData?.currency ? `${pack.extractedData.currency} ${Number(pack.extractedData.totalInvoiceValue||0).toLocaleString(undefined,{minimumFractionDigits:2})}` : "Awaiting extraction"}</b></div>
+             <div><span>Gross mass</span><b>{pack.extractedData?.totalGrossWeight!=null ? `${pack.extractedData.totalGrossWeight} kg` : "Awaiting extraction"}</b></div>
+             <div><span>Country export</span><b>{pack.extractedData?.countryOfExport || "Awaiting extraction"}</b></div>
+             <div><span>Destination</span><b>{pack.extractedData?.sourceCountryOfDestination || "Awaiting extraction"}</b></div>
+           </div>
+           <div className="section-title">
+             <div><h3>Invoice positions</h3><span>{pack.extractedData?.lines?.length||0} lines extracted · AI confidence shown per line</span></div>
+             <button className="secondary" onClick={()=>notify("Correction workflow ready — next step is persistent editing")}>Save corrections</button>
+           </div>
+           <div className="line-table">
+             <table>
+               <thead><tr><th>#</th><th>DESCRIPTION</th><th>HS CODE</th><th>ORIGIN</th><th>PKGS</th><th>QTY</th><th>WEIGHT KG</th><th>VALUE</th><th></th></tr></thead>
+               <tbody>{(pack.extractedData?.lines||[]).map(l=><tr key={l.lineNo}>
+                 <td>{l.lineNo}</td>
+                 <td><b>{l.description||"—"}</b><small>{Math.round((l.confidence||0)*100)}% confidence</small></td>
+                 <td>{l.hsCode||"—"}</td>
+                 <td><span className="country">{l.sourceCountryCode||"—"}</span></td>
+                 <td>{l.packages??"—"} {l.packagingType||""}</td>
+                 <td>{l.quantity??"—"} {l.unitOfMeasure||""}</td>
+                 <td>{l.weightKg??"—"}</td>
+                 <td>{pack.extractedData?.currency||""} {l.totalValue??"—"}</td>
+                 <td><MoreHorizontal size={16}/></td>
+               </tr>)}</tbody>
+             </table>
+           </div>
+         </>}
+
+         {tab==="json"&&<pre className="json">{JSON.stringify({
+           customerId:"ACME-001",identifier:pack.id,customerReference:"88421",customerCustomerNo:"ACME-UK",
+           deliveryTerm_SAD20:"DDP",deliveryTermPlace_SAD20:"Maldon",countryOfExport_SAD15:"HU",
+           countryOfDestination_SAD17:"GB",totalAmountInvoiced_SAD22:720,totalAmountInvoicedCurrency_SAD22:"GBP",
+           totalGrossMass:23.01,ticketNo:pack.ticket,positions:[]
+         },null,2)}</pre>}
+       </div>
+
+       <aside className="agent-panel review-agent-panel">
+         <div className="agent-title">
+           <div className="agent-orb"><Sparkles size={18}/></div>
+           <div><b>Extraction Agent</b><span>Online · customer-aware</span></div>
+         </div>
+         <div className="agent-insight">
+           <Sparkles size={15}/>
+           <div><b>Validation complete</b><p>I found 1 field that may need review: the gross mass was apportioned across the three lines using the configured net-weight ratio.</p></div>
+         </div>
+         <div className="agent-rule">
+           <span>Applied customer rule</span>
+           <b>Gross weight apportionment</b>
+           <small>Net-weight ratio · Bancale Legno excluded from net weight</small>
+         </div>
+         <div className="chat">
+           <div className="message agent">I can correct extracted fields, explain why a value was chosen, or save a correction as a customer rule.</div>
+           <div className="chat-input">
+             <input value={chat} onChange={e=>setChat(e.target.value)} placeholder="Ask the agent to change something..."/>
+             <button onClick={()=>{setChat("");notify("Agent request queued")}}><ArrowRight size={16}/></button>
            </div>
          </div>
-         <div className="review-document-list">
-           {documentRows.map(f=>{
-             const id=f.id||f.name;
-             const selected=id===selectedDocumentId;
-             return <button type="button" className={"review-document-card "+(selected?"selected":"")} key={id} onClick={()=>setSelectedDocumentId(id)}>
-               <div className="review-document-icon"><FileText size={18}/></div>
-               <div className="review-document-copy">
-                 <b>{f.name}</b>
-                 <span>{f.storagePath?"Stored in Supabase":"Browser fallback / example"}</span>
-               </div>
-               <span className="review-document-state">{selected?"Viewing":"View"}</span>
-             </button>;
-           })}
+       </aside>
+     </div>
+
+     <div className="review-right-column">
+       <div className="panel review-documents-panel">
+         <div className="review-documents">
+           <div className="review-documents-head">
+             <div>
+               <h3>Documents</h3>
+               <span>{documentRows.length} documents · select a document to preview it</span>
+             </div>
+           </div>
+           <div className="review-document-list">
+             {documentRows.map(f=>{
+               const id=f.id||f.name;
+               const selected=id===selectedDocumentId;
+               return <button type="button" className={"review-document-card "+(selected?"selected":"")} key={id} onClick={()=>setSelectedDocumentId(id)}>
+                 <div className="review-document-icon"><FileText size={18}/></div>
+                 <div className="review-document-copy">
+                   <b>{f.name}</b>
+                   <span>{f.storagePath?"Stored in Supabase":"Browser fallback / example"}</span>
+                 </div>
+                 <span className="review-document-state">{selected?"Viewing":"View"}</span>
+               </button>;
+             })}
+           </div>
          </div>
 
          <div className="review-document-preview">
@@ -576,77 +647,12 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
                : <div className="review-document-empty">
                    <FileText size={28}/>
                    <b>{selectedDocument?.name||"No document available"}</b>
-                   <span>The document is not stored in this browser, so a live preview cannot be displayed. Uploaded documents will appear here automatically.</span>
+                   <span>The document is not available for preview yet. New uploads are stored in the private Supabase document store.</span>
                  </div>}
            </div>
          </div>
        </div>
-
-       <div className="tabs">
-         <button className={tab==="extraction"?"selected":""} onClick={()=>setTab("extraction")}>Extracted data</button>
-         <button className={tab==="json"?"selected":""} onClick={()=>setTab("json")}>Middleware JSON</button>
-       </div>
-
-       {tab==="extraction"&&<>
-         <div className="data-summary">
-           {pack.processingError&&<div className="extraction-error"><b>Extraction failed:</b> {pack.processingError}</div>}
-           <div><span>Invoice total</span><b>{pack.extractedData?.currency ? `${pack.extractedData.currency} ${Number(pack.extractedData.totalInvoiceValue||0).toLocaleString(undefined,{minimumFractionDigits:2})}` : "Awaiting extraction"}</b></div>
-           <div><span>Gross mass</span><b>{pack.extractedData?.totalGrossWeight!=null ? `${pack.extractedData.totalGrossWeight} kg` : "Awaiting extraction"}</b></div>
-           <div><span>Country export</span><b>{pack.extractedData?.countryOfExport || "Awaiting extraction"}</b></div>
-           <div><span>Destination</span><b>{pack.extractedData?.sourceCountryOfDestination || "Awaiting extraction"}</b></div>
-         </div>
-         <div className="section-title">
-           <div><h3>Invoice positions</h3><span>{pack.extractedData?.lines?.length||0} lines extracted · AI confidence shown per line</span></div>
-           <button className="secondary" onClick={()=>notify("Correction workflow ready — next step is persistent editing")}>Save corrections</button>
-         </div>
-         <div className="line-table">
-           <table>
-             <thead><tr><th>#</th><th>DESCRIPTION</th><th>HS CODE</th><th>ORIGIN</th><th>PKGS</th><th>QTY</th><th>WEIGHT KG</th><th>VALUE</th><th></th></tr></thead>
-             <tbody>{(pack.extractedData?.lines||[]).map(l=><tr key={l.lineNo}>
-               <td>{l.lineNo}</td>
-               <td><b>{l.description||"—"}</b><small>{Math.round((l.confidence||0)*100)}% confidence</small></td>
-               <td>{l.hsCode||"—"}</td>
-               <td><span className="country">{l.sourceCountryCode||"—"}</span></td>
-               <td>{l.packages??"—"} {l.packagingType||""}</td>
-               <td>{l.quantity??"—"} {l.unitOfMeasure||""}</td>
-               <td>{l.weightKg??"—"}</td>
-               <td>{pack.extractedData?.currency||""} {l.totalValue??"—"}</td>
-               <td><MoreHorizontal size={16}/></td>
-             </tr>)}</tbody>
-           </table>
-         </div>
-       </>}
-
-       {tab==="json"&&<pre className="json">{JSON.stringify({
-         customerId:"ACME-001",identifier:"PK-10482",customerReference:"88421",customerCustomerNo:"ACME-UK",
-         deliveryTerm_SAD20:"DDP",deliveryTermPlace_SAD20:"Maldon",countryOfExport_SAD15:"HU",
-         countryOfDestination_SAD17:"GB",totalAmountInvoiced_SAD22:720,totalAmountInvoicedCurrency_SAD22:"GBP",
-         totalGrossMass:23.01,ticketNo:"TK-88421",positions:[]
-       },null,2)}</pre>}
      </div>
-
-     <aside className="agent-panel review-agent-panel">
-       <div className="agent-title">
-         <div className="agent-orb"><Sparkles size={18}/></div>
-         <div><b>Extraction Agent</b><span>Online · customer-aware</span></div>
-       </div>
-       <div className="agent-insight">
-         <Sparkles size={15}/>
-         <div><b>Validation complete</b><p>I found 1 field that may need review: the gross mass was apportioned across the three lines using the configured net-weight ratio.</p></div>
-       </div>
-       <div className="agent-rule">
-         <span>Applied customer rule</span>
-         <b>Gross weight apportionment</b>
-         <small>Net-weight ratio · Bancale Legno excluded from net weight</small>
-       </div>
-       <div className="chat">
-         <div className="message agent">I can correct extracted fields, explain why a value was chosen, or save a correction as a customer rule.</div>
-         <div className="chat-input">
-           <input value={chat} onChange={e=>setChat(e.target.value)} placeholder="Ask the agent to change something..."/>
-           <button onClick={()=>{setChat("");notify("Agent request queued")}}><ArrowRight size={16}/></button>
-         </div>
-       </div>
-     </aside>
    </div>
  </section>
 }
