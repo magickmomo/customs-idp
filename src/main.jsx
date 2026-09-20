@@ -523,7 +523,7 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
  const selectedDocumentUrl=selectedDocument ? docUrls[selectedDocument.id] : null;
  const selectedDocumentIsPdf=/\.pdf$/i.test(selectedDocument?.name||"");
  const selectedDocumentIsImage=/^image\//i.test(selectedDocument?.type||"") || /\.(png|jpe?g|webp|gif)$/i.test(selectedDocument?.name||"");
- const selectedDocumentFrameUrl=selectedDocumentUrl&&selectedDocumentIsPdf?\`${selectedDocumentUrl}#page=1&view=FitH&zoom=page-width\`:selectedDocumentUrl;
+ const selectedDocumentFrameUrl=selectedDocumentUrl&&selectedDocumentIsPdf?`${selectedDocumentUrl}#page=1&view=FitH&zoom=page-width`:selectedDocumentUrl;
 
  useEffect(()=>{try{localStorage.setItem("customs-idp-review-preview",showPreview?"on":"off");}catch{}},[showPreview]);
  useEffect(()=>{try{localStorage.setItem("customs-idp-review-split",String(reviewSplit));}catch{}},[reviewSplit]);
