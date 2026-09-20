@@ -537,11 +537,20 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
      const ratio=((e.clientX-rect.left)/rect.width)*100;
      setReviewSplit(Math.max(32,Math.min(68,ratio)));
    };
+   const onMouseMove=e=>onMove(e);
    const onUp=()=>setResizing(false);
-   window.addEventListener("pointermove",onMove);
-   window.addEventListener("pointerup",onUp);
+   window.addEventListener("pointermove",onMove,{capture:true});
+   window.addEventListener("pointerup",onUp,{capture:true});
+   window.addEventListener("mousemove",onMouseMove,{capture:true});
+   window.addEventListener("mouseup",onUp,{capture:true});
    document.body.classList.add("review-resizing");
-   return()=>{window.removeEventListener("pointermove",onMove);window.removeEventListener("pointerup",onUp);document.body.classList.remove("review-resizing");};
+   return()=>{
+     window.removeEventListener("pointermove",onMove,{capture:true});
+     window.removeEventListener("pointerup",onUp,{capture:true});
+     window.removeEventListener("mousemove",onMouseMove,{capture:true});
+     window.removeEventListener("mouseup",onUp,{capture:true});
+     document.body.classList.remove("review-resizing");
+   };
  },[resizing]);
 
  const extractedPanel=<div className="review-left-column">
@@ -647,7 +656,7 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
    <div className={"review-workspace-split "+(!showPreview?"preview-hidden":"")} style={{"--review-split":showPreview?reviewSplit:100}}>
      {extractedPanel}
      {showPreview&&<>
-       <div className={"review-resizer "+(resizing?"active":"")} role="separator" aria-label="Resize extracted data and document preview" onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture?.(e.pointerId);setResizing(true);}} onDoubleClick={()=>setReviewSplit(50)} title="Drag to resize"></div>
+       <div className={"review-resizer "+(resizing?"active":"")} role="separator" aria-label="Resize extracted data and document preview" onPointerDown={e=>{e.preventDefault();e.stopPropagation();e.currentTarget.setPointerCapture?.(e.pointerId);setResizing(true);}} onMouseDown={e=>{e.preventDefault();e.stopPropagation();setResizing(true);}} onDoubleClick={()=>setReviewSplit(50)} title="Drag to resize"></div>
        {documentPanel}
      </>}
    </div>
