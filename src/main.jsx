@@ -655,7 +655,7 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
      <label className="review-preview-toggle"><input type="checkbox" checked={showPreview} onChange={e=>setShowPreview(e.target.checked)}/><span className="review-toggle-track"><i></i></span><span>Show preview</span></label>
      <button className="secondary review-fit-btn" onClick={()=>setReviewSplit(50)}>Reset split</button>
    </div>
-   <div className={"review-workspace-split "+(!showPreview?"preview-hidden":"")} style={{"--review-split":showPreview?reviewSplit:100}}>
+   <div className={"review-workspace-split "+(!showPreview?"preview-hidden":"")} style={{"--review-split":`${showPreview?reviewSplit:100}%`}}>
      {extractedPanel}
      {showPreview&&<>
        <div className={"review-resizer "+(resizing?"active":"")} role="separator" aria-label="Resize extracted data and document preview" title="Drag to resize">
