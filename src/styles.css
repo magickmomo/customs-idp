@@ -1110,3 +1110,26 @@ body.review-resizing .review-horizontal-resizer span{
     min-height:340px;
   }
 }
+
+
+/* Keep optional preview beside extracted data on desktop */
+@media(min-width:901px){
+  .review-workspace-split.preview-hidden{
+    grid-template-columns:1fr;
+  }
+  .review-workspace-split:not(.preview-hidden) .review-left-column{
+    grid-column:1;
+    grid-row:1;
+  }
+  .review-workspace-split:not(.preview-hidden) .review-resizer{
+    grid-column:2;
+    grid-row:1;
+  }
+  .review-workspace-split:not(.preview-hidden) .review-right-column{
+    grid-column:3;
+    grid-row:1;
+  }
+  .review-workspace-split:not(.preview-hidden) .review-right-column{
+    align-self:start;
+  }
+}
