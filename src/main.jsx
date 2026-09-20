@@ -479,6 +479,13 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
  const [tab,setTab]=useState("extraction");
  const [chat,setChat]=useState("");
  const [selectedDocumentId,setSelectedDocumentId]=useState(null);
+ const [reviewSplit,setReviewSplit]=useState(()=>{
+   try{
+     const saved=Number(localStorage.getItem("customs-idp-review-split"));
+     return Number.isFinite(saved)&&saved>=32&&saved<=68?saved:50;
+   }catch{return 50;}
+ });
+ const [resizing,setResizing]=useState(false);
 
  useEffect(()=>{let active=true;(async()=>{
    const entries=await Promise.all((pack.uploadedFiles||[]).map(async f=>{
@@ -512,7 +519,32 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
  const selectedDocument=documentRows.find(d=>(d.id||d.name)===selectedDocumentId)||documentRows[0];
  const selectedDocumentUrl=selectedDocument ? docUrls[selectedDocument.id] : null;
  const selectedDocumentIsPdf=/\.pdf$/i.test(selectedDocument?.name||"");
- const selectedDocumentFrameUrl=selectedDocumentUrl && selectedDocumentIsPdf ? `${selectedDocumentUrl}#view=FitH&zoom=page-width` : selectedDocumentUrl;
+ const selectedDocumentIsImage=/^image\//i.test(selectedDocument?.type||"") || /\.(png|jpe?g|webp|gif)$/i.test(selectedDocument?.name||"");
+ const selectedDocumentFrameUrl=selectedDocumentUrl && selectedDocumentIsPdf ? `${selectedDocumentUrl}#page=1&view=FitH&zoom=page-width` : selectedDocumentUrl;
+
+ useEffect(()=>{
+   try{localStorage.setItem("customs-idp-review-split",String(reviewSplit));}catch{}
+ },[reviewSplit]);
+
+ useEffect(()=>{
+   if(!resizing)return;
+   const onMove=e=>{
+     const workspace=document.querySelector(".review-workspace-split");
+     if(!workspace)return;
+     const rect=workspace.getBoundingClientRect();
+     const ratio=((e.clientX-rect.left)/rect.width)*100;
+     setReviewSplit(Math.max(32,Math.min(68,ratio)));
+   };
+   const onUp=()=>setResizing(false);
+   window.addEventListener("pointermove",onMove);
+   window.addEventListener("pointerup",onUp);
+   document.body.classList.add("review-resizing");
+   return()=>{
+     window.removeEventListener("pointermove",onMove);
+     window.removeEventListener("pointerup",onUp);
+     document.body.classList.remove("review-resizing");
+   };
+ },[resizing]);
 
  return <section>
    <button className="back" onClick={back}>← Back to inbox</button>
@@ -538,7 +570,8 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
      </div>
    </div>
 
-   <div className="review-workspace-split">
+   <div className="review-workspace-split" style={{"--review-split":`${reviewSplit}%`}}>
+
      <div className="review-left-column">
        <div className="panel extraction-panel review-data-panel">
          <div className="tabs">
@@ -608,6 +641,10 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
        </aside>
      </div>
 
+     <div className={"review-resizer "+(resizing?"active":"")} role="separator" aria-label="Resize extracted data and document preview" aria-orientation="vertical" onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture?.(e.pointerId);setResizing(true);}} title="Drag to resize">
+       <span></span>
+     </div>
+
      <div className="review-right-column">
        <div className="panel review-documents-panel">
          <div className="review-documents">
@@ -663,9 +700,11 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
                  <button type="button" aria-label="Open document">↗</button>
                </div>
              </div>
-             <div className="review-document-preview-body">
+             <div className={"review-document-preview-body "+(selectedDocumentIsImage?"image-document":"pdf-document")}>
                {selectedDocumentUrl
-                 ? <iframe src={selectedDocumentFrameUrl} title={selectedDocument?.name||"Document preview"} />
+                 ? selectedDocumentIsImage
+                   ? <img src={selectedDocumentUrl} alt={selectedDocument?.name||"Document preview"} />
+                   : <iframe src={selectedDocumentFrameUrl} title={selectedDocument?.name||"Document preview"} />
                  : <div className="review-document-empty">
                      <FileText size={28}/>
                      <b>{selectedDocument?.name||"No document available"}</b>
