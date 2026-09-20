@@ -570,7 +570,7 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
      </div>
    </div>
 
-   <div className="review-workspace-top">
+   <div className="review-workspace-top" style={{"--review-doc-height":`${reviewSplit}vh`}}>
      <div className="review-right-column review-document-top">
        <div className="panel review-documents-panel">
          <div className="review-documents">
@@ -647,7 +647,7 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
      <span></span>
    </div>
 
-   <div className="review-workspace-bottom" style={{"--review-data-height":`${Math.max(280,Math.min(760,(100-reviewSplit)*7))}px`}}>
+   <div className="review-workspace-bottom" style={{"--review-data-height":`clamp(220px,calc(70vh - var(--review-doc-height)),620px)`}}>
      <div className="review-left-column">
        <div className="panel extraction-panel review-data-panel">
          <div className="tabs">
