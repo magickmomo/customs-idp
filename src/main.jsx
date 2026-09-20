@@ -658,7 +658,10 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
    <div className={"review-workspace-split "+(!showPreview?"preview-hidden":"")} style={{"--review-split":showPreview?reviewSplit:100}}>
      {extractedPanel}
      {showPreview&&<>
-       <button type="button" className={"review-resizer "+(resizing?"active":"")} role="separator" aria-label="Resize extracted data and document preview" onPointerDown={e=>{e.preventDefault();e.stopPropagation();setResizing(true);}} onMouseDown={e=>{e.preventDefault();e.stopPropagation();setResizing(true);}} onTouchStart={e=>{e.preventDefault();setResizing(true);}} onDoubleClick={()=>setReviewSplit(50)} title="Drag to resize"><span className="review-resizer-grip"></span></button>
+       <div className={"review-resizer "+(resizing?"active":"")} role="separator" aria-label="Resize extracted data and document preview" title="Drag to resize">
+         <input className="review-split-range" type="range" min="32" max="68" step="0.5" value={reviewSplit} onChange={e=>setReviewSplit(Number(e.target.value))} aria-label="Data and document split"/>
+         <span className="review-resizer-grip"></span>
+       </div>
        {documentPanel}
      </>}
    </div>
