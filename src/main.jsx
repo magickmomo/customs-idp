@@ -647,7 +647,7 @@ function Review({pack,back,notify,onAssign,validatePack,postToLCA,reprocessPack}
    <div className={"review-workspace-split "+(!showPreview?"preview-hidden":"")} style={{"--review-split":showPreview?reviewSplit:100}}>
      {extractedPanel}
      {showPreview&&<>
-       <div className={"review-resizer "+(resizing?"active":"")} role="separator" aria-label="Resize extracted data and document preview" onPointerDown={e=>{e.preventDefault();setResizing(true);}} title="Drag to resize"></div>
+       <div className={"review-resizer "+(resizing?"active":"")} role="separator" aria-label="Resize extracted data and document preview" onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture?.(e.pointerId);setResizing(true);}} onDoubleClick={()=>setReviewSplit(50)} title="Drag to resize"></div>
        {documentPanel}
      </>}
    </div>
