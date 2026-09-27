@@ -765,43 +765,65 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
    }
    if(m.type==="customsEntrySummary"&&m.summary){
      const s=m.summary;
-     return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><Sparkles size={15}/></div><div className="chat-message-content"><div className="customs-entry-summary-card">
-       <div className="customs-summary-title"><div><span className="summary-kicker">CUSTOMS ENTRY SUMMARY</span><h3>{s.invoice||"Customs entry"}</h3></div><span className="summary-status">Source: {s.sourceLabel}</span></div>
-       {s.weightSourceDecision&&<div className="weight-source-selected"><CheckCircle2 size={15}/><span><b>Working weights:</b> {s.weightSourceDecision==="packing_list"?"Packing List":"Commercial Invoice"} selected. The selected values are now used for customs validation and downstream data.</span></div>}
-       <div className="customs-party-grid">
-         <div className="customs-party-card">
-           <span className="customs-party-label">Exporter</span>
-           <b>{s.exporter||"—"}</b>
-           <div className="customs-address-block">
-             <span>{s.exporterAddressLine1||"Address line 1 not extracted"}</span>
-             <span>{s.exporterPostcode||"Postcode/ZIP not extracted"}</span>
-             <span>{s.exporterCity||"City not extracted"}</span>
-             <span>{s.exporterCountryIso||"Country not extracted"}</span>
-             {s.exporterEoriNo&&<span><strong>EORI:</strong> {s.exporterEoriNo}</span>}
+     const addressLines=(value,fallback)=>String(value||fallback).split(/,|\\n/).map(x=>x.trim()).filter(Boolean);
+     const renderAddress=(value,fallback)=><>{addressLines(value,fallback).map((line,idx)=><span key={idx}>{line}</span>)}</>;
+     return <div className="chat-message-row agent" key={i}>
+       <div className="chat-message-avatar"><Sparkles size={15}/></div>
+       <div className="chat-message-content">
+         <div className="customs-entry-summary-card">
+           <div className="customs-summary-title">
+             <div><span className="summary-kicker">CUSTOMS ENTRY SUMMARY</span><h3>{s.invoice||"Customs entry"}</h3></div>
+             <span className="summary-status">Source: {s.sourceLabel}</span>
            </div>
-         </div>
-         <div className="customs-party-card">
-           <span className="customs-party-label">Consignee</span>
-           <b>{s.consignee||"—"}</b>
-           <div className="customs-address-block">
-             <span>{s.consigneeAddressLine1||"Address line 1 not extracted"}</span>
-             <span>{s.consigneePostcode||"Postcode/ZIP not extracted"}</span>
-             <span>{s.consigneeCity||"City not extracted"}</span>
-             <span>{s.consigneeCountryIso||"Country not extracted"}</span>
+           {s.weightSourceDecision&&<div className="weight-source-selected"><CheckCircle2 size={15}/><span><b>Working weights:</b> {s.weightSourceDecision==="packing_list"?"Packing List":"Commercial Invoice"} selected. The selected values are now used for customs validation and downstream data.</span></div>}
+           <div className="customs-party-grid">
+             <div className="customs-party-card">
+               <span className="customs-party-label">Exporter</span>
+               <b>{s.exporter||"—"}</b>
+               <div className="customs-address-block">
+                 {renderAddress(s.exporterAddressLine1,"Address line 1 not extracted")}
+                 <span>{s.exporterPostcode||"Postcode/ZIP not extracted"}</span>
+                 <span>{s.exporterCity||"City not extracted"}</span>
+                 <span>{s.exporterCountryIso||"Country not extracted"}</span>
+                 {s.exporterEoriNo&&<span><strong>EORI:</strong> {s.exporterEoriNo}</span>}
+               </div>
+             </div>
+             <div className="customs-party-card">
+               <span className="customs-party-label">Consignee</span>
+               <b>{s.consignee||"—"}</b>
+               <div className="customs-address-block">
+                 {renderAddress(s.consigneeAddressLine1,"Address line 1 not extracted")}
+                 <span>{s.consigneePostcode||"Postcode/ZIP not extracted"}</span>
+                 <span>{s.consigneeCity||"City not extracted"}</span>
+                 <span>{s.consigneeCountryIso||"Country not extracted"}</span>
+               </div>
+             </div>
            </div>
+           <div className="customs-header-table">
+             <div>
+               <div><span>Currency</span><b>{s.currency||"—"}</b></div>
+               <div><span>Invoice Value</span><b>{s.invoiceValue?((s.currency||"")+" "+s.invoiceValue):"—"}</b></div>
+               <div><span>Export</span><b>{s.exportCountry||"—"}</b></div>
+               <div><span>Destination</span><b>{s.destination||"—"}</b></div>
+               <div><span>Packages</span><b>{s.packages||"—"}</b></div>
+               <div><span>Gross Weight</span><b>{s.gross?s.gross+" kg":"—"}</b></div>
+               <div><span>Net Weight</span><b>{s.net?s.net+" kg":"—"}</b></div>
+               <div><span>Delivery Term</span><b>{s.deliveryTerm||"—"}</b></div>
+             </div>
+           </div>
+           <div className="customs-summary-section">
+             <div className="summary-section-title">Goods lines <span>{s.lines.length}</span></div>
+             <div className="customs-line-table-wrap">
+               <table className="customs-line-table">
+                 <thead><tr><th>Line</th><th>Goods Description</th><th>HS Code</th><th>Origin</th><th>Qty</th><th>Net Weight (kg)</th><th>Gross Weight (kg)</th><th>Value</th></tr></thead>
+                 <tbody>{s.lines.map(line=><tr key={line.no}><td>{line.no}</td><td>{line.description}</td><td>{line.hs||"—"}</td><td>{line.origin||"—"}</td><td>{line.quantity||"—"}</td><td>{line.net||"—"}</td><td>{line.gross||"—"}</td><td>{line.itemValue?(s.currency+" "+line.itemValue):"—"}</td></tr>)}</tbody>
+               </table>
+             </div>
+           </div>
+           {source&&<div className="summary-source">{source}</div>}
          </div>
-         <div className="customs-header-table"><div>
-           <div><span>Currency</span><b>{s.currency||"—"}</b></div>
-           <div><span>Invoice Value</span><b>{s.invoiceValue?((s.currency||"")+" "+s.invoiceValue):"—"}</b></div>
-           <div><span>Export</span><b>{s.exportCountry||"—"}</b></div>
-           <div><span>Destination</span><b>{s.destination||"—"}</b></div>
-           <div><span>Packages</span><b>{s.packages||"—"}</b></div>
-           <div><span>Gross Weight</span><b>{s.gross?s.gross+" kg":"—"}</b></div>
-           <div><span>Net Weight</span><b>{s.net?s.net+" kg":"—"}</b></div>
-           <div><span>Delivery Term</span><b>{s.deliveryTerm||"—"}</b></div>
-         </div></div><div className="customs-summary-section"><div className="summary-section-title">Goods lines <span>{s.lines.length}</span></div><div className="customs-line-table-wrap"><table className="customs-line-table"><thead><tr><th>Line</th><th>Goods Description</th><th>HS Code</th><th>Origin</th><th>Qty</th><th>Net Weight (kg)</th><th>Gross Weight (kg)</th><th>Value</th></tr></thead><tbody>{s.lines.map(line=><tr key={line.no}><td>{line.no}</td><td>{line.description}</td><td>{line.hs||"—"}</td><td>{line.origin||"—"}</td><td>{line.quantity||"—"}</td><td>{line.net||"—"}</td><td>{line.gross||"—"}</td><td>{line.itemValue?(s.currency+" "+line.itemValue):"—"}</td></tr>)}</tbody></table></div></div>
-       {source&&<div className="summary-source">{source}</div>}
-     </div></div></div></div>;
+       </div>
+     </div>;
    }
    if(m.type==="validationSummary"&&Array.isArray(m.checks)){
      return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><ShieldCheck size={15}/></div><div className="chat-message-content"><div className="validation-summary-card"><div className="customs-summary-title"><div><span className="summary-kicker">VALIDATION RESULTS</span><h3>Document and customs checks</h3></div></div><div className="validation-check-list">{m.checks.map((check,idx)=><div className={"validation-check "+check.status} key={idx}><span>{check.status==="pass"?"✓":"!"}</span><div><b>{check.label}</b><small>{check.detail}</small></div></div>)}</div></div></div></div>;
