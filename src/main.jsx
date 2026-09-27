@@ -273,17 +273,45 @@ function App(){
   };
   const validatePack=()=>{
   if(!selectedPack)return;
-  const lines=selectedPack.extractedData?.lines||[];
-  const checks=lines.map((line,index)=>({
-    lineNo:line.lineNo||index+1,
-    status:"Pending",
-    message:"Customer strategy validation will run here."
-  }));
-  const validated={...selectedPack,status:"Ready",validationStatus:"Validated",validationChecks:checks};
+  const data=selectedPack.extractedData||{};
+  const lines=data.lines||[];
+  const checks=[];
+  const exportCountry=String(data.countryOfExport||"").trim().toUpperCase();
+  const exporterAddress=String(data.exporterAddress||"").trim();
+  const exporterEori=String(data.exporterEoriNo||"").trim();
+  const isGBExporter=exportCountry==="GB" || /(?:^|[\\n, ])(?:GB|UK|UNITED KINGDOM)(?:$|[\\n, ])/i.test(exporterAddress);
+  if(isGBExporter){
+    checks.push({
+      check:"GB exporter EORI",
+      status:exporterEori?"pass":"fail",
+      detail:exporterEori
+        ?"Exporter EORI extracted: "+exporterEori
+        :"GB exporter address/export country detected but no EORI number was extracted. Confirm the EORI is present on the source document before posting to LCA."
+    });
+  }else{
+    checks.push({check:"GB exporter EORI",status:"not_applicable",detail:"Exporter is not identified as GB."});
+  }
+  lines.forEach((line,index)=>{
+    checks.push({
+      lineNo:line.lineNo||index+1,
+      check:"Line "+(line.lineNo||index+1)+" extraction",
+      status:"pass",
+      message:"Source data extracted."
+    });
+  });
+  const hasFail=checks.some(x=>x.status==="fail");
+  const validated={
+    ...selectedPack,
+    status:hasFail?"Needs review":"Ready",
+    validationStatus:hasFail?"Failed":"Validated",
+    validationChecks:checks
+  };
   setSelectedPack(validated);
   setLivePacks(prev=>prev.map(p=>p.id===validated.id?validated:p));
   persistPack(validated);
-  notify("Data validation complete — customer strategy checks passed in test mode");
+  notify(hasFail
+    ?"Validation failed — "+checks.filter(x=>x.status==="fail").map(x=>x.check).join(", ")
+    :"Data validation complete — all implemented checks passed");
 };
 const postToLCA=()=>{
   if(!selectedPack)return;
