@@ -601,40 +601,40 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      persist:false
    }];
 
+   const invoiceDoc=docs.find(d=>d.extraction?.documentType==="commercial_invoice")||docs[0];
+   const invoice=invoiceDoc?.extraction||{};
+   const supportingDocs=docs.filter(d=>d!==invoiceDoc);
+   const lineKey=line=>String(line?.hsCode||"")+"|"+String(line?.description||"").trim().toLowerCase();
+   const hasValue=v=>v!==undefined&&v!==null&&v!=="";
+
    const grouped=new Map();
-   docs.forEach(doc=>{
-     const e=doc.extraction||{};
-     (Array.isArray(e.lines)?e.lines:[]).forEach((line,index)=>{
-       const key=lineKey(line)||("line-"+index);
-       if(!grouped.has(key))grouped.set(key,{line:normaliseLine(line),sources:[]});
-       grouped.get(key).sources.push({doc,line});
+   (Array.isArray(invoice.lines)?invoice.lines:[]).forEach((line,index)=>{
+     grouped.set(lineKey(line)||("invoice-"+index),{invoiceLine:line,supporting:[]});
+   });
+   supportingDocs.forEach(doc=>{
+     (Array.isArray(doc.extraction?.lines)?doc.extraction.lines:[]).forEach((line,index)=>{
+       const key=lineKey(line)||("supporting-"+doc.id+"-"+index);
+       const item=grouped.get(key);
+       if(item) item.supporting.push({doc,line});
+       else grouped.set(key,{invoiceLine:null,supporting:[{doc,line}]});
      });
    });
 
    const customsLines=[];
-   for(const item of grouped.values()){
-     const base=item.line;
-     const invoiceSource=item.sources.find(x=>x.doc.extraction?.documentType==="commercial_invoice")||item.sources[0];
-     const invoiceLine=invoiceSource?.line||{};
-     const otherSources=item.sources.filter(x=>x!==invoiceSource);
-     const parts=[
-       base.description||"Unnamed goods line",
-       "HS "+value(base.hs),
-       "Origin "+value(base.origin),
-       "Qty "+value(base.quantity),
-       "Net "+value(base.net)+" kg",
-       "Gross "+value(base.gross)+" kg",
-       "Value "+value(base.value)
-     ];
-     if(otherSources.length){
-       const checks=otherSources.map(x=>{
-         const l=x.line||{};
-         return x.doc.filename+": net "+value(l.netMassKg)+" kg, gross "+value(l.grossMassKg)+" kg";
-       });
-       parts.push("Other source: "+checks.join(" · "));
-     }
-     customsLines.push("Line "+(customsLines.length+1)+": "+parts.join(" | "));
-   }
+   grouped.forEach(item=>{
+     const l=item.invoiceLine||item.supporting[0]?.line||{};
+     const fallback=(field)=>hasValue(l[field])?l[field]:item.supporting.find(x=>hasValue(x.line?.[field]))?.line?.[field];
+     customsLines.push(
+       "Line "+(customsLines.length+1)+": "+
+       (l.description||"Unnamed goods line")+
+       " | HS "+value(fallback("hsCode"))+
+       " | Origin "+value(fallback("sourceCountryCode"))+
+       " | Qty "+value(fallback("quantity"))+
+       " | Net "+value(fallback("netMassKg"))+" kg"+
+       " | Gross "+value(fallback("grossMassKg"))+" kg"+
+       " | Value "+value(fallback("totalValue"))
+     );
+   });
 
    const combined=[
      "Customs entry",
