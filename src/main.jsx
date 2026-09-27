@@ -662,34 +662,40 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      persist:false
    });
 
-   const conflicts=[];
-   [["gross weight","totalGrossWeight"],["net weight","totalNetWeight"],["invoice value","totalInvoiceValue"],["currency","currency"],["export country","countryOfExport"],["destination","sourceCountryOfDestination"],["packages","totalPackages"]].forEach(([label,key])=>{
-     const vals=docs.map(d=>({d,value:d.extraction?.[key]})).filter(x=>x.value!==undefined&&x.value!==null&&x.value!=="");
-     if([...new Set(vals.map(x=>String(x.value)))].length>1)conflicts.push({label,vals});
-   });
-
-   grouped.forEach(item=>{
-     const sources=item.sources;
-     const fields=["sourceCountryCode","quantity","netMassKg","grossMassKg","totalValue"];
-     fields.forEach(field=>{
-       const vals=sources.map(x=>({doc:x.doc,value:x.line?.[field]})).filter(x=>x.value!==undefined&&x.value!==null&&x.value!=="");
-       if(new Set(vals.map(x=>String(x.value))).size>1){
-         conflicts.push({label:"line "+(item.line.description||"goods")+" "+field,vals});
-       }
+   const supportingDifferences=[];
+   const invoiceLines=Array.isArray(invoice.lines)?invoice.lines:[];
+   supportingDocs.forEach(doc=>{
+     const lines=Array.isArray(doc.extractedData?.lines)?doc.extractedData.lines:(Array.isArray(doc.extraction?.lines)?doc.extraction.lines:[]);
+     let weightDifferences=0;
+     let matched=0;
+     lines.forEach(line=>{
+       const inv=invoiceLines.find(x=>lineKey(x)===lineKey(line));
+       if(!inv)return;
+       matched++;
+       if(hasValue(inv.netMassKg)&&hasValue(line.netMassKg)&&String(inv.netMassKg)!==String(line.netMassKg))weightDifferences++;
+       if(hasValue(inv.grossMassKg)&&hasValue(line.grossMassKg)&&String(inv.grossMassKg)!==String(line.grossMassKg))weightDifferences++;
      });
+     if(weightDifferences){
+       supportingDifferences.push(
+         doc.filename+" reports different line-level weights for "+matched+" matching goods lines. "+
+         "The Commercial Invoice already states those weights, so its values remain in the customs entry. "+
+         "The supporting document is retained for evidence and comparison only."
+       );
+     }
    });
 
-   if(conflicts.length){
+   if(supportingDifferences.length){
      out.push({
        type:"agent",
-       text:"Cross-document check — attention required. I found "+conflicts.length+" discrepancy"+(conflicts.length===1?"":"ies")+" and have not silently chosen a value.\n"+
-         conflicts.map(c=>c.label+": "+c.vals.map(v=>v.doc.filename+" = "+v.value).join(" · ")).join("\n"),
+       text:"Cross-document review — I found differences in supporting documents, but I have not treated them as replacement values.\n"+
+         supportingDifferences.join("\n")+
+         "\n\nWhy: the Commercial Invoice is the primary source for customs-entry values when a field is explicitly stated there. A Packing List can contain different per-carton or packaging weight allocations while still reconciling to the same shipment totals.",
        persist:false
      });
    }else{
      out.push({
        type:"agent",
-       text:"Cross-document check: the key header and line values checked across the uploaded documents agree. I have not inferred or corrected any source value.",
+       text:"Cross-document review: no supporting-document differences require a source-selection decision. The Commercial Invoice remains the primary source for fields it explicitly states.",
        persist:false
      });
    }
