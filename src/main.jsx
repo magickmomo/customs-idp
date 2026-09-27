@@ -801,7 +801,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
            <div><span>Delivery Term</span><b>{s.deliveryTerm||"—"}</b></div>
          </div></div><div className="customs-summary-section"><div className="summary-section-title">Goods lines <span>{s.lines.length}</span></div><div className="customs-line-table-wrap"><table className="customs-line-table"><thead><tr><th>Line</th><th>Goods Description</th><th>HS Code</th><th>Origin</th><th>Qty</th><th>Net Weight (kg)</th><th>Gross Weight (kg)</th><th>Value</th></tr></thead><tbody>{s.lines.map(line=><tr key={line.no}><td>{line.no}</td><td>{line.description}</td><td>{line.hs||"—"}</td><td>{line.origin||"—"}</td><td>{line.quantity||"—"}</td><td>{line.net||"—"}</td><td>{line.gross||"—"}</td><td>{line.itemValue?(s.currency+" "+line.itemValue):"—"}</td></tr>)}</tbody></table></div></div>
        {source&&<div className="summary-source">{source}</div>}
-     </div></div></div></div></div>;
+     </div></div></div></div>;
    }
    if(m.type==="validationSummary"&&Array.isArray(m.checks)){
      return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><ShieldCheck size={15}/></div><div className="chat-message-content"><div className="validation-summary-card"><div className="customs-summary-title"><div><span className="summary-kicker">VALIDATION RESULTS</span><h3>Document and customs checks</h3></div></div><div className="validation-check-list">{m.checks.map((check,idx)=><div className={"validation-check "+check.status} key={idx}><span>{check.status==="pass"?"✓":"!"}</span><div><b>{check.label}</b><small>{check.detail}</small></div></div>)}</div></div></div></div>;
