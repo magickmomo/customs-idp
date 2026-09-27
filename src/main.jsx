@@ -859,16 +859,14 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
              </div>
            </div>
            <div className="customs-header-table">
-             <div>
-               <div><span>Currency</span><b>{s.currency||"—"}</b></div>
-               <div><span>Invoice Value</span><b>{s.invoiceValue?((s.currency||"")+" "+s.invoiceValue):"—"}</b></div>
-               <div><span>Export</span><b>{s.exportCountry||"—"}</b></div>
-               <div><span>Destination</span><b>{s.destination||"—"}</b></div>
-               <div><span>Packages</span><b>{s.packages||"—"}</b></div>
-               <div><span>Gross Weight</span><b>{s.gross?s.gross+" kg":"—"}</b></div>
-               <div><span>Net Weight</span><b>{s.net?s.net+" kg":"—"}</b></div>
-               <div><span>Delivery Term</span><b>{s.deliveryTerm||"—"}</b></div>
-             </div>
+             <div><span>Currency</span><b>{s.currency||"—"}</b></div>
+             <div><span>Invoice Value</span><b>{s.invoiceValue?((s.currency||"")+" "+s.invoiceValue):"—"}</b></div>
+             <div><span>Export</span><b>{s.exportCountry||"—"}</b></div>
+             <div><span>Destination</span><b>{s.destination||"—"}</b></div>
+             <div><span>Packages</span><b>{s.packages||"—"}</b></div>
+             <div><span>Gross Weight</span><b>{s.gross?s.gross+" kg":"—"}</b></div>
+             <div><span>Net Weight</span><b>{s.net?s.net+" kg":"—"}</b></div>
+             <div><span>Delivery Term</span><b>{s.deliveryTerm||"—"}</b></div>
            </div>
            <div className="customs-summary-section">
              <div className="summary-section-title">Goods lines <span>{s.lines.length}</span></div>
