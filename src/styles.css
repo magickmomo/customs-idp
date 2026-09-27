@@ -1193,7 +1193,7 @@ body.review-resizing .review-horizontal-resizer span{
 .customs-summary-title{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding:16px 18px;border-bottom:1px solid var(--border,#e5e7eb)}
 .customs-summary-title h3{margin:3px 0 0;font-size:15px}
 .customs-summary-title .summary-status{font-size:11px;color:#667085;background:#f8fafc;border:1px solid #e5e7eb;padding:5px 8px;border-radius:999px}
-.customs-header-table{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:#e5e7eb;border-bottom:1px solid #e5e7eb}
+.customs-header-table{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:#e5e7eb;border-bottom:1px solid #e5e7eb;width:100%}
 .customs-header-table>div{background:#fff;padding:10px 12px;min-width:0}
 .customs-header-table span{display:block;font-size:10px;color:#667085;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
 .customs-header-table b{display:block;font-size:12px;overflow-wrap:anywhere}
@@ -1232,3 +1232,6 @@ body.review-resizing .review-horizontal-resizer span{
 .email-draft-modal textarea{resize:vertical;line-height:1.45}
 .email-draft-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
 .email-draft-actions button:disabled{opacity:.45;cursor:not-allowed}
+
+@media(max-width:900px){.customs-header-table{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:520px){.customs-header-table{grid-template-columns:1fr;}}
