@@ -649,23 +649,9 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      {label:"Country of origin",status:lines.every(l=>hasValue(l.sourceCountryCode))?"pass":"warning",detail:lines.every(l=>hasValue(l.sourceCountryCode))?"All goods lines have an origin code.":"One or more goods lines are missing an origin code."},
      {label:"Weight comparison",status:conflicts.length?(pack.extractedData?.weightSourceDecision?"pass":"warning"):"pass",detail:conflicts.length?(pack.extractedData?.weightSourceDecision?"Source selected: "+(pack.extractedData.weightSourceDecision.source==="packing_list"?"Packing List":"Commercial Invoice")+". Working weights have been updated.":"Line-level weight differences found between the invoice and packing list — a source must be selected."):"No line-level weight discrepancies found."}
    ];
-   const agentIssues=[];
-   const exportCountry=String(invoice.countryOfExport||"").trim().toUpperCase();
-   const exporterIso=String(invoice.exporterCountryIso||"").trim().toUpperCase();
-   const exporterEori=String(invoice.exporterEoriNo||"").trim();
-   const isGBExporter=exportCountry==="GB"||exporterIso==="GB"||/(?:^|[\\n, ])(?:GB|UK|UNITED KINGDOM)(?:$|[\\n, ])/i.test(String(invoice.exporterAddress||""));
-   if(isGBExporter&&!exporterEori) agentIssues.push({title:"GB exporter EORI missing",detail:"The exporter is identified as GB, but no EORI number was extracted. Check the source document and correct the EORI before validation."});
-   const addressFields=[
-     ["Exporter address line 1",invoice.exporterAddressLine1],["Exporter postcode/ZIP",invoice.exporterPostcode],["Exporter city",invoice.exporterCity],["Exporter country ISO",invoice.exporterCountryIso],
-     ["Consignee address line 1",invoice.consigneeAddressLine1],["Consignee postcode/ZIP",invoice.consigneePostcode],["Consignee city",invoice.consigneeCity],["Consignee country ISO",invoice.consigneeCountryIso]
-   ];
-   addressFields.forEach(([label,v])=>{if(!hasValue(v))agentIssues.push({title:label+" missing",detail:"This address component was not extracted. Check the source document and correct it before validation."});});
-   if(lines.some(l=>!hasValue(l.hsCode)))agentIssues.push({title:"HS code missing",detail:"One or more goods lines do not have an HS code. Correct the affected line before validation."});
-   if(lines.some(l=>!hasValue(l.sourceCountryCode)))agentIssues.push({title:"Country of origin missing",detail:"One or more goods lines do not have a country-of-origin code. Correct the affected line before validation."});
 
    return [
-     {type:"agent",text:"I've reviewed the extracted pack. I will surface extraction and document issues here first; corrections can be made through the agent, and Validate data is the final gate before posting to LCA.",persist:false},
-     ...(agentIssues.length?[{type:"agentIssues",issues:agentIssues,persist:false}]:[{type:"agent",text:"No immediate extraction issues were detected from the available pack data. Validate data is still required before posting to LCA.",persist:false}]),
+     {type:"agent",text:"I've combined the document pack into one customs-entry summary. The table shows the working customs weights only; the selected source is recorded separately so the declaration is not carrying duplicate PKL/CIV weight columns.",persist:false},
      {
        type:"customsEntrySummary",
        summary:{
@@ -679,7 +665,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
        },
        persist:false
      },
-     {type:"validationSummary",checks:Array.isArray(pack.validationChecks)&&pack.validationChecks.length?pack.validationChecks:(Array.isArray(pack.extractedData?.validationChecks)&&pack.extractedData.validationChecks.length?pack.extractedData.validationChecks:checks),persist:false},
+     {type:"validationSummary",checks:Array.isArray(pack.extractedData?.validationChecks)&&pack.extractedData.validationChecks.length?pack.extractedData.validationChecks:checks,persist:false},
      ...(conflicts.length&&!pack.extractedData?.weightSourceDecision?[{
        type:"weightDecision",
        text:"Weight discrepancy detected. The invoice and packing list contain different line-level weights. No value has been silently chosen.",
@@ -691,7 +677,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
  useEffect(()=>{
    const saved=Array.isArray(pack.extractedData?.agentMessages)?pack.extractedData.agentMessages:[];
    setMessages([...buildSummary(),...saved]);
- },[pack.id,pack.extractedData?.extractionRunId,pack.validationStatus,pack.validationChecks,pack.extractedData?.validationStatus,pack.extractedData?.validationChecks,extractedDocuments]);
+ },[pack.id,pack.extractedData?.extractionRunId,pack.extractedData?.validationStatus,pack.extractedData?.validationChecks,extractedDocuments]);
  useEffect(()=>{if(!documentRows.length){setSelectedDocumentId(null);return;}setSelectedDocumentId(current=>documentRows.some(d=>(d.id||d.name)===current)?current:(documentRows[0].id||documentRows[0].name));},[pack.id,pack.uploadedFiles?.length]);
 
  const selectedDocument=documentRows.find(d=>(d.id||d.name)===selectedDocumentId)||documentRows[0];
@@ -862,9 +848,6 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
          </div>
        </div>
      </div>;
-   }
-   if(m.type==="agentIssues"&&Array.isArray(m.issues)){
-     return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><AlertCircle size={15}/></div><div className="chat-message-content"><div className="validation-summary-card"><div className="customs-summary-title"><div><span className="summary-kicker">EXTRACTION AGENT</span><h3>Issues requiring attention</h3></div></div><div className="validation-check-list">{m.issues.map((issue,idx)=><div className="validation-check warning" key={idx}><span>!</span><div><b>{issue.title}</b><small>{issue.detail}</small></div></div>)}</div><div className="chat-message-text" style={{marginTop:"10px"}}>Correct these issues with the agent, then click <b>Validate data</b>. Validation is the final gate before posting to LCA.</div></div></div></div>;
    }
    if(m.type==="validationSummary"&&Array.isArray(m.checks)){
      return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><ShieldCheck size={15}/></div><div className="chat-message-content"><div className="validation-summary-card"><div className="customs-summary-title"><div><span className="summary-kicker">VALIDATION RESULTS</span><h3>Document and customs checks</h3></div></div><div className="validation-check-list">{m.checks.map((check,idx)=><div className={"validation-check "+check.status} key={idx}><span>{check.status==="pass"?"✓":check.status==="not_applicable"?"—":"!"}</span><div><b>{check.label||check.check||"Validation check"}</b><small>{check.detail||check.message||""}</small></div></div>)}</div></div></div></div>;
