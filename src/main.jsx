@@ -759,7 +759,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
    const invoiceLines=Array.isArray(invoiceDoc?.extraction?.lines)?invoiceDoc.extraction.lines:[];
    let changed=0;
    groups.forEach(group=>group.differences.forEach(diff=>{
-     const lineIndex=invoiceLines.findIndex(line=>lineKey(line)===lineKey({hsCode:diff.hsCode,description:diff.description}));
+     const lineIndex=invoiceLines.findIndex(line=>String(line?.description||"").trim().toLowerCase()===String(diff.description||"").trim().toLowerCase());
      if(lineIndex<0)return;
      const target=source==="packing_list"?group.differences.find(d=>d.description===diff.description):diff;
      const net=source==="packing_list"?target?.packingNet:target?.invoiceNet;
