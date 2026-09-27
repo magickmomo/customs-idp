@@ -599,7 +599,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      {label:"Consignee",status:hasValue(invoice.consignee)?"pass":"warning",detail:hasValue(invoice.consignee)?value(invoice.consignee):"Not extracted"},
      {label:"HS codes",status:lines.every(l=>hasValue(l.hsCode))?"pass":"warning",detail:lines.every(l=>hasValue(l.hsCode))?"All goods lines have HS codes.":"One or more goods lines are missing an HS code."},
      {label:"Country of origin",status:lines.every(l=>hasValue(l.sourceCountryCode))?"pass":"warning",detail:lines.every(l=>hasValue(l.sourceCountryCode))?"All goods lines have an origin code.":"One or more goods lines are missing an origin code."},
-     {label:"Weight comparison",status:conflicts.length?"warning":"pass",detail:conflicts.length?conflicts.length+" line-level weight discrepancy"+(conflicts.length===1?"":"ies")+" found between the invoice and packing list.":"No line-level weight discrepancies found."}
+     {label:"Weight comparison",status:conflicts.length?(pack.extractedData?.weightSourceDecision?"pass":"warning"):"pass",detail:conflicts.length?(pack.extractedData?.weightSourceDecision?"Source selected: "+(pack.extractedData.weightSourceDecision.source==="packing_list"?"Packing List":"Commercial Invoice")+". Working weights have been updated.":"Line-level weight differences found between the invoice and packing list — a source must be selected."):"No line-level weight discrepancies found."}
    ];
 
    return [
@@ -611,12 +611,12 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
          currency:value(invoice.currency),invoiceValue:value(invoice.totalInvoiceValue),exportCountry:value(invoice.countryOfExport),
          destination:value(invoice.sourceCountryOfDestination),packages:value(invoice.totalPackages),gross:value(invoice.totalGrossWeight),
          net:value(invoice.totalNetWeight),deliveryTerm:value(invoice.deliveryTerm),lines:customsLines,
-         sourceLabel:invoiceDoc?.filename||"Commercial Invoice",sourceDocumentId:invoiceDoc?.id||null,sourcePage:sourceFor(invoiceDoc)
+         sourceLabel:invoiceDoc?.filename||"Commercial Invoice",sourceDocumentId:invoiceDoc?.id||null,sourcePage:sourceFor(invoiceDoc),weightSourceDecision:pack.extractedData?.weightSourceDecision?.source||null
        },
        persist:false
      },
      {type:"validationSummary",checks,persist:false},
-     ...(conflicts.length?[{
+     ...(conflicts.length&&!pack.extractedData?.weightSourceDecision?[{
        type:"weightDecision",
        text:"Weight discrepancy detected. The invoice and packing list contain different line-level weights. No value has been silently chosen.",
        conflicts,
@@ -704,15 +704,21 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
  };
  const decideWeights=(source,conflicts)=>{
    const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
+   const sourceLabel=source==="packing_list"?"Packing List":"Commercial Invoice";
+   let changed=0;
    (data.lines||[]).forEach(inv=>{
      const match=conflicts.find(c=>String(c.invoice.description||"").trim().toLowerCase()===String(inv.description||"").trim().toLowerCase());
      if(!match)return;
      inv.netMassKg=source==="packing_list"?match.line.netMassKg:match.invoice.netMassKg;
      inv.grossMassKg=source==="packing_list"?match.line.grossMassKg:match.invoice.grossMassKg;
+     inv.weightSource=source;
+     changed++;
    });
-   data.weightSourceDecision={source,selectedAt:new Date().toISOString()};
-   updatePack?.({...pack,extractedData:data,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined});
-   notify?.(source==="packing_list"?"Packing List weights selected":"Commercial Invoice weights selected");
+   data.weightSourceDecision={source,sourceLabel,selectedAt:new Date().toISOString(),linesChanged:changed};
+   data.weightSelectionStatus="resolved";
+   const next={...pack,extractedData:data,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
+   updatePack?.(next);
+   notify?.(sourceLabel+" weights selected — "+changed+" line"+(changed===1?"":"s")+" updated");
  };
  const emailWeightIssue=conflicts=>{
    const body=encodeURIComponent("Hello,\n\nWe have found differences between the Commercial Invoice and Packing List weights. Please confirm which weights should be used for the customs declaration.\n\n"+conflicts.map(c=>"- "+(c.invoice.description||"Goods line")+": Invoice net "+value(c.invoice.netMassKg)+" kg / gross "+value(c.invoice.grossMassKg)+" kg; Packing List net "+value(c.line.netMassKg)+" kg / gross "+value(c.line.grossMassKg)+" kg.").join("\n")+"\n\nRegards\nCustoms IDP");
@@ -727,6 +733,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      const s=m.summary;
      return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><Sparkles size={15}/></div><div className="chat-message-content"><div className="customs-entry-summary-card">
        <div className="customs-summary-title"><div><span className="summary-kicker">CUSTOMS ENTRY SUMMARY</span><h3>{s.invoice||"Customs entry"}</h3></div><span className="summary-status">Source: {s.sourceLabel}</span></div>
+       {s.weightSourceDecision&&<div className="weight-source-selected"><CheckCircle2 size={15}/><span><b>Working weights:</b> {s.weightSourceDecision==="packing_list"?"Packing List":"Commercial Invoice"} selected. The selected values are now used for customs validation and downstream data.</span></div>}
        <div className="customs-header-table"><div><span>Exporter</span><b>{s.exporter||"—"}</b></div><div><span>Consignee</span><b>{s.consignee||"—"}</b></div><div><span>Currency</span><b>{s.currency||"—"}</b></div><div><span>Invoice Value</span><b>{s.invoiceValue?((s.currency||"")+" "+s.invoiceValue):"—"}</b></div><div><span>Export</span><b>{s.exportCountry||"—"}</b></div><div><span>Destination</span><b>{s.destination||"—"}</b></div><div><span>Packages</span><b>{s.packages||"—"}</b></div><div><span>Gross Weight</span><b>{s.gross?s.gross+" kg":"—"}</b></div><div><span>Net Weight</span><b>{s.net?s.net+" kg":"—"}</b></div><div><span>Delivery Term</span><b>{s.deliveryTerm||"—"}</b></div></div>
        <div className="customs-summary-section"><div className="summary-section-title">Goods lines <span>{s.lines.length}</span></div><div className="customs-line-table-wrap"><table className="customs-line-table"><thead><tr><th>Line</th><th>Goods Description</th><th>HS Code</th><th>Origin</th><th>Qty</th><th>Invoice Net (kg)</th><th>Packing List Net (kg)</th><th>Invoice Gross (kg)</th><th>Packing List Gross (kg)</th><th>Value</th></tr></thead><tbody>{s.lines.map(line=><tr key={line.no}><td>{line.no}</td><td>{line.description}</td><td>{line.hs||"—"}</td><td>{line.origin||"—"}</td><td>{line.quantity||"—"}</td><td>{line.invoiceNet||"—"}</td><td>{line.packingNet||"—"}</td><td>{line.invoiceGross||"—"}</td><td>{line.packingGross||"—"}</td><td>{line.itemValue?(s.currency+" "+line.itemValue):"—"}</td></tr>)}</tbody></table></div></div>
        {source&&<div className="summary-source">{source}</div>}
