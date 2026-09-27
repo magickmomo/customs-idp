@@ -546,6 +546,9 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
 
  const buildSummary=()=>{
    const docs=extractedDocuments;
+   const invoice=docs.find(d=>d.extraction?.documentType==="commercial_invoice")||docs[0];
+   const supportingDocs=docs.filter(d=>d!==invoice);
+   const hasValue=value=>value!==undefined&&value!==null&&value!=="";
    if(!docs.length){
      return [{type:"agent",text:pack.processingError?"I couldn't complete the extraction. "+pack.processingError:"I'm waiting for the document extraction to finish."}];
    }
