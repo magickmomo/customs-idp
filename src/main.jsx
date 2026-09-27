@@ -665,7 +665,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
        },
        persist:false
      },
-     {type:"validationSummary",checks,persist:false},
+     {type:"validationSummary",checks:Array.isArray(pack.extractedData?.validationChecks)&&pack.extractedData.validationChecks.length?pack.extractedData.validationChecks:checks,persist:false},
      ...(conflicts.length&&!pack.extractedData?.weightSourceDecision?[{
        type:"weightDecision",
        text:"Weight discrepancy detected. The invoice and packing list contain different line-level weights. No value has been silently chosen.",
@@ -677,7 +677,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
  useEffect(()=>{
    const saved=Array.isArray(pack.extractedData?.agentMessages)?pack.extractedData.agentMessages:[];
    setMessages([...buildSummary(),...saved]);
- },[pack.id,pack.extractedData?.extractionRunId,extractedDocuments]);
+ },[pack.id,pack.extractedData?.extractionRunId,pack.extractedData?.validationStatus,pack.extractedData?.validationChecks,extractedDocuments]);
  useEffect(()=>{if(!documentRows.length){setSelectedDocumentId(null);return;}setSelectedDocumentId(current=>documentRows.some(d=>(d.id||d.name)===current)?current:(documentRows[0].id||documentRows[0].name));},[pack.id,pack.uploadedFiles?.length]);
 
  const selectedDocument=documentRows.find(d=>(d.id||d.name)===selectedDocumentId)||documentRows[0];
@@ -850,7 +850,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      </div>;
    }
    if(m.type==="validationSummary"&&Array.isArray(m.checks)){
-     return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><ShieldCheck size={15}/></div><div className="chat-message-content"><div className="validation-summary-card"><div className="customs-summary-title"><div><span className="summary-kicker">VALIDATION RESULTS</span><h3>Document and customs checks</h3></div></div><div className="validation-check-list">{m.checks.map((check,idx)=><div className={"validation-check "+check.status} key={idx}><span>{check.status==="pass"?"✓":"!"}</span><div><b>{check.label}</b><small>{check.detail}</small></div></div>)}</div></div></div></div>;
+     return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><ShieldCheck size={15}/></div><div className="chat-message-content"><div className="validation-summary-card"><div className="customs-summary-title"><div><span className="summary-kicker">VALIDATION RESULTS</span><h3>Document and customs checks</h3></div></div><div className="validation-check-list">{m.checks.map((check,idx)=><div className={"validation-check "+check.status} key={idx}><span>{check.status==="pass"?"✓":check.status==="not_applicable"?"—":"!"}</span><div><b>{check.label||check.check||"Validation check"}</b><small>{check.detail||check.message||""}</small></div></div>)}</div></div></div></div>;
    }
    return <div className={"chat-message-row "+(m.type||"agent")} key={i}><div className="chat-message-avatar">{m.type==="user"?"You":<Sparkles size={15}/>}</div><div className="chat-message-content"><div className="chat-message-text">{m.text}</div>{source&&<div className="chat-source">{source}</div>}</div></div>;
  };
