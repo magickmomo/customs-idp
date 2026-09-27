@@ -783,7 +783,8 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
    const lines=groups.flatMap(g=>g.differences.map(d=>`- ${d.description}: Commercial Invoice net ${value(d.invoiceNet)} kg / gross ${value(d.invoiceGross)} kg; ${g.doc.filename} net ${value(d.packingNet)} kg / gross ${value(d.packingGross)} kg.`));
    const body=encodeURIComponent(`Hello,\n\nWe have identified a difference between the Commercial Invoice and supporting Packing List weights for customs clearance. Please confirm which weights should be used for the customs declaration.\n\n${lines.join("\n")}\n\nPlease confirm the correct weights for customs purposes.\n\nRegards\nCustoms IDP`);
    window.location.href=`mailto:${customerEmail}?subject=${subject}&body=${body}`;
- };\n const applyAgentAction=action=>{
+ };
+ const applyAgentAction=action=>{
    if(!action||action.kind!=="update_field")return null;
    const target=action.target||{}, data=JSON.parse(JSON.stringify(pack.extractedData||{}));
    if(target.scope==="line"&&Number.isInteger(target.lineIndex)&&data.lines?.[target.lineIndex]){
