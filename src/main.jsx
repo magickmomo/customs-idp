@@ -280,13 +280,30 @@ function App(){
   const exporterAddress=String(data.exporterAddress||"").trim();
   const exporterEori=String(data.exporterEoriNo||"").trim();
   const isGBExporter=exportCountry==="GB" || /(?:^|[\\n, ])(?:GB|UK|UNITED KINGDOM)(?:$|[\\n, ])/i.test(exporterAddress);
+  const exporterAddressLine1=String(data.exporterAddressLine1||"").trim();
+  const exporterPostcode=String(data.exporterPostcode||"").trim();
+  const exporterCity=String(data.exporterCity||"").trim();
+  const exporterCountryIso=String(data.exporterCountryIso||"").trim();
+  const addressChecks=[
+    ["Exporter address line 1",exporterAddressLine1],
+    ["Exporter postcode/ZIP",exporterPostcode],
+    ["Exporter city",exporterCity],
+    ["Exporter country ISO",exporterCountryIso]
+  ];
+  addressChecks.forEach(([check,value])=>{
+    checks.push({
+      check,
+      status:value?"pass":"fail",
+      detail:value?check+" extracted: "+value:check+" is missing from the extracted data. Check the source document and correct the pack before posting to LCA."
+    });
+  });
   if(isGBExporter){
     checks.push({
       check:"GB exporter EORI",
       status:exporterEori?"pass":"fail",
       detail:exporterEori
         ?"Exporter EORI extracted: "+exporterEori
-        :"GB exporter address/export country detected but no EORI number was extracted. Confirm the EORI is present on the source document before posting to LCA."
+        :"GB exporter address/export country detected but no EORI number was extracted. Check the source document and correct the pack before posting to LCA."
     });
   }else{
     checks.push({check:"GB exporter EORI",status:"not_applicable",detail:"Exporter is not identified as GB."});
@@ -790,8 +807,8 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
                <b>{s.exporter||"—"}</b>
                <div className="customs-address-block">
                  {s.exporterAddressLine1
-                   ? <>{renderAddress(s.exporterAddressLine1,"","Address not extracted")}<span>{s.exporterPostcode||"Postcode/ZIP not extracted"}</span><span>{s.exporterCity||"City not extracted"}</span><span>{s.exporterCountryIso||"Country not extracted"}</span></>
-                   : renderAddress("",s.exporterAddress,"Address not extracted")}
+                   ? <>{renderAddress(s.exporterAddressLine1,"","")}<span>{s.exporterPostcode||""}</span><span>{s.exporterCity||""}</span><span>{s.exporterCountryIso||""}</span></>
+                   : renderAddress("",s.exporterAddress,"")}
                  {s.exporterEoriNo&&<span><strong>EORI:</strong> {s.exporterEoriNo}</span>}
                </div>
              </div>
@@ -800,8 +817,8 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
                <b>{s.consignee||"—"}</b>
                <div className="customs-address-block">
                  {s.consigneeAddressLine1
-                   ? <>{renderAddress(s.consigneeAddressLine1,"","Address not extracted")}<span>{s.consigneePostcode||"Postcode/ZIP not extracted"}</span><span>{s.consigneeCity||"City not extracted"}</span><span>{s.consigneeCountryIso||"Country not extracted"}</span></>
-                   : renderAddress("",s.consigneeAddress,"Address not extracted")}
+                   ? <>{renderAddress(s.consigneeAddressLine1,"","")}<span>{s.consigneePostcode||""}</span><span>{s.consigneeCity||""}</span><span>{s.consigneeCountryIso||""}</span></>
+                   : renderAddress("",s.consigneeAddress,"")}
                </div>
              </div>
            </div>
