@@ -765,8 +765,12 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
    }
    if(m.type==="customsEntrySummary"&&m.summary){
      const s=m.summary;
-     const addressLines=(value,fallback)=>String(value||fallback).split(/,|\\n/).map(x=>x.trim()).filter(Boolean);
-     const renderAddress=(value,fallback)=><>{addressLines(value,fallback).map((line,idx)=><span key={idx}>{line}</span>)}</>;
+     const addressLines=(structured,fullAddress,fallback)=>{
+       const raw=structured||fullAddress||"";
+       const lines=String(raw).split(/,|\\n/).map(x=>x.trim()).filter(Boolean);
+       return lines.length?lines:[fallback];
+     };
+     const renderAddress=(structured,fullAddress,fallback)=><>{addressLines(structured,fullAddress,fallback).map((line,idx)=><span key={idx}>{line}</span>)}</>;
      return <div className="chat-message-row agent" key={i}>
        <div className="chat-message-avatar"><Sparkles size={15}/></div>
        <div className="chat-message-content">
@@ -781,7 +785,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
                <span className="customs-party-label">Exporter</span>
                <b>{s.exporter||"—"}</b>
                <div className="customs-address-block">
-                 {renderAddress(s.exporterAddressLine1,"Address line 1 not extracted")}
+                 {renderAddress(s.exporterAddressLine1,s.exporterAddress,"Address not extracted")}
                  <span>{s.exporterPostcode||"Postcode/ZIP not extracted"}</span>
                  <span>{s.exporterCity||"City not extracted"}</span>
                  <span>{s.exporterCountryIso||"Country not extracted"}</span>
@@ -792,7 +796,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
                <span className="customs-party-label">Consignee</span>
                <b>{s.consignee||"—"}</b>
                <div className="customs-address-block">
-                 {renderAddress(s.consigneeAddressLine1,"Address line 1 not extracted")}
+                 {renderAddress(s.consigneeAddressLine1,s.consigneeAddress,"Address not extracted")}
                  <span>{s.consigneePostcode||"Postcode/ZIP not extracted"}</span>
                  <span>{s.consigneeCity||"City not extracted"}</span>
                  <span>{s.consigneeCountryIso||"Country not extracted"}</span>
