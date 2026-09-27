@@ -546,118 +546,83 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
 
  const buildSummary=()=>{
    const docs=extractedDocuments;
-   const invoice=docs.find(d=>d.extraction?.documentType==="commercial_invoice")||docs[0];
-   const supportingDocs=docs.filter(d=>d!==invoice);
-   const hasValue=value=>value!==undefined&&value!==null&&value!=="";
+   const invoiceDoc=docs.find(d=>d.extraction?.documentType==="commercial_invoice")||docs[0];
+   const invoice=invoiceDoc?.extraction||{};
+   const value=v=>v===undefined||v===null||v===""?"":String(v);
+   const hasValue=v=>v!==undefined&&v!==null&&v!=="";
    if(!docs.length){
-     return [{type:"agent",text:pack.processingError?"I couldn't complete the extraction. "+pack.processingError:"I'm waiting for the document extraction to finish."}];
+     return [{type:"agent",text:pack.processingError?"I couldn't complete the extraction. "+pack.processingError:"I'm waiting for document extraction to finish."}];
    }
 
-   const first=docs[0]?.extraction||{};
-   const value=(v)=>v===undefined||v===null||v===""?"not stated":String(v);
+   const supportingDocs=docs.filter(d=>d!==invoiceDoc);
+   const packingDoc=supportingDocs.find(d=>/packing/i.test(d.filename||""))||supportingDocs[0];
    const sourceFor=doc=>{
-     const ref=getEvidence(doc,["invoiceNumber","totalInvoiceValue","totalGrossWeight","totalNetWeight","totalPackages"]);
      const ev=evidenceFor(doc);
-     return ref?.page||ev.find(x=>x.page)?.page||1;
+     return ev.find(x=>x.page)?.page||1;
    };
    const lineKey=line=>String(line?.hsCode||"")+"|"+String(line?.description||"").trim().toLowerCase();
-   const normaliseLine=line=>({
-     description:line?.description,
-     hs:line?.hsCode,
-     origin:line?.sourceCountryCode,
-     quantity:line?.quantity,
-     net:line?.netMassKg,
-     gross:line?.grossMassKg,
-     value:line?.totalValue,
-     unitValue:line?.unitValue
-   });
+   const lines=Array.isArray(invoice.lines)?invoice.lines:[];
+   const findSourceLine=(doc,invLine)=>{
+     const sourceLines=Array.isArray(doc?.extraction?.lines)?doc.extraction.lines:[];
+     return sourceLines.find(l=>lineKey(l)===lineKey(invLine))||sourceLines.find(l=>String(l.description||"").trim().toLowerCase()===String(invLine.description||"").trim().toLowerCase());
+   };
 
-   const out=[{
-     type:"agent",
-     text:"Extraction complete. I've combined the uploaded documents into one customs-entry view. Matching goods lines are grouped so the same item is not shown twice.",
-     persist:false
-   }];
-
-   const grouped=new Map();
-   docs.forEach(doc=>{
-     const e=doc.extraction||{};
-     (Array.isArray(e.lines)?e.lines:[]).forEach((line,index)=>{
-       const key=lineKey(line)||("line-"+index);
-       if(!grouped.has(key))grouped.set(key,{line:normaliseLine(line),sources:[]});
-       grouped.get(key).sources.push({doc,line});
-     });
-   });
-
-   const customsLines=[];
-   for(const item of grouped.values()){
-     const base=item.line;
-     const invoiceSource=item.sources.find(x=>x.doc.extraction?.documentType==="commercial_invoice")||item.sources[0];
-     const invoiceLine=invoiceSource?.line||{};
-     const otherSources=item.sources.filter(x=>x!==invoiceSource);
-     const parts=[
-       base.description||"Unnamed goods line",
-       "HS "+value(base.hs),
-       "Origin "+value(base.origin),
-       "Qty "+value(base.quantity),
-       "Net "+value(base.net)+" kg",
-       "Gross "+value(base.gross)+" kg",
-       "Value "+value(base.value)
-     ];
-     if(otherSources.length){
-       const checks=otherSources.map(x=>{
-         const l=x.line||{};
-         return x.doc.filename+": net "+value(l.netMassKg)+" kg, gross "+value(l.grossMassKg)+" kg";
-       });
-       parts.push("Other source: "+checks.join(" · "));
-     }
-     customsLines.push("Line "+(customsLines.length+1)+": "+parts.join(" | "));
-   }
-
-   const combined=[
-     "Customs entry",
-     "Invoice: "+value(first.invoiceNumber),
-     "Exporter: "+value(first.exporter),
-     "Consignee: "+value(first.consignee),
-     "Currency: "+value(first.currency),
-     "Invoice value: "+value(first.totalInvoiceValue),
-     "Export: "+value(first.countryOfExport),
-     "Destination: "+value(first.sourceCountryOfDestination),
-     "Packages: "+value(first.totalPackages),
-     "Gross weight: "+value(first.totalGrossWeight)+" kg",
-     "Net weight: "+value(first.totalNetWeight)+" kg",
-     "Delivery term: "+value(first.deliveryTerm),
-     customsLines.length?"Goods lines:\n"+customsLines.join("\n"):"Goods lines: none extracted"
-   ].join("\n");
-
-   const invoiceDoc=docs.find(d=>d.extraction?.documentType==="commercial_invoice")||docs[0];
-   out.push({
-     type:"agent",
-     text:combined,
-     sourceDocumentId:invoiceDoc.id,
-     sourcePage:sourceFor(invoiceDoc),
-     sourceLabel:invoiceDoc.filename+" — page "+sourceFor(invoiceDoc),
-     persist:false
+   const customsLines=lines.map((line,index)=>{
+     const plLine=packingDoc?findSourceLine(packingDoc,line):null;
+     return {
+       no:index+1,
+       description:value(line.description)||"Unnamed goods line",
+       hs:value(line.hsCode),
+       origin:value(line.sourceCountryCode),
+       quantity:value(line.quantity),
+       invoiceNet:value(line.netMassKg),
+       packingNet:value(plLine?.netMassKg),
+       invoiceGross:value(line.grossMassKg),
+       packingGross:value(plLine?.grossMassKg),
+       itemValue:value(line.totalValue)
+     };
    });
 
    const conflicts=[];
-   supportingDocs.forEach(doc=>{
-     const lines=Array.isArray(doc.extraction?.lines)?doc.extraction.lines:[];
-     lines.forEach(line=>{
-       const inv=invoice.lines?.find(x=>lineKey(x)===lineKey(line));
-       if(!inv)return;
-       const netDifferent=hasValue(inv.netMassKg)&&hasValue(line.netMassKg)&&String(inv.netMassKg)!==String(line.netMassKg);
-       const grossDifferent=hasValue(inv.grossMassKg)&&hasValue(line.grossMassKg)&&String(inv.grossMassKg)!==String(line.grossMassKg);
-       if(netDifferent||grossDifferent)conflicts.push({doc,line,invoice:inv});
-     });
+   customsLines.forEach((row,index)=>{
+     const invLine=lines[index];
+     const plLine=packingDoc?findSourceLine(packingDoc,invLine):null;
+     if(!plLine)return;
+     const netDifferent=hasValue(invLine?.netMassKg)&&hasValue(plLine?.netMassKg)&&String(invLine.netMassKg)!==String(plLine.netMassKg);
+     const grossDifferent=hasValue(invLine?.grossMassKg)&&hasValue(plLine?.grossMassKg)&&String(invLine.grossMassKg)!==String(plLine.grossMassKg);
+     if(netDifferent||grossDifferent)conflicts.push({doc:packingDoc,line:plLine,invoice:invLine});
    });
-   if(conflicts.length){
-     const detail=conflicts.map(c=>"• "+(c.invoice.description||"Goods line")+" — Commercial Invoice: net "+value(c.invoice.netMassKg)+" kg / gross "+value(c.invoice.grossMassKg)+" kg; "+c.doc.filename+": net "+value(c.line.netMassKg)+" kg / gross "+value(c.line.grossMassKg)+" kg.").join("\n");
-     out.push({type:"weightDecision",text:"The Packing List contains different line-level weights. I have kept the Commercial Invoice values for now, but I have not silently resolved the difference.\n\n"+detail+"\n\nWhy: a Packing List can allocate weight by carton or packaging, while the Commercial Invoice may state goods-line weights. Because the values differ, you can choose the source or ask the customer to confirm.",conflicts,persist:false});
-   }else{
-     out.push({type:"agent",text:"Cross-document review: no supporting-document weight differences require a source-selection decision. The Commercial Invoice remains the primary source for fields it explicitly states.",persist:false});
-   }
 
-   return out;
+   const checks=[
+     {label:"Invoice number",status:hasValue(invoice.invoiceNumber)?"pass":"warning",detail:hasValue(invoice.invoiceNumber)?value(invoice.invoiceNumber):"Not extracted"},
+     {label:"Exporter",status:hasValue(invoice.exporter)?"pass":"warning",detail:hasValue(invoice.exporter)?value(invoice.exporter):"Not extracted"},
+     {label:"Consignee",status:hasValue(invoice.consignee)?"pass":"warning",detail:hasValue(invoice.consignee)?value(invoice.consignee):"Not extracted"},
+     {label:"HS codes",status:lines.every(l=>hasValue(l.hsCode))?"pass":"warning",detail:lines.every(l=>hasValue(l.hsCode))?"All goods lines have HS codes.":"One or more goods lines are missing an HS code."},
+     {label:"Country of origin",status:lines.every(l=>hasValue(l.sourceCountryCode))?"pass":"warning",detail:lines.every(l=>hasValue(l.sourceCountryCode))?"All goods lines have an origin code.":"One or more goods lines are missing an origin code."},
+     {label:"Weight comparison",status:conflicts.length?"warning":"pass",detail:conflicts.length?conflicts.length+" line-level weight discrepancy"+(conflicts.length===1?"":"ies")+" found between the invoice and packing list.":"No line-level weight discrepancies found."}
+   ];
+
+   return [
+     {type:"agent",text:"I've combined the document pack into one customs-entry summary. Source-specific values are shown in separate columns so differences are visible without repeating document names.",persist:false},
+     {
+       type:"customsEntrySummary",
+       summary:{
+         invoice:value(invoice.invoiceNumber),exporter:value(invoice.exporter),consignee:value(invoice.consignee),
+         currency:value(invoice.currency),invoiceValue:value(invoice.totalInvoiceValue),exportCountry:value(invoice.countryOfExport),
+         destination:value(invoice.sourceCountryOfDestination),packages:value(invoice.totalPackages),gross:value(invoice.totalGrossWeight),
+         net:value(invoice.totalNetWeight),deliveryTerm:value(invoice.deliveryTerm),lines:customsLines,
+         sourceLabel:invoiceDoc?.filename||"Commercial Invoice",sourceDocumentId:invoiceDoc?.id||null,sourcePage:sourceFor(invoiceDoc)
+       },
+       persist:false
+     },
+     {type:"validationSummary",checks,persist:false},
+     ...(conflicts.length?[{
+       type:"weightDecision",
+       text:"Weight discrepancy detected. The invoice and packing list contain different line-level weights. No value has been silently chosen.",
+       conflicts,
+       persist:false
+     }]:[{type:"agent",text:"Cross-document validation: no line-level weight source conflicts require a decision.",persist:false}])
+   ];
  };
  useEffect(()=>{
    const saved=Array.isArray(pack.extractedData?.agentMessages)?pack.extractedData.agentMessages:[];
@@ -758,26 +723,17 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
    if(m.type==="weightDecision"){
      return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><Sparkles size={15}/></div><div className="chat-message-content"><div className="chat-message-text">{m.text.split("\n").map((x,j)=><React.Fragment key={j}>{x}{j<m.text.split("\n").length-1&&<br/>}</React.Fragment>)}</div><div className="weight-decision-actions"><button className="secondary" onClick={()=>decideWeights("invoice",m.conflicts)}>Use Commercial Invoice weights</button><button className="secondary" onClick={()=>decideWeights("packing_list",m.conflicts)}>Use Packing List weights</button><button className="secondary" onClick={()=>emailWeightIssue(m.conflicts)}><Mail size={15}/> Email customer</button></div></div></div>;
    }
-   if(m.type==="documentSummary"&&m.summary){
+   if(m.type==="customsEntrySummary"&&m.summary){
      const s=m.summary;
-     return <div className="chat-message-row agent" key={i}>
-       <div className="chat-message-avatar"><Sparkles size={15}/></div>
-       <div className="chat-message-content">
-         <div className="extraction-summary-card">
-           <div className="extraction-summary-head"><div><span className="summary-kicker">{s.documentType}</span><h3>{s.filename}</h3></div><span className="summary-status">Extracted</span></div>
-           <div className="summary-meta">{s.invoiceNumber&&<span>Invoice <b>{s.invoiceNumber}</b></span>}{s.currency&&<span>Currency <b>{s.currency}</b></span>}{s.exportCountry&&<span>Export <b>{s.exportCountry}</b></span>}{s.destination&&<span>Destination <b>{s.destination}</b></span>}</div>
-           <div className="summary-total-grid">
-             {s.invoiceValue!=null&&<div><small>Invoice value</small><b>{s.currency||""} {s.invoiceValue}</b></div>}
-             {s.packages!=null&&<div><small>Packages</small><b>{s.packages}</b></div>}
-             {s.gross!=null&&<div><small>Gross weight</small><b>{s.gross} kg</b></div>}
-             {s.net!=null&&<div><small>Net weight</small><b>{s.net} kg</b></div>}
-             {s.deliveryTerm&&<div><small>Delivery term</small><b>{s.deliveryTerm}</b></div>}
-           </div>
-           {s.lines.length>0&&<div className="summary-lines"><div className="summary-section-title">Goods lines <span>{s.lines.length}</span></div><div className="summary-line-list">{s.lines.map(line=><div className="summary-line" key={line.no}><div className="summary-line-no">{line.no}</div><div className="summary-line-main"><b>{line.description}</b><div>{line.hs&&<span>HS {line.hs}</span>}{line.origin&&<span>Origin {line.origin}</span>}{line.quantity!=null&&<span>Qty {line.quantity}</span>}{line.net!=null&&<span>Net {line.net} kg</span>}{line.gross!=null&&<span>Gross {line.gross} kg</span>}{line.value!=null&&<span>{s.currency||""} {line.value}</span>}</div></div></div>)}</div></div>}
-           {source&&<div className="summary-source">{source}</div>}
-         </div>
-       </div>
-     </div>;
+     return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><Sparkles size={15}/></div><div className="chat-message-content"><div className="customs-entry-summary-card">
+       <div className="customs-summary-title"><div><span className="summary-kicker">CUSTOMS ENTRY SUMMARY</span><h3>{s.invoice||"Customs entry"}</h3></div><span className="summary-status">Source: {s.sourceLabel}</span></div>
+       <div className="customs-header-table"><div><span>Exporter</span><b>{s.exporter||"—"}</b></div><div><span>Consignee</span><b>{s.consignee||"—"}</b></div><div><span>Currency</span><b>{s.currency||"—"}</b></div><div><span>Invoice Value</span><b>{s.invoiceValue?((s.currency||"")+" "+s.invoiceValue):"—"}</b></div><div><span>Export</span><b>{s.exportCountry||"—"}</b></div><div><span>Destination</span><b>{s.destination||"—"}</b></div><div><span>Packages</span><b>{s.packages||"—"}</b></div><div><span>Gross Weight</span><b>{s.gross?s.gross+" kg":"—"}</b></div><div><span>Net Weight</span><b>{s.net?s.net+" kg":"—"}</b></div><div><span>Delivery Term</span><b>{s.deliveryTerm||"—"}</b></div></div>
+       <div className="customs-summary-section"><div className="summary-section-title">Goods lines <span>{s.lines.length}</span></div><div className="customs-line-table-wrap"><table className="customs-line-table"><thead><tr><th>Line</th><th>Goods Description</th><th>HS Code</th><th>Origin</th><th>Qty</th><th>Invoice Net (kg)</th><th>Packing List Net (kg)</th><th>Invoice Gross (kg)</th><th>Packing List Gross (kg)</th><th>Value</th></tr></thead><tbody>{s.lines.map(line=><tr key={line.no}><td>{line.no}</td><td>{line.description}</td><td>{line.hs||"—"}</td><td>{line.origin||"—"}</td><td>{line.quantity||"—"}</td><td>{line.invoiceNet||"—"}</td><td>{line.packingNet||"—"}</td><td>{line.invoiceGross||"—"}</td><td>{line.packingGross||"—"}</td><td>{line.itemValue?(s.currency+" "+line.itemValue):"—"}</td></tr>)}</tbody></table></div></div>
+       {source&&<div className="summary-source">{source}</div>}
+     </div></div></div>;
+   }
+   if(m.type==="validationSummary"&&Array.isArray(m.checks)){
+     return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><ShieldCheck size={15}/></div><div className="chat-message-content"><div className="validation-summary-card"><div className="customs-summary-title"><div><span className="summary-kicker">VALIDATION RESULTS</span><h3>Document and customs checks</h3></div></div><div className="validation-check-list">{m.checks.map((check,idx)=><div className={"validation-check "+check.status} key={idx}><span>{check.status==="pass"?"✓":"!"}</span><div><b>{check.label}</b><small>{check.detail}</small></div></div>)}</div></div></div></div>;
    }
    return <div className={"chat-message-row "+(m.type||"agent")} key={i}><div className="chat-message-avatar">{m.type==="user"?"You":<Sparkles size={15}/>}</div><div className="chat-message-content"><div className="chat-message-text">{m.text}</div>{source&&<div className="chat-source">{source}</div>}</div></div>;
  };
