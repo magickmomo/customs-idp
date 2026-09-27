@@ -161,7 +161,7 @@ function App(){
       }
       const confidences=extractedDocuments.map(d=>Number(d.extraction?.confidence)||0).filter(Boolean);
       const primaryDoc=extractedDocuments.find(d=>d.extraction?.documentType==="commercial_invoice")||extractedDocuments[0];
-      const processed={...processing,status:"Needs review",confidence:confidences.length?Math.round(confidences.reduce((a,b)=>a+b,0)/confidences.length*100):0,extractedData:{...(primaryDoc?.extraction||{}),documents:extractedDocuments,documentCount:extractedDocuments.length,sourceDocuments:extractedDocuments.map(d=>({id:d.id,filename:d.filename,mimeType:d.mimeType,documentType:d.extraction?.documentType||"unknown",confidence:d.extraction?.confidence||0}))}};
+      const processed={...processing,status:"Needs review",confidence:confidences.length?Math.round(confidences.reduce((a,b)=>a+b,0)/confidences.length*100):0,extractedData:{...(primaryDoc?.extraction||{}),documents:extractedDocuments,documentCount:extractedDocuments.length,sourceDocuments:extractedDocuments.map(d=>({id:d.id,filename:d.filename,mimeType:d.mimeType,documentType:d.extraction?.documentType||"unknown",confidence:d.extraction?.confidence||0})),agentMessages:[],extractionRunId:new Date().toISOString()}};
       setSelectedPack(processed);setLivePacks(prev=>prev.map(p=>p.id===processed.id?processed:p));persistPack(processed);notify("Re-processing complete — "+extractedDocuments.length+" documents extracted");
     }catch(error){const failed={...processing,status:"Needs review",processingError:error.message};setSelectedPack(failed);setLivePacks(prev=>prev.map(p=>p.id===failed.id?failed:p));persistPack(failed);notify("Re-processing failed — check the pack for details");}
   };
@@ -662,7 +662,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
  useEffect(()=>{
    const saved=Array.isArray(pack.extractedData?.agentMessages)?pack.extractedData.agentMessages:[];
    setMessages([...buildSummary(),...saved]);
- },[pack.id,extractedDocuments]);
+ },[pack.id,pack.extractedData?.extractionRunId,extractedDocuments]);
  useEffect(()=>{if(!documentRows.length){setSelectedDocumentId(null);return;}setSelectedDocumentId(current=>documentRows.some(d=>(d.id||d.name)===current)?current:(documentRows[0].id||documentRows[0].name));},[pack.id,pack.uploadedFiles?.length]);
 
  const selectedDocument=documentRows.find(d=>(d.id||d.name)===selectedDocumentId)||documentRows[0];
