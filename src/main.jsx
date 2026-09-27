@@ -665,7 +665,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
        },
        persist:false
      },
-     {type:"validationSummary",checks:Array.isArray(pack.extractedData?.validationChecks)&&pack.extractedData.validationChecks.length?pack.extractedData.validationChecks:checks,persist:false},
+     {type:"validationSummary",checks:Array.isArray(pack.validationChecks)&&pack.validationChecks.length?pack.validationChecks:(Array.isArray(pack.extractedData?.validationChecks)&&pack.extractedData.validationChecks.length?pack.extractedData.validationChecks:checks),persist:false},
      ...(conflicts.length&&!pack.extractedData?.weightSourceDecision?[{
        type:"weightDecision",
        text:"Weight discrepancy detected. The invoice and packing list contain different line-level weights. No value has been silently chosen.",
@@ -677,7 +677,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
  useEffect(()=>{
    const saved=Array.isArray(pack.extractedData?.agentMessages)?pack.extractedData.agentMessages:[];
    setMessages([...buildSummary(),...saved]);
- },[pack.id,pack.extractedData?.extractionRunId,pack.extractedData?.validationStatus,pack.extractedData?.validationChecks,extractedDocuments]);
+ },[pack.id,pack.extractedData?.extractionRunId,pack.validationStatus,pack.validationChecks,pack.extractedData?.validationStatus,pack.extractedData?.validationChecks,extractedDocuments]);
  useEffect(()=>{if(!documentRows.length){setSelectedDocumentId(null);return;}setSelectedDocumentId(current=>documentRows.some(d=>(d.id||d.name)===current)?current:(documentRows[0].id||documentRows[0].name));},[pack.id,pack.uploadedFiles?.length]);
 
  const selectedDocument=documentRows.find(d=>(d.id||d.name)===selectedDocumentId)||documentRows[0];
