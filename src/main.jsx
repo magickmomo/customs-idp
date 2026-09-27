@@ -155,32 +155,54 @@ function App(){
     persistPack(processing);
     notify("Re-processing documents — AI extraction started");
     try{
-      let source=null;
-      if(files[0].storagePath){
-        const storageResponse=await fetch("/api/storage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"signed-url",path:files[0].storagePath})});
-        const storageData=await storageResponse.json();
-        if(!storageResponse.ok) throw new Error(storageData.error||"Stored document could not be opened");
-        const fileResponse=await fetch(storageData.signedUrl);
-        if(!fileResponse.ok) throw new Error("Stored document could not be downloaded");
-        source=await fileResponse.blob();
-      }else{
-        source=await getUploadedDocument(files[0].id);
+      const extractedDocuments=[];
+      for(const uploaded of files){
+        let source=null;
+        if(uploaded.storagePath){
+          const storageResponse=await fetch("/api/storage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"signed-url",path:uploaded.storagePath})});
+          const storageData=await storageResponse.json();
+          if(!storageResponse.ok) throw new Error(storageData.error||`Stored document ${uploaded.name} could not be opened`);
+          const fileResponse=await fetch(storageData.signedUrl);
+          if(!fileResponse.ok) throw new Error(`Stored document ${uploaded.name} could not be downloaded`);
+          source=await fileResponse.blob();
+        }else{
+          source=await getUploadedDocument(uploaded.id);
+        }
+        if(!source)throw new Error(`The uploaded document ${uploaded.name} is no longer available`);
+        const buffer=await source.arrayBuffer();
+        const bytes=new Uint8Array(buffer);
+        let binary="";
+        const chunk=0x8000;
+        for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+chunk,bytes.length)));
+        const dataUrl=`data:${source.type||uploaded.type||"application/octet-stream"};base64,${btoa(binary)}`;
+        const response=await fetch("/api/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({fileData:dataUrl,filename:uploaded.name,mimeType:source.type||uploaded.type})});
+        const result=await response.json();
+        if(!response.ok)throw new Error(result.error||`Re-processing failed for ${uploaded.name}`);
+        extractedDocuments.push({
+          id:uploaded.id,
+          filename:uploaded.name,
+          mimeType:source.type||uploaded.type,
+          extraction:result.extraction
+        });
       }
-      if(!source)throw new Error("The uploaded document is no longer available");
-      const buffer=await source.arrayBuffer();
-      const bytes=new Uint8Array(buffer);
-      let binary="";
-      const chunk=0x8000;
-      for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+chunk,bytes.length)));
-      const dataUrl=`data:${source.type||"application/octet-stream"};base64,${btoa(binary)}`;
-      const response=await fetch("/api/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({fileData:dataUrl,filename:files[0].name,mimeType:source.type})});
-      const result=await response.json();
-      if(!response.ok)throw new Error(result.error||"Re-processing failed");
-      const processed={...processing,status:"Needs review",confidence:Math.round((result.extraction.confidence||0)*100),extractedData:result.extraction};
+      const confidences=extractedDocuments.map(d=>Number(d.extraction?.confidence)||0).filter(v=>v>0);
+      const firstInvoice=extractedDocuments.find(d=>d.extraction?.documentType==="commercial_invoice")||extractedDocuments[0];
+      const primary=firstInvoice?.extraction||{};
+      const processed={
+        ...processing,
+        status:"Needs review",
+        confidence:confidences.length?Math.round((confidences.reduce((a,b)=>a+b,0)/confidences.length)*100):0,
+        extractedData:{
+          ...primary,
+          documents:extractedDocuments,
+          documentCount:extractedDocuments.length,
+          sourceDocuments:extractedDocuments.map(d=>({id:d.id,filename:d.filename,mimeType:d.mimeType,documentType:d.extraction?.documentType||"unknown",confidence:d.extraction?.confidence||0}))
+        }
+      };
       setSelectedPack(processed);
       setLivePacks(prev=>prev.map(p=>p.id===processed.id?processed:p));
       persistPack(processed);
-      notify("Re-processing complete — review the new extraction");
+      notify(`Re-processing complete — ${extractedDocuments.length} document${extractedDocuments.length===1?"":"s"} extracted`);
     }catch(error){
       const failed={...processing,status:"Needs review",processingError:error.message};
       setSelectedPack(failed);
@@ -666,36 +688,50 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
    const invoiceLines=Array.isArray(invoice.lines)?invoice.lines:[];
    supportingDocs.forEach(doc=>{
      const lines=Array.isArray(doc.extractedData?.lines)?doc.extractedData.lines:(Array.isArray(doc.extraction?.lines)?doc.extraction.lines:[]);
-     let weightDifferences=0;
-     let matched=0;
+     const differences=[];
      lines.forEach(line=>{
        const inv=invoiceLines.find(x=>lineKey(x)===lineKey(line));
        if(!inv)return;
-       matched++;
-       if(hasValue(inv.netMassKg)&&hasValue(line.netMassKg)&&String(inv.netMassKg)!==String(line.netMassKg))weightDifferences++;
-       if(hasValue(inv.grossMassKg)&&hasValue(line.grossMassKg)&&String(inv.grossMassKg)!==String(line.grossMassKg))weightDifferences++;
+       const netDifferent=hasValue(inv.netMassKg)&&hasValue(line.netMassKg)&&String(inv.netMassKg)!==String(line.netMassKg);
+       const grossDifferent=hasValue(inv.grossMassKg)&&hasValue(line.grossMassKg)&&String(inv.grossMassKg)!==String(line.grossMassKg);
+       if(netDifferent||grossDifferent){
+         differences.push({
+           description:line.description||inv.description||"Unnamed goods line",
+           invoiceNet:inv.netMassKg,
+           packingNet:line.netMassKg,
+           invoiceGross:inv.grossMassKg,
+           packingGross:line.grossMassKg,
+           documentId:doc.id,
+           documentName:doc.filename
+         });
+       }
      });
-     if(weightDifferences){
-       supportingDifferences.push(
-         doc.filename+" reports different line-level weights for "+matched+" matching goods lines. "+
-         "The Commercial Invoice already states those weights, so its values remain in the customs entry. "+
-         "The supporting document is retained for evidence and comparison only."
-       );
-     }
+     if(differences.length)supportingDifferences.push({doc, differences});
    });
 
    if(supportingDifferences.length){
+     const detail=supportingDifferences.map(group=>
+       group.differences.map(d=>
+         "• "+d.description+
+         " — Commercial Invoice: net "+value(d.invoiceNet)+" kg / gross "+value(d.invoiceGross)+" kg; "+
+         group.doc.filename+": net "+value(d.packingNet)+" kg / gross "+value(d.packingGross)+" kg."
+       ).join("\n")
+     ).join("\n");
+
      out.push({
-       type:"agent",
-       text:"Cross-document review — I found differences in supporting documents, but I have not treated them as replacement values.\n"+
-         supportingDifferences.join("\n")+
-         "\n\nWhy: the Commercial Invoice is the primary source for customs-entry values when a field is explicitly stated there. A Packing List can contain different per-carton or packaging weight allocations while still reconciling to the same shipment totals.",
-       persist:false
+       type:"weightDecision",
+       text:
+         "Weight difference requires your decision. The Packing List reports different line-level weights from the Commercial Invoice. "+
+         "I have not changed the customs-entry values automatically.\n\n"+
+         detail+
+         "\n\nWhy this happens: the Commercial Invoice can state goods-line weights, while a Packing List may allocate net/gross weight by carton or packaging. "+
+         "Both documents can still reconcile to the same shipment totals. Because the values are different, I need you to decide which source should be used for the customs entry, or you can contact the customer to confirm.",
+       groups:supportingDifferences
      });
    }else{
      out.push({
        type:"agent",
-       text:"Cross-document review: no supporting-document differences require a source-selection decision. The Commercial Invoice remains the primary source for fields it explicitly states.",
+       text:"Cross-document review: no supporting-document weight differences require a source-selection decision. The Commercial Invoice remains the primary source for fields it explicitly states.",
        persist:false
      });
    }
@@ -717,7 +753,37 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
  useEffect(()=>{try{localStorage.setItem("customs-idp-review-split",String(reviewSplit));}catch{}},[reviewSplit]);
  useEffect(()=>{if(!resizing)return;const onMove=e=>{const workspace=document.querySelector(".review-workspace-split");if(!workspace)return;const rect=workspace.getBoundingClientRect();setReviewSplit(Math.max(32,Math.min(68,((e.clientX-rect.left)/rect.width)*100)));};const onUp=()=>setResizing(false);window.addEventListener("pointermove",onMove);window.addEventListener("pointerup",onUp);document.body.classList.add("review-resizing");return()=>{window.removeEventListener("pointermove",onMove);window.removeEventListener("pointerup",onUp);document.body.classList.remove("review-resizing");};},[resizing]);
 
- const applyAgentAction=action=>{
+ const chooseWeightSource=async(source,groups)=>{
+   const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
+   const invoiceDoc=extractedDocuments.find(d=>d.extraction?.documentType==="commercial_invoice")||extractedDocuments[0];
+   const invoiceLines=Array.isArray(invoiceDoc?.extraction?.lines)?invoiceDoc.extraction.lines:[];
+   let changed=0;
+   groups.forEach(group=>group.differences.forEach(diff=>{
+     const lineIndex=invoiceLines.findIndex(line=>lineKey(line)===lineKey({hsCode:diff.hsCode,description:diff.description}));
+     if(lineIndex<0)return;
+     const target=source==="packing_list"?group.differences.find(d=>d.description===diff.description):diff;
+     const net=source==="packing_list"?target?.packingNet:target?.invoiceNet;
+     const gross=source==="packing_list"?target?.packingGross:target?.invoiceGross;
+     if(data.lines?.[lineIndex]){
+       if(hasValue(net))data.lines[lineIndex].netMassKg=net;
+       if(hasValue(gross))data.lines[lineIndex].grossMassKg=gross;
+       changed++;
+     }
+   }));
+   data.weightSourceDecision={source,selectedAt:new Date().toISOString(),supportingDocuments:groups.map(g=>g.doc.filename)};
+   data.reviewOverrides=[...(data.reviewOverrides||[]),{scope:"weights",source,createdAt:new Date().toISOString(),supportingDocuments:groups.map(g=>g.doc.filename)}];
+   const next={...pack,extractedData:data,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
+   updatePack?.(next);
+   notify?.(source==="packing_list"?"Packing List weights selected":"Commercial Invoice weights selected");
+   return changed;
+ };
+ const draftCustomerEmail=groups=>{
+   const customerEmail=pack.extractedData?.customerEmail||pack.extractedData?.consigneeEmail||"";
+   const subject=encodeURIComponent(`Customs IDP — weight discrepancy for ${pack.id}`);
+   const lines=groups.flatMap(g=>g.differences.map(d=>`- ${d.description}: Commercial Invoice net ${value(d.invoiceNet)} kg / gross ${value(d.invoiceGross)} kg; ${g.doc.filename} net ${value(d.packingNet)} kg / gross ${value(d.packingGross)} kg.`));
+   const body=encodeURIComponent(`Hello,\n\nWe have identified a difference between the Commercial Invoice and supporting Packing List weights for customs clearance. Please confirm which weights should be used for the customs declaration.\n\n${lines.join("\n")}\n\nPlease confirm the correct weights for customs purposes.\n\nRegards\nCustoms IDP`);
+   window.location.href=`mailto:${customerEmail}?subject=${subject}&body=${body}`;
+ };\n const applyAgentAction=action=>{
    if(!action||action.kind!=="update_field")return null;
    const target=action.target||{}, data=JSON.parse(JSON.stringify(pack.extractedData||{}));
    if(target.scope==="line"&&Number.isInteger(target.lineIndex)&&data.lines?.[target.lineIndex]){
@@ -782,6 +848,19 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
  };
  const renderMessage=(m,i)=>{
    const source=m.sourceDocumentId&&m.sourcePage?sourceButton(m.sourceLabel||("Source — page "+m.sourcePage),m.sourceDocumentId,m.sourcePage):null;
+   if(m.type==="weightDecision"){
+     return <div className="chat-message-row agent" key={i}>
+       <div className="chat-message-avatar"><Sparkles size={15}/></div>
+       <div className="chat-message-content">
+         <div className="chat-message-text"><b>Weight difference requires a decision</b><br/>{m.text.split("\n").map((part,j)=><React.Fragment key={j}>{part}{j<m.text.split("\n").length-1&&<br/>}</React.Fragment>)}</div>
+         <div className="weight-decision-actions">
+           <button className="secondary" onClick={()=>chooseWeightSource("invoice",m.groups)}>Use Commercial Invoice weights</button>
+           <button className="secondary" onClick={()=>chooseWeightSource("packing_list",m.groups)}>Use Packing List weights</button>
+           <button className="secondary" onClick={()=>draftCustomerEmail(m.groups)}><Mail size={15}/> Email customer</button>
+         </div>
+       </div>
+     </div>;
+   }
    if(m.type==="documentSummary"&&m.summary){
      const s=m.summary;
      return <div className="chat-message-row agent" key={i}>
