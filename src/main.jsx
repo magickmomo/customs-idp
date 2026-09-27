@@ -519,6 +519,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
  const [showPreview,setShowPreview]=useState(()=>{try{return localStorage.getItem("customs-idp-review-preview")!=="off";}catch{return true;}});
  const [reviewSplit,setReviewSplit]=useState(()=>{try{const saved=Number(localStorage.getItem("customs-idp-review-split"));return Number.isFinite(saved)&&saved>=32&&saved<=68?saved:48;}catch{return 48;}});
  const [resizing,setResizing]=useState(false);
+ const [emailDraft,setEmailDraft]=useState(null);
 
  useEffect(()=>{let active=true;(async()=>{const entries=await Promise.all((pack.uploadedFiles||[]).map(async f=>{try{if(f.storagePath){const response=await fetch("/api/storage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"signed-url",path:f.storagePath})});const data=await response.json();if(response.ok&&data.signedUrl)return [f.id,data.signedUrl];}const file=await getUploadedDocument(f.id);return file?[f.id,URL.createObjectURL(file)]:null;}catch{return null;}}));if(active)setDocUrls(Object.fromEntries(entries.filter(Boolean)));})();return()=>{active=false;};},[pack.id,pack.uploadedFiles]);
 
@@ -567,18 +568,19 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      return sourceLines.find(l=>lineKey(l)===lineKey(invLine))||sourceLines.find(l=>String(l.description||"").trim().toLowerCase()===String(invLine.description||"").trim().toLowerCase());
    };
 
+   const selectedWeightSource=pack.extractedData?.weightSourceDecision?.source||null;
    const customsLines=lines.map((line,index)=>{
      const plLine=packingDoc?findSourceLine(packingDoc,line):null;
+     const workingNet=selectedWeightSource==="packing_list"?plLine?.netMassKg:line.netMassKg;
+     const workingGross=selectedWeightSource==="packing_list"?plLine?.grossMassKg:line.grossMassKg;
      return {
        no:index+1,
        description:value(line.description)||"Unnamed goods line",
        hs:value(line.hsCode),
        origin:value(line.sourceCountryCode),
        quantity:value(line.quantity),
-       invoiceNet:value(line.netMassKg),
-       packingNet:value(plLine?.netMassKg),
-       invoiceGross:value(line.grossMassKg),
-       packingGross:value(plLine?.grossMassKg),
+       net:value(workingNet),
+       gross:value(workingGross),
        itemValue:value(line.totalValue)
      };
    });
@@ -603,14 +605,16 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
    ];
 
    return [
-     {type:"agent",text:"I've combined the document pack into one customs-entry summary. Source-specific values are shown in separate columns so differences are visible without repeating document names.",persist:false},
+     {type:"agent",text:"I've combined the document pack into one customs-entry summary. The table shows the working customs weights only; the selected source is recorded separately so the declaration is not carrying duplicate PKL/CIV weight columns.",persist:false},
      {
        type:"customsEntrySummary",
        summary:{
          invoice:value(invoice.invoiceNumber),exporter:value(invoice.exporter),consignee:value(invoice.consignee),
          currency:value(invoice.currency),invoiceValue:value(invoice.totalInvoiceValue),exportCountry:value(invoice.countryOfExport),
-         destination:value(invoice.sourceCountryOfDestination),packages:value(invoice.totalPackages),gross:value(invoice.totalGrossWeight),
-         net:value(invoice.totalNetWeight),deliveryTerm:value(invoice.deliveryTerm),lines:customsLines,
+         destination:value(invoice.sourceCountryOfDestination),packages:value(invoice.totalPackages),
+         gross:value(selectedWeightSource==="packing_list"?packingDoc?.extraction?.totalGrossWeight:invoice.totalGrossWeight),
+         net:value(selectedWeightSource==="packing_list"?packingDoc?.extraction?.totalNetWeight:invoice.totalNetWeight),
+         deliveryTerm:value(invoice.deliveryTerm),lines:customsLines,
          sourceLabel:invoiceDoc?.filename||"Commercial Invoice",sourceDocumentId:invoiceDoc?.id||null,sourcePage:sourceFor(invoiceDoc),weightSourceDecision:pack.extractedData?.weightSourceDecision?.source||null
        },
        persist:false
@@ -721,8 +725,9 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
    notify?.(sourceLabel+" weights selected — "+changed+" line"+(changed===1?"":"s")+" updated");
  };
  const emailWeightIssue=conflicts=>{
-   const body=encodeURIComponent("Hello,\n\nWe have found differences between the Commercial Invoice and Packing List weights. Please confirm which weights should be used for the customs declaration.\n\n"+conflicts.map(c=>"- "+(c.invoice.description||"Goods line")+": Invoice net "+value(c.invoice.netMassKg)+" kg / gross "+value(c.invoice.grossMassKg)+" kg; Packing List net "+value(c.line.netMassKg)+" kg / gross "+value(c.line.grossMassKg)+" kg.").join("\n")+"\n\nRegards\nCustoms IDP");
-   window.location.href="mailto:?subject="+encodeURIComponent("Customs IDP - weight confirmation required")+"&body="+body;
+   const subject="Customs IDP - weight confirmation required";
+   const body="Hello,\\n\\nWe have found differences between the Commercial Invoice and Packing List weights. Please confirm which weights should be used for the customs declaration.\\n\\n"+conflicts.map(c=>"- "+(c.invoice.description||"Goods line")+": Commercial Invoice net "+value(c.invoice.netMassKg)+" kg / gross "+value(c.invoice.grossMassKg)+" kg; Packing List net "+value(c.line.netMassKg)+" kg / gross "+value(c.line.grossMassKg)+" kg.").join("\\n")+"\\n\\nRegards\\nCustoms IDP";
+   setEmailDraft({to:"",subject,body});
  };
  const renderMessage=(m,i)=>{
    const source=m.sourceDocumentId&&m.sourcePage?sourceButton(m.sourceLabel||("Source — page "+m.sourcePage),m.sourceDocumentId,m.sourcePage):null;
@@ -735,7 +740,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
        <div className="customs-summary-title"><div><span className="summary-kicker">CUSTOMS ENTRY SUMMARY</span><h3>{s.invoice||"Customs entry"}</h3></div><span className="summary-status">Source: {s.sourceLabel}</span></div>
        {s.weightSourceDecision&&<div className="weight-source-selected"><CheckCircle2 size={15}/><span><b>Working weights:</b> {s.weightSourceDecision==="packing_list"?"Packing List":"Commercial Invoice"} selected. The selected values are now used for customs validation and downstream data.</span></div>}
        <div className="customs-header-table"><div><span>Exporter</span><b>{s.exporter||"—"}</b></div><div><span>Consignee</span><b>{s.consignee||"—"}</b></div><div><span>Currency</span><b>{s.currency||"—"}</b></div><div><span>Invoice Value</span><b>{s.invoiceValue?((s.currency||"")+" "+s.invoiceValue):"—"}</b></div><div><span>Export</span><b>{s.exportCountry||"—"}</b></div><div><span>Destination</span><b>{s.destination||"—"}</b></div><div><span>Packages</span><b>{s.packages||"—"}</b></div><div><span>Gross Weight</span><b>{s.gross?s.gross+" kg":"—"}</b></div><div><span>Net Weight</span><b>{s.net?s.net+" kg":"—"}</b></div><div><span>Delivery Term</span><b>{s.deliveryTerm||"—"}</b></div></div>
-       <div className="customs-summary-section"><div className="summary-section-title">Goods lines <span>{s.lines.length}</span></div><div className="customs-line-table-wrap"><table className="customs-line-table"><thead><tr><th>Line</th><th>Goods Description</th><th>HS Code</th><th>Origin</th><th>Qty</th><th>Invoice Net (kg)</th><th>Packing List Net (kg)</th><th>Invoice Gross (kg)</th><th>Packing List Gross (kg)</th><th>Value</th></tr></thead><tbody>{s.lines.map(line=><tr key={line.no}><td>{line.no}</td><td>{line.description}</td><td>{line.hs||"—"}</td><td>{line.origin||"—"}</td><td>{line.quantity||"—"}</td><td>{line.invoiceNet||"—"}</td><td>{line.packingNet||"—"}</td><td>{line.invoiceGross||"—"}</td><td>{line.packingGross||"—"}</td><td>{line.itemValue?(s.currency+" "+line.itemValue):"—"}</td></tr>)}</tbody></table></div></div>
+       <div className="customs-summary-section"><div className="summary-section-title">Goods lines <span>{s.lines.length}</span></div><div className="customs-line-table-wrap"><table className="customs-line-table"><thead><tr><th>Line</th><th>Goods Description</th><th>HS Code</th><th>Origin</th><th>Qty</th><th>Net Weight (kg)</th><th>Gross Weight (kg)</th><th>Value</th></tr></thead><tbody>{s.lines.map(line=><tr key={line.no}><td>{line.no}</td><td>{line.description}</td><td>{line.hs||"—"}</td><td>{line.origin||"—"}</td><td>{line.quantity||"—"}</td><td>{line.net||"—"}</td><td>{line.gross||"—"}</td><td>{line.itemValue?(s.currency+" "+line.itemValue):"—"}</td></tr>)}</tbody></table></div></div>
        {source&&<div className="summary-source">{source}</div>}
      </div></div></div>;
    }
@@ -768,6 +773,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
          </div>
        </div></div>
      </>}
+     {emailDraft&&<div className="email-draft-overlay" onClick={()=>setEmailDraft(null)}><div className="email-draft-modal" onClick={e=>e.stopPropagation()}><div className="email-draft-head"><div><span className="summary-kicker">EMAIL CUSTOMER</span><h3>Weight confirmation request</h3></div><button type="button" className="row-btn" onClick={()=>setEmailDraft(null)}><X size={17}/></button></div><label>To<input value={emailDraft.to} onChange={e=>setEmailDraft({...emailDraft,to:e.target.value})} placeholder="customer@email.com" autoFocus/></label><label>Subject<input value={emailDraft.subject} onChange={e=>setEmailDraft({...emailDraft,subject:e.target.value})}/></label><label>Message<textarea rows="10" value={emailDraft.body} onChange={e=>setEmailDraft({...emailDraft,body:e.target.value})}/></label><div className="email-draft-actions"><button type="button" className="secondary" onClick={()=>{navigator.clipboard?.writeText(emailDraft.body);notify?.("Email message copied to clipboard");}}>Copy message</button><button type="button" className="primary" disabled={!emailDraft.to.trim()} onClick={()=>{window.location.href="mailto:"+encodeURIComponent(emailDraft.to.trim())+"?subject="+encodeURIComponent(emailDraft.subject)+"&body="+encodeURIComponent(emailDraft.body);setEmailDraft(null);}}>Open email</button></div></div></div>}
    </div>
  </section>
 }
