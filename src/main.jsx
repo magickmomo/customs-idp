@@ -650,8 +650,43 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      {label:"Weight comparison",status:conflicts.length?(pack.extractedData?.weightSourceDecision?"pass":"warning"):"pass",detail:conflicts.length?(pack.extractedData?.weightSourceDecision?"Source selected: "+(pack.extractedData.weightSourceDecision.source==="packing_list"?"Packing List":"Commercial Invoice")+". Working weights have been updated.":"Line-level weight differences found between the invoice and packing list — a source must be selected."):"No line-level weight discrepancies found."}
    ];
 
+   const exportCountry=value(invoice.countryOfExport).trim().toUpperCase();
+   const exporterCountryIso=value(invoice.exporterCountryIso).trim().toUpperCase();
+   const exporterAddress=value(invoice.exporterAddress);
+   const isGBExporter=exportCountry==="GB"||exporterCountryIso==="GB"||/(?:^|[\\n, ])(?:GB|UK|UNITED KINGDOM)(?:$|[\\n, ])/i.test(exporterAddress);
+   const agentIssues=[];
+   if(isGBExporter&&!hasValue(invoice.exporterEoriNo)){
+     agentIssues.push({
+       title:"GB exporter EORI missing",
+       detail:"The exporter appears to be in Great Britain, but no EORI number was extracted. Check the commercial invoice for the EORI number. If it is present, tell me where it appears or re-process the document.",
+       sourceDocumentId:invoiceDoc?.id||null,
+       sourcePage:sourceFor(invoiceDoc)
+     });
+   }
+   if(!hasValue(invoice.exporterAddressLine1)||!hasValue(invoice.exporterPostcode)||!hasValue(invoice.exporterCity)||!hasValue(invoice.exporterCountryIso)){
+     agentIssues.push({
+       title:"Exporter address incomplete",
+       detail:"One or more structured exporter address fields are missing. Check the commercial invoice and correct the missing address component before posting to LCA.",
+       sourceDocumentId:invoiceDoc?.id||null,
+       sourcePage:sourceFor(invoiceDoc)
+     });
+   }
+   if(conflicts.length&&!pack.extractedData?.weightSourceDecision){
+     agentIssues.push({
+       title:"Weight discrepancy needs a decision",
+       detail:"The commercial invoice and packing list contain different weights. Choose the source to use for the customs entry, or email the customer for confirmation.",
+       sourceDocumentId:packingDoc?.id||null,
+       sourcePage:sourceFor(packingDoc)
+     });
+   }
+
    return [
      {type:"agent",text:"I've combined the document pack into one customs-entry summary. The table shows the working customs weights only; the selected source is recorded separately so the declaration is not carrying duplicate PKL/CIV weight columns.",persist:false},
+     ...(agentIssues.length?[{
+       type:"agentIssues",
+       issues:agentIssues,
+       persist:false
+     }]:[]),
      {
        type:"customsEntrySummary",
        summary:{
@@ -848,6 +883,9 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
          </div>
        </div>
      </div>;
+   }
+   if(m.type==="agentIssues"&&Array.isArray(m.issues)){
+     return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><AlertCircle size={15}/></div><div className="chat-message-content"><div className="validation-summary-card agent-issues-card"><div className="customs-summary-title"><div><span className="summary-kicker">ATTENTION REQUIRED</span><h3>Issues found during document review</h3></div></div><div className="validation-check-list">{m.issues.map((issue,idx)=><div className="validation-check warning" key={idx}><span>!</span><div><b>{issue.title}</b><small>{issue.detail}</small>{issue.sourceDocumentId&&<div className="chat-source">{sourceButton("Open source document",issue.sourceDocumentId,issue.sourcePage||1)}</div>}</div></div>)}</div></div></div></div>;
    }
    if(m.type==="validationSummary"&&Array.isArray(m.checks)){
      return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><ShieldCheck size={15}/></div><div className="chat-message-content"><div className="validation-summary-card"><div className="customs-summary-title"><div><span className="summary-kicker">VALIDATION RESULTS</span><h3>Document and customs checks</h3></div></div><div className="validation-check-list">{m.checks.map((check,idx)=><div className={"validation-check "+check.status} key={idx}><span>{check.status==="pass"?"✓":check.status==="not_applicable"?"—":"!"}</span><div><b>{check.label||check.check||"Validation check"}</b><small>{check.detail||check.message||""}</small></div></div>)}</div></div></div></div>;
