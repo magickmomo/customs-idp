@@ -674,7 +674,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      customsLines.length?"Goods lines:\n"+customsLines.join("\n"):"Goods lines: none extracted"
    ].join("\n");
 
-   const invoiceDoc=docs.find(d=>d.extraction?.documentType==="commercial_invoice")||docs[0];
+   
    out.push({
      type:"agent",
      text:combined,
