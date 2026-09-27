@@ -1182,3 +1182,7 @@ body.review-resizing .review-horizontal-resizer span{
  .chat-review-intro{padding:10px 12px;font-size:9px}
  .chat-review-head{padding:12px}
 }
+
+
+.weight-decision-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.weight-decision-actions button{display:inline-flex;align-items:center;gap:7px}
