@@ -279,16 +279,17 @@ function App(){
   const exportCountry=String(data.countryOfExport||"").trim().toUpperCase();
   const exporterAddress=String(data.exporterAddress||"").trim();
   const exporterEori=String(data.exporterEoriNo||"").trim();
-  const isGBExporter=exportCountry==="GB" || /(?:^|[\\n, ])(?:GB|UK|UNITED KINGDOM)(?:$|[\\n, ])/i.test(exporterAddress);
+  const exporterCountryIso=String(data.exporterCountryIso||"").trim().toUpperCase();
+  const isGBExporter=exportCountry==="GB" || exporterCountryIso==="GB" || /(?:^|[\\n, ])(?:GB|UK|UNITED KINGDOM)(?:$|[\\n, ])/i.test(exporterAddress);
   const exporterAddressLine1=String(data.exporterAddressLine1||"").trim();
   const exporterPostcode=String(data.exporterPostcode||"").trim();
   const exporterCity=String(data.exporterCity||"").trim();
-  const exporterCountryIso=String(data.exporterCountryIso||"").trim();
+  const exporterCountryIsoForCheck=String(data.exporterCountryIso||"").trim();
   const addressChecks=[
     ["Exporter address line 1",exporterAddressLine1],
     ["Exporter postcode/ZIP",exporterPostcode],
     ["Exporter city",exporterCity],
-    ["Exporter country ISO",exporterCountryIso]
+    ["Exporter country ISO",exporterCountryIsoForCheck]
   ];
   addressChecks.forEach(([check,value])=>{
     checks.push({
