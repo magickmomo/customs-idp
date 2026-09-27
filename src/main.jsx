@@ -145,71 +145,25 @@ function App(){
   const reprocessPack=async(pack)=>{
     if(!pack)return;
     const files=pack.uploadedFiles||[];
-    if(!files.length){
-      notify("No uploaded documents are available to reprocess");
-      return;
-    }
-    const processing={...pack,status:"Processing",processingError:undefined,validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined,processingStartedAt:new Date().toISOString()};
-    setSelectedPack(processing);
-    setLivePacks(prev=>prev.map(p=>p.id===processing.id?processing:p));
-    persistPack(processing);
-    notify("Re-processing documents — AI extraction started");
+    if(!files.length){notify("No uploaded documents are available to reprocess");return;}
+    const processing={...pack,status:"Processing",processingError:undefined,validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
+    setSelectedPack(processing);setLivePacks(prev=>prev.map(p=>p.id===pack.id?processing:p));persistPack(processing);notify("Re-processing all documents — AI extraction started");
     try{
       const extractedDocuments=[];
       for(const uploaded of files){
         let source=null;
-        if(uploaded.storagePath){
-          const storageResponse=await fetch("/api/storage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"signed-url",path:uploaded.storagePath})});
-          const storageData=await storageResponse.json();
-          if(!storageResponse.ok) throw new Error(storageData.error||`Stored document ${uploaded.name} could not be opened`);
-          const fileResponse=await fetch(storageData.signedUrl);
-          if(!fileResponse.ok) throw new Error(`Stored document ${uploaded.name} could not be downloaded`);
-          source=await fileResponse.blob();
-        }else{
-          source=await getUploadedDocument(uploaded.id);
-        }
-        if(!source)throw new Error(`The uploaded document ${uploaded.name} is no longer available`);
-        const buffer=await source.arrayBuffer();
-        const bytes=new Uint8Array(buffer);
-        let binary="";
-        const chunk=0x8000;
-        for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+chunk,bytes.length)));
-        const dataUrl=`data:${source.type||uploaded.type||"application/octet-stream"};base64,${btoa(binary)}`;
-        const response=await fetch("/api/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({fileData:dataUrl,filename:uploaded.name,mimeType:source.type||uploaded.type})});
-        const result=await response.json();
-        if(!response.ok)throw new Error(result.error||`Re-processing failed for ${uploaded.name}`);
-        extractedDocuments.push({
-          id:uploaded.id,
-          filename:uploaded.name,
-          mimeType:source.type||uploaded.type,
-          extraction:result.extraction
-        });
+        if(uploaded.storagePath){const sr=await fetch("/api/storage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"signed-url",path:uploaded.storagePath})});const sd=await sr.json();if(!sr.ok)throw new Error(sd.error||"Stored document could not be opened");const fr=await fetch(sd.signedUrl);if(!fr.ok)throw new Error("Stored document could not be downloaded");source=await fr.blob();}else source=await getUploadedDocument(uploaded.id);
+        if(!source)throw new Error("Uploaded document is unavailable: "+uploaded.name);
+        const bytes=new Uint8Array(await source.arrayBuffer());let binary="";for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+0x8000,bytes.length)));
+        const response=await fetch("/api/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({fileData:"data:"+(source.type||uploaded.type||"application/octet-stream")+";base64,"+btoa(binary),filename:uploaded.name,mimeType:source.type||uploaded.type})});
+        const result=await response.json();if(!response.ok)throw new Error(result.error||("Extraction failed for "+uploaded.name));
+        extractedDocuments.push({id:uploaded.id,filename:uploaded.name,mimeType:source.type||uploaded.type,extraction:result.extraction});
       }
-      const confidences=extractedDocuments.map(d=>Number(d.extraction?.confidence)||0).filter(v=>v>0);
-      const firstInvoice=extractedDocuments.find(d=>d.extraction?.documentType==="commercial_invoice")||extractedDocuments[0];
-      const primary=firstInvoice?.extraction||{};
-      const processed={
-        ...processing,
-        status:"Needs review",
-        confidence:confidences.length?Math.round((confidences.reduce((a,b)=>a+b,0)/confidences.length)*100):0,
-        extractedData:{
-          ...primary,
-          documents:extractedDocuments,
-          documentCount:extractedDocuments.length,
-          sourceDocuments:extractedDocuments.map(d=>({id:d.id,filename:d.filename,mimeType:d.mimeType,documentType:d.extraction?.documentType||"unknown",confidence:d.extraction?.confidence||0}))
-        }
-      };
-      setSelectedPack(processed);
-      setLivePacks(prev=>prev.map(p=>p.id===processed.id?processed:p));
-      persistPack(processed);
-      notify(`Re-processing complete — ${extractedDocuments.length} document${extractedDocuments.length===1?"":"s"} extracted`);
-    }catch(error){
-      const failed={...processing,status:"Needs review",processingError:error.message};
-      setSelectedPack(failed);
-      setLivePacks(prev=>prev.map(p=>p.id===failed.id?failed:p));
-      persistPack(failed);
-      notify("Re-processing failed — check the pack for details");
-    }
+      const confidences=extractedDocuments.map(d=>Number(d.extraction?.confidence)||0).filter(Boolean);
+      const primaryDoc=extractedDocuments.find(d=>d.extraction?.documentType==="commercial_invoice")||extractedDocuments[0];
+      const processed={...processing,status:"Needs review",confidence:confidences.length?Math.round(confidences.reduce((a,b)=>a+b,0)/confidences.length*100):0,extractedData:{...(primaryDoc?.extraction||{}),documents:extractedDocuments,documentCount:extractedDocuments.length,sourceDocuments:extractedDocuments.map(d=>({id:d.id,filename:d.filename,mimeType:d.mimeType,documentType:d.extraction?.documentType||"unknown",confidence:d.extraction?.confidence||0}))}};
+      setSelectedPack(processed);setLivePacks(prev=>prev.map(p=>p.id===processed.id?processed:p));persistPack(processed);notify("Re-processing complete — "+extractedDocuments.length+" documents extracted");
+    }catch(error){const failed={...processing,status:"Needs review",processingError:error.message};setSelectedPack(failed);setLivePacks(prev=>prev.map(p=>p.id===failed.id?failed:p));persistPack(failed);notify("Re-processing failed — check the pack for details");}
   };
 
   const handleUpload=async(files)=>{
@@ -593,9 +547,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
  const buildSummary=()=>{
    const docs=extractedDocuments;
    if(!docs.length){
-     if(pack.processingError) return [{type:"agent",text:"Extraction failed: "+pack.processingError}];
-     if(pack.status==="Processing") return [{type:"agent",text:"The document pack is still being processed. I'll show the extracted customs data here as soon as processing completes."}];
-     return [{type:"agent",text:"No extraction data is attached to this pack yet. Click Re-process to run the uploaded documents through the extraction engine."}];
+     return [{type:"agent",text:pack.processingError?"I couldn't complete the extraction. "+pack.processingError:"I'm waiting for the document extraction to finish."}];
    }
 
    const first=docs[0]?.extraction||{};
@@ -623,40 +575,40 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      persist:false
    }];
 
-   const invoiceDoc=docs.find(d=>d.extraction?.documentType==="commercial_invoice")||docs[0];
-   const invoice=invoiceDoc?.extraction||{};
-   const supportingDocs=docs.filter(d=>d!==invoiceDoc);
-   const lineKey=line=>String(line?.hsCode||"")+"|"+String(line?.description||"").trim().toLowerCase();
-   const hasValue=v=>v!==undefined&&v!==null&&v!=="";
-
    const grouped=new Map();
-   (Array.isArray(invoice.lines)?invoice.lines:[]).forEach((line,index)=>{
-     grouped.set(lineKey(line)||("invoice-"+index),{invoiceLine:line,supporting:[]});
-   });
-   supportingDocs.forEach(doc=>{
-     (Array.isArray(doc.extraction?.lines)?doc.extraction.lines:[]).forEach((line,index)=>{
-       const key=lineKey(line)||("supporting-"+doc.id+"-"+index);
-       const item=grouped.get(key);
-       if(item) item.supporting.push({doc,line});
-       else grouped.set(key,{invoiceLine:null,supporting:[{doc,line}]});
+   docs.forEach(doc=>{
+     const e=doc.extraction||{};
+     (Array.isArray(e.lines)?e.lines:[]).forEach((line,index)=>{
+       const key=lineKey(line)||("line-"+index);
+       if(!grouped.has(key))grouped.set(key,{line:normaliseLine(line),sources:[]});
+       grouped.get(key).sources.push({doc,line});
      });
    });
 
    const customsLines=[];
-   grouped.forEach(item=>{
-     const l=item.invoiceLine||item.supporting[0]?.line||{};
-     const fallback=(field)=>hasValue(l[field])?l[field]:item.supporting.find(x=>hasValue(x.line?.[field]))?.line?.[field];
-     customsLines.push(
-       "Line "+(customsLines.length+1)+": "+
-       (l.description||"Unnamed goods line")+
-       " | HS "+value(fallback("hsCode"))+
-       " | Origin "+value(fallback("sourceCountryCode"))+
-       " | Qty "+value(fallback("quantity"))+
-       " | Net "+value(fallback("netMassKg"))+" kg"+
-       " | Gross "+value(fallback("grossMassKg"))+" kg"+
-       " | Value "+value(fallback("totalValue"))
-     );
-   });
+   for(const item of grouped.values()){
+     const base=item.line;
+     const invoiceSource=item.sources.find(x=>x.doc.extraction?.documentType==="commercial_invoice")||item.sources[0];
+     const invoiceLine=invoiceSource?.line||{};
+     const otherSources=item.sources.filter(x=>x!==invoiceSource);
+     const parts=[
+       base.description||"Unnamed goods line",
+       "HS "+value(base.hs),
+       "Origin "+value(base.origin),
+       "Qty "+value(base.quantity),
+       "Net "+value(base.net)+" kg",
+       "Gross "+value(base.gross)+" kg",
+       "Value "+value(base.value)
+     ];
+     if(otherSources.length){
+       const checks=otherSources.map(x=>{
+         const l=x.line||{};
+         return x.doc.filename+": net "+value(l.netMassKg)+" kg, gross "+value(l.grossMassKg)+" kg";
+       });
+       parts.push("Other source: "+checks.join(" · "));
+     }
+     customsLines.push("Line "+(customsLines.length+1)+": "+parts.join(" | "));
+   }
 
    const combined=[
      "Customs entry",
@@ -674,7 +626,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      customsLines.length?"Goods lines:\n"+customsLines.join("\n"):"Goods lines: none extracted"
    ].join("\n");
 
-   
+   const invoiceDoc=docs.find(d=>d.extraction?.documentType==="commercial_invoice")||docs[0];
    out.push({
      type:"agent",
      text:combined,
@@ -684,56 +636,22 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      persist:false
    });
 
-   const supportingDifferences=[];
-   const invoiceLines=Array.isArray(invoice.lines)?invoice.lines:[];
+   const conflicts=[];
    supportingDocs.forEach(doc=>{
-     const lines=Array.isArray(doc.extractedData?.lines)?doc.extractedData.lines:(Array.isArray(doc.extraction?.lines)?doc.extraction.lines:[]);
-     const differences=[];
+     const lines=Array.isArray(doc.extraction?.lines)?doc.extraction.lines:[];
      lines.forEach(line=>{
-       const inv=invoiceLines.find(x=>lineKey(x)===lineKey(line));
+       const inv=invoice.lines?.find(x=>lineKey(x)===lineKey(line));
        if(!inv)return;
        const netDifferent=hasValue(inv.netMassKg)&&hasValue(line.netMassKg)&&String(inv.netMassKg)!==String(line.netMassKg);
        const grossDifferent=hasValue(inv.grossMassKg)&&hasValue(line.grossMassKg)&&String(inv.grossMassKg)!==String(line.grossMassKg);
-       if(netDifferent||grossDifferent){
-         differences.push({
-           description:line.description||inv.description||"Unnamed goods line",
-           invoiceNet:inv.netMassKg,
-           packingNet:line.netMassKg,
-           invoiceGross:inv.grossMassKg,
-           packingGross:line.grossMassKg,
-           documentId:doc.id,
-           documentName:doc.filename
-         });
-       }
+       if(netDifferent||grossDifferent)conflicts.push({doc,line,invoice:inv});
      });
-     if(differences.length)supportingDifferences.push({doc, differences});
    });
-
-   if(supportingDifferences.length){
-     const detail=supportingDifferences.map(group=>
-       group.differences.map(d=>
-         "• "+d.description+
-         " — Commercial Invoice: net "+value(d.invoiceNet)+" kg / gross "+value(d.invoiceGross)+" kg; "+
-         group.doc.filename+": net "+value(d.packingNet)+" kg / gross "+value(d.packingGross)+" kg."
-       ).join("\n")
-     ).join("\n");
-
-     out.push({
-       type:"weightDecision",
-       text:
-         "Weight difference requires your decision. The Packing List reports different line-level weights from the Commercial Invoice. "+
-         "I have not changed the customs-entry values automatically.\n\n"+
-         detail+
-         "\n\nWhy this happens: the Commercial Invoice can state goods-line weights, while a Packing List may allocate net/gross weight by carton or packaging. "+
-         "Both documents can still reconcile to the same shipment totals. Because the values are different, I need you to decide which source should be used for the customs entry, or you can contact the customer to confirm.",
-       groups:supportingDifferences
-     });
+   if(conflicts.length){
+     const detail=conflicts.map(c=>"• "+(c.invoice.description||"Goods line")+" — Commercial Invoice: net "+value(c.invoice.netMassKg)+" kg / gross "+value(c.invoice.grossMassKg)+" kg; "+c.doc.filename+": net "+value(c.line.netMassKg)+" kg / gross "+value(c.line.grossMassKg)+" kg.").join("\n");
+     out.push({type:"weightDecision",text:"The Packing List contains different line-level weights. I have kept the Commercial Invoice values for now, but I have not silently resolved the difference.\n\n"+detail+"\n\nWhy: a Packing List can allocate weight by carton or packaging, while the Commercial Invoice may state goods-line weights. Because the values differ, you can choose the source or ask the customer to confirm.",conflicts,persist:false});
    }else{
-     out.push({
-       type:"agent",
-       text:"Cross-document review: no supporting-document weight differences require a source-selection decision. The Commercial Invoice remains the primary source for fields it explicitly states.",
-       persist:false
-     });
+     out.push({type:"agent",text:"Cross-document review: no supporting-document weight differences require a source-selection decision. The Commercial Invoice remains the primary source for fields it explicitly states.",persist:false});
    }
 
    return out;
@@ -753,37 +671,6 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
  useEffect(()=>{try{localStorage.setItem("customs-idp-review-split",String(reviewSplit));}catch{}},[reviewSplit]);
  useEffect(()=>{if(!resizing)return;const onMove=e=>{const workspace=document.querySelector(".review-workspace-split");if(!workspace)return;const rect=workspace.getBoundingClientRect();setReviewSplit(Math.max(32,Math.min(68,((e.clientX-rect.left)/rect.width)*100)));};const onUp=()=>setResizing(false);window.addEventListener("pointermove",onMove);window.addEventListener("pointerup",onUp);document.body.classList.add("review-resizing");return()=>{window.removeEventListener("pointermove",onMove);window.removeEventListener("pointerup",onUp);document.body.classList.remove("review-resizing");};},[resizing]);
 
- const chooseWeightSource=async(source,groups)=>{
-   const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
-   const invoiceDoc=extractedDocuments.find(d=>d.extraction?.documentType==="commercial_invoice")||extractedDocuments[0];
-   const invoiceLines=Array.isArray(invoiceDoc?.extraction?.lines)?invoiceDoc.extraction.lines:[];
-   let changed=0;
-   groups.forEach(group=>group.differences.forEach(diff=>{
-     const lineIndex=invoiceLines.findIndex(line=>String(line?.description||"").trim().toLowerCase()===String(diff.description||"").trim().toLowerCase());
-     if(lineIndex<0)return;
-     const target=source==="packing_list"?group.differences.find(d=>d.description===diff.description):diff;
-     const net=source==="packing_list"?target?.packingNet:target?.invoiceNet;
-     const gross=source==="packing_list"?target?.packingGross:target?.invoiceGross;
-     if(data.lines?.[lineIndex]){
-       if(hasValue(net))data.lines[lineIndex].netMassKg=net;
-       if(hasValue(gross))data.lines[lineIndex].grossMassKg=gross;
-       changed++;
-     }
-   }));
-   data.weightSourceDecision={source,selectedAt:new Date().toISOString(),supportingDocuments:groups.map(g=>g.doc.filename)};
-   data.reviewOverrides=[...(data.reviewOverrides||[]),{scope:"weights",source,createdAt:new Date().toISOString(),supportingDocuments:groups.map(g=>g.doc.filename)}];
-   const next={...pack,extractedData:data,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
-   updatePack?.(next);
-   notify?.(source==="packing_list"?"Packing List weights selected":"Commercial Invoice weights selected");
-   return changed;
- };
- const draftCustomerEmail=groups=>{
-   const customerEmail=pack.extractedData?.customerEmail||pack.extractedData?.consigneeEmail||"";
-   const subject=encodeURIComponent(`Customs IDP — weight discrepancy for ${pack.id}`);
-   const lines=groups.flatMap(g=>g.differences.map(d=>`- ${d.description}: Commercial Invoice net ${value(d.invoiceNet)} kg / gross ${value(d.invoiceGross)} kg; ${g.doc.filename} net ${value(d.packingNet)} kg / gross ${value(d.packingGross)} kg.`));
-   const body=encodeURIComponent(`Hello,\n\nWe have identified a difference between the Commercial Invoice and supporting Packing List weights for customs clearance. Please confirm which weights should be used for the customs declaration.\n\n${lines.join("\n")}\n\nPlease confirm the correct weights for customs purposes.\n\nRegards\nCustoms IDP`);
-   window.location.href=`mailto:${customerEmail}?subject=${subject}&body=${body}`;
- };
  const applyAgentAction=action=>{
    if(!action||action.kind!=="update_field")return null;
    const target=action.target||{}, data=JSON.parse(JSON.stringify(pack.extractedData||{}));
@@ -847,20 +734,26 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      updatePack?.(finalPack);
    }finally{setIsSending(false);}
  };
+ const decideWeights=(source,conflicts)=>{
+   const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
+   (data.lines||[]).forEach(inv=>{
+     const match=conflicts.find(c=>String(c.invoice.description||"").trim().toLowerCase()===String(inv.description||"").trim().toLowerCase());
+     if(!match)return;
+     inv.netMassKg=source==="packing_list"?match.line.netMassKg:match.invoice.netMassKg;
+     inv.grossMassKg=source==="packing_list"?match.line.grossMassKg:match.invoice.grossMassKg;
+   });
+   data.weightSourceDecision={source,selectedAt:new Date().toISOString()};
+   updatePack?.({...pack,extractedData:data,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined});
+   notify?.(source==="packing_list"?"Packing List weights selected":"Commercial Invoice weights selected");
+ };
+ const emailWeightIssue=conflicts=>{
+   const body=encodeURIComponent("Hello,\n\nWe have found differences between the Commercial Invoice and Packing List weights. Please confirm which weights should be used for the customs declaration.\n\n"+conflicts.map(c=>"- "+(c.invoice.description||"Goods line")+": Invoice net "+value(c.invoice.netMassKg)+" kg / gross "+value(c.invoice.grossMassKg)+" kg; Packing List net "+value(c.line.netMassKg)+" kg / gross "+value(c.line.grossMassKg)+" kg.").join("\n")+"\n\nRegards\nCustoms IDP");
+   window.location.href="mailto:?subject="+encodeURIComponent("Customs IDP - weight confirmation required")+"&body="+body;
+ };
  const renderMessage=(m,i)=>{
    const source=m.sourceDocumentId&&m.sourcePage?sourceButton(m.sourceLabel||("Source — page "+m.sourcePage),m.sourceDocumentId,m.sourcePage):null;
    if(m.type==="weightDecision"){
-     return <div className="chat-message-row agent" key={i}>
-       <div className="chat-message-avatar"><Sparkles size={15}/></div>
-       <div className="chat-message-content">
-         <div className="chat-message-text"><b>Weight difference requires a decision</b><br/>{m.text.split("\n").map((part,j)=><React.Fragment key={j}>{part}{j<m.text.split("\n").length-1&&<br/>}</React.Fragment>)}</div>
-         <div className="weight-decision-actions">
-           <button className="secondary" onClick={()=>chooseWeightSource("invoice",m.groups)}>Use Commercial Invoice weights</button>
-           <button className="secondary" onClick={()=>chooseWeightSource("packing_list",m.groups)}>Use Packing List weights</button>
-           <button className="secondary" onClick={()=>draftCustomerEmail(m.groups)}><Mail size={15}/> Email customer</button>
-         </div>
-       </div>
-     </div>;
+     return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><Sparkles size={15}/></div><div className="chat-message-content"><div className="chat-message-text">{m.text.split("\n").map((x,j)=><React.Fragment key={j}>{x}{j<m.text.split("\n").length-1&&<br/>}</React.Fragment>)}</div><div className="weight-decision-actions"><button className="secondary" onClick={()=>decideWeights("invoice",m.conflicts)}>Use Commercial Invoice weights</button><button className="secondary" onClick={()=>decideWeights("packing_list",m.conflicts)}>Use Packing List weights</button><button className="secondary" onClick={()=>emailWeightIssue(m.conflicts)}><Mail size={15}/> Email customer</button></div></div></div>;
    }
    if(m.type==="documentSummary"&&m.summary){
      const s=m.summary;
