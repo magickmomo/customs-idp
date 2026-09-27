@@ -25,7 +25,7 @@ Your job is accurate source extraction, NOT guessing and NOT customer-rule appli
 1. Identify the document type.
 2. Read the complete document, including headers, footers, tables and totals.
 3. Extract only values supported by the document. Never invent, infer or silently correct a missing value.
-4. Preserve the source representation where useful, but return numeric customs values as numbers. For exporterAddress and consigneeAddress, capture the COMPLETE visible address block exactly as shown, including every street/address line, town/city, postcode/ZIP, country and any other address text. Preserve line breaks with \\n where appropriate; never truncate an address to only the first line.
+4. Preserve the source representation where useful, but return numeric customs values as numbers. For exporterAddress and consigneeAddress, capture the COMPLETE visible address block exactly as shown, including every street/address line, town/city, postcode/ZIP, country and any other address text. Preserve line breaks with \\n where appropriate; never truncate an address to only the first line. For each exporter and consignee, also split the address into addressLine1, postcode/ZIP, city and country ISO code when those components are explicitly present. Do not invent missing components. Country ISO codes must be two-letter ISO 3166-1 alpha-2 codes based on the document; if the country is not explicitly identifiable, return null. For a GB exporter, extract the EORI number if it is visibly present; do not mistake a VAT number for an EORI.
 5. Capture all line items. Do not merge separate lines.
 6. Capture line-level net and gross weight separately when the document provides them. Map the document's NET column to netMassKg and the document's GROSS column to grossMassKg. Never swap these fields. Map the line's extended/total amount to totalValue and the unit price to unitValue. Map the line's country-of-origin/country code to sourceCountryCode. Read the column header immediately above each weight value before assigning it. For example, a value under NET must never be returned as grossMassKg, and a value under GROSS must never be returned as netMassKg. If both columns are present, preserve each independently even when another document uses a different weight allocation.
 7. If a value is unclear, return the best supported reading and lower its confidence.
@@ -127,10 +127,18 @@ The downstream workflow will use this extraction as the canonical source layer b
 
         exporter: nullableString,
         exporterAddress: nullableString,
+        exporterAddressLine1: nullableString,
+        exporterPostcode: nullableString,
+        exporterCity: nullableString,
+        exporterCountryIso: nullableString,
         exporterVatNo: nullableString,
         exporterEoriNo: nullableString,
         consignee: nullableString,
         consigneeAddress: nullableString,
+        consigneeAddressLine1: nullableString,
+        consigneePostcode: nullableString,
+        consigneeCity: nullableString,
+        consigneeCountryIso: nullableString,
         consigneeTaxId: nullableString,
         importer: nullableString,
 
@@ -190,10 +198,18 @@ The downstream workflow will use this extraction as the canonical source layer b
         "transportReference",
         "exporter",
         "exporterAddress",
+        "exporterAddressLine1",
+        "exporterPostcode",
+        "exporterCity",
+        "exporterCountryIso",
         "exporterVatNo",
         "exporterEoriNo",
         "consignee",
         "consigneeAddress",
+        "consigneeAddressLine1",
+        "consigneePostcode",
+        "consigneeCity",
+        "consigneeCountryIso",
         "consigneeTaxId",
         "importer",
         "countryOfExport",
