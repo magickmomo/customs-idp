@@ -1197,6 +1197,7 @@ body.review-resizing .review-horizontal-resizer span{
 .customs-header-table>div{background:#fff;padding:10px 12px;min-width:0}
 .customs-header-table span{display:block;font-size:10px;color:#667085;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
 .customs-header-table b{display:block;font-size:12px;overflow-wrap:anywhere}
+.customs-address{display:block!important;margin-top:5px!important;color:#475467!important;font-size:11px!important;font-weight:400!important;line-height:1.35!important;white-space:pre-line!important;text-transform:none!important;letter-spacing:0!important}
 .customs-summary-section{padding:14px 16px}
 .customs-line-table-wrap{overflow-x:auto;border:1px solid #e5e7eb;border-radius:10px}
 .customs-line-table{width:100%;border-collapse:collapse;min-width:980px;font-size:11px}
