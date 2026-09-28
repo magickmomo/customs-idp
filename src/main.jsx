@@ -705,7 +705,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
    const weightResolved=Boolean(pack.extractedData?.weightSourceDecision?.source);
    const cleanedSaved=saved.filter(m=>!(weightResolved&&((m.type==="weightDecision")||/weight discrepancy detected/i.test(String(m.text||"")))));
    setMessages([...buildSummary(),...cleanedSaved]);
- },[pack.id,pack.extractedData?.extractionRunId,pack.validationStatus,pack.validationChecks,pack.extractedData?.validationStatus,pack.extractedData?.validationChecks,pack.extractedData?.weightSourceDecision?.source,extractedDocuments]);
+ },[pack.id,pack.extractedData?.extractionRunId,pack.extractedData?.reviewOverrides?.length,pack.validationStatus,pack.validationChecks,pack.extractedData?.validationStatus,pack.extractedData?.validationChecks,pack.extractedData?.weightSourceDecision?.source,extractedDocuments]);
  useEffect(()=>{if(!documentRows.length){setSelectedDocumentId(null);return;}setSelectedDocumentId(current=>documentRows.some(d=>(d.id||d.name)===current)?current:(documentRows[0].id||documentRows[0].name));},[pack.id,pack.uploadedFiles?.length]);
 
  const selectedDocument=documentRows.find(d=>(d.id||d.name)===selectedDocumentId)||documentRows[0];
