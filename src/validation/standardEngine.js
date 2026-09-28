@@ -54,7 +54,7 @@ export function validateStandardCustomsRecord(data={}){
   const invoiceNumber=text(data.invoiceNumber);
   const exporter=text(data.exporterName||data.exporter);
   const consignee=text(data.consigneeName||data.consignee);
-  const totalAmount=numberValue(data.totalInvoicedAmount??data.totalAmountInvoiced);
+  const totalAmount=numberValue(data.totalInvoicedAmount??data.totalAmountInvoiced??data.totalInvoiceValue);
   const selectedWeightSource=data?.weightSourceDecision?.source;
   const docs=Array.isArray(data?.documents)?data.documents:[];
   const packingDoc=docs.find(d=>/packing/i.test(d?.filename||""))||docs.find(d=>d?.extraction?.documentType==="packing_list");
@@ -231,7 +231,7 @@ export function validateStandardCustomsRecord(data={}){
     else pass("Gross mass total reconciliation","totalGrossWeight","pass",lineGross,"line gross total matches header total","Working line gross mass total reconciles to the header gross mass.");
   }
 
-  const invoiceTotal=numberValue(data.totalInvoicedAmount??data.totalAmountInvoiced);
+  const invoiceTotal=numberValue(data.totalInvoicedAmount??data.totalAmountInvoiced??data.totalInvoiceValue);
   if(invoiceTotal!==null&&allLineValuesNumeric){
     const difference=Math.abs(lineValue-invoiceTotal);
     if(difference>0.01) fail("Invoice amount reconciliation","totalInvoicedAmount","fail",`${lineValue} vs ${invoiceTotal}`,"line amounts reconcile to invoice total","Sum of working line amounts does not reconcile to the invoice total.",{expected:invoiceTotal});
