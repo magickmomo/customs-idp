@@ -1481,3 +1481,20 @@ body.review-resizing .review-horizontal-resizer span{
     flex:1 1 100%;
   }
 }
+
+
+/* Missing information email action */
+.validation-missing-actions{
+  display:flex;
+  padding:9px 0 2px;
+}
+.validation-missing-actions button{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  min-height:30px;
+  padding:0 10px;
+  border-radius:7px;
+  font-size:10px;
+  font-weight:700;
+}
