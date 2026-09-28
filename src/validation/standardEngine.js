@@ -87,7 +87,7 @@ export function validateStandardCustomsRecord(data={}){
 
   const exporterCountry=text(data.exporterCountryIso).toUpperCase();
   const consigneeCountry=text(data.consigneeCountryIso).toUpperCase();
-  [["Exporter country ISO","exporterCountryIso",exporterCountry],["Consignee country ISO","consigneeCountryIso",consigneeCountry]].forEach(([label,field,value])=>{
+  [["Exporter country ISO","exporterCountryIso",exporterAddressCountry],["Consignee country ISO","consigneeCountryIso",consigneeCountry]].forEach(([label,field,value])=>{
     if(!hasValue(value)) review(label,field,"review",value,"two-letter ISO code","Country ISO was not extracted; confirm the source document before posting.");
     else if(!ISO2.test(value)) fail(label,field,"fail",value,"two-letter ISO code","Country ISO must contain exactly two letters.");
     else pass(label,field,"pass",value,"two-letter ISO code","Country ISO format is valid.");
@@ -96,13 +96,13 @@ export function validateStandardCustomsRecord(data={}){
   const exporterAddressLine1=text(data.exporterAddressLine1);
   const exporterPostcode=text(data.exporterPostcode);
   const exporterCity=text(data.exporterCity);
-  const exporterCountry=text(data.exporterCountryIso).toUpperCase();
+  const exporterAddressCountry=text(data.exporterCountryIso).toUpperCase();
   [["Exporter address line 1","exporterAddressLine1",exporterAddressLine1],["Exporter postcode/ZIP","exporterPostcode",exporterPostcode],["Exporter city","exporterCity",exporterCity],["Exporter country ISO","exporterCountryIso",exporterCountry]].forEach(([label,field,value])=>{
     if(!hasValue(value)) fail(label,field,"fail",value,"extracted address component","Exporter address component is missing.");
     else pass(label,field,"pass",value,"extracted address component","Exporter address component is present.");
   });
 
-  const isGBExporter=countryExport==="GB"||exporterCountry==="GB";
+  const isGBExporter=countryExport==="GB"||exporterAddressCountry==="GB";
   const exporterEori=text(data.exporterEoriNo);
   if(isGBExporter){
     if(!exporterEori) fail("GB exporter EORI","exporterEoriNo","fail",exporterEori,"GB EORI number","GB exporter detected but no EORI was extracted.");
