@@ -6,6 +6,7 @@ import {
   Settings, ShieldCheck, Sparkles, Users, X, Zap
 } from "lucide-react";
 import "./styles.css";
+import { validateStandardCustomsRecord } from "./validation/standardEngine.js";
 
 const packs = [
   { id:"PK-10482", customer:"Acme Components Ltd", docs:4, status:"Needs review", confidence:91, received:"16 Sep 2026, 15:42", ticket:"TK-88421" },
@@ -274,62 +275,27 @@ function App(){
   const validatePack=()=>{
   if(!selectedPack)return;
   const data=selectedPack.extractedData||{};
-  const lines=data.lines||[];
-  const checks=[];
-  const exportCountry=String(data.countryOfExport||"").trim().toUpperCase();
-  const exporterAddress=String(data.exporterAddress||"").trim();
-  const exporterEori=String(data.exporterEoriNo||"").trim();
-  const exporterCountryIso=String(data.exporterCountryIso||"").trim().toUpperCase();
-  const isGBExporter=exportCountry==="GB" || exporterCountryIso==="GB" || /(?:^|[\\n, ])(?:GB|UK|UNITED KINGDOM)(?:$|[\\n, ])/i.test(exporterAddress);
-  const exporterAddressLine1=String(data.exporterAddressLine1||"").trim();
-  const exporterPostcode=String(data.exporterPostcode||"").trim();
-  const exporterCity=String(data.exporterCity||"").trim();
-  const exporterCountryIsoForCheck=String(data.exporterCountryIso||"").trim();
-  const addressChecks=[
-    ["Exporter address line 1",exporterAddressLine1],
-    ["Exporter postcode/ZIP",exporterPostcode],
-    ["Exporter city",exporterCity],
-    ["Exporter country ISO",exporterCountryIsoForCheck]
-  ];
-  addressChecks.forEach(([check,value])=>{
-    checks.push({
-      check,
-      status:value?"pass":"fail",
-      detail:value?check+" extracted: "+value:check+" is missing from the extracted data. Check the source document and correct the pack before posting to LCA."
-    });
-  });
-  if(isGBExporter){
-    checks.push({
-      check:"GB exporter EORI",
-      status:exporterEori?"pass":"fail",
-      detail:exporterEori
-        ?"Exporter EORI extracted: "+exporterEori
-        :"GB exporter address/export country detected but no EORI number was extracted. Check the source document and correct the pack before posting to LCA."
-    });
-  }else{
-    checks.push({check:"GB exporter EORI",status:"not_applicable",detail:"Exporter is not identified as GB."});
-  }
-  lines.forEach((line,index)=>{
-    checks.push({
-      lineNo:line.lineNo||index+1,
-      check:"Line "+(line.lineNo||index+1)+" extraction",
-      status:"pass",
-      message:"Source data extracted."
-    });
-  });
+  const standard=validateStandardCustomsRecord(data);
+  const checks=standard.checks;
   const hasFail=checks.some(x=>x.status==="fail");
+  const hasReview=checks.some(x=>x.status==="review");
   const validated={
     ...selectedPack,
-    status:hasFail?"Needs review":"Ready",
-    validationStatus:hasFail?"Failed":"Validated",
-    validationChecks:checks
+    status:(hasFail||hasReview)?"Needs review":"Ready",
+    validationStatus:(hasFail||hasReview)?"Failed":"Validated",
+    validationChecks:checks,
+    validationSummary:standard.summary
   };
   setSelectedPack(validated);
   setLivePacks(prev=>prev.map(p=>p.id===validated.id?validated:p));
   persistPack(validated);
-  notify(hasFail
-    ?"Validation failed — "+checks.filter(x=>x.status==="fail").map(x=>x.check).join(", ")
-    :"Data validation complete — all implemented checks passed");
+  notify(
+    hasFail
+      ?"Validation failed — "+checks.filter(x=>x.status==="fail").map(x=>x.check).slice(0,4).join(", ")
+      :hasReview
+        ?"Validation requires review — "+checks.filter(x=>x.status==="review").map(x=>x.check).slice(0,4).join(", ")
+        :"Data validation complete — all standard checks passed"
+  );
 };
 const postToLCA=()=>{
   if(!selectedPack)return;
