@@ -670,7 +670,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
        },
        persist:false
      },
-     {type:"validationSummary",checks:Array.isArray(pack.validationChecks)&&pack.validationChecks.length?pack.validationChecks:(Array.isArray(pack.extractedData?.validationChecks)&&pack.extractedData.validationChecks.length?pack.extractedData.validationChecks:checks),persist:false},
+     {type:"validationSummary",checks:(()=>{const standard=validateStandardCustomsRecord(pack.extractedData||{});return standard.checks;})(),persist:false},
      ...(conflicts.length&&!pack.extractedData?.weightSourceDecision?[{
        type:"weightDecision",
        text:"Weight discrepancy detected. The invoice and packing list contain different line-level weights. No value has been silently chosen.",
