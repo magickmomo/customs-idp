@@ -90,6 +90,7 @@ export function validateStandardCustomsRecord(data={}){
 
   const exporterCountry=text(data.exporterCountryIso).toUpperCase();
   const consigneeCountry=text(data.consigneeCountryIso).toUpperCase();
+  const exporterAddressCountry=exporterCountry;
   [["Exporter country ISO","exporterCountryIso",exporterAddressCountry],["Consignee country ISO","consigneeCountryIso",consigneeCountry]].forEach(([label,field,value])=>{
     if(!hasValue(value)) review(label,field,"review",value,"two-letter ISO code","Country ISO was not extracted; confirm the source document before posting.");
     else if(!ISO2.test(value)) fail(label,field,"fail",value,"two-letter ISO code","Country ISO must contain exactly two letters.");
