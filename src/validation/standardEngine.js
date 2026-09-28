@@ -55,7 +55,10 @@ export function validateStandardCustomsRecord(data={}){
   const exporter=text(data.exporterName||data.exporter);
   const consignee=text(data.consigneeName||data.consignee);
   const totalAmount=numberValue(data.totalInvoicedAmount??data.totalAmountInvoiced);
-  const totalGross=numberValue(data.totalGrossWeight);
+  const selectedWeightSource=data?.weightSourceDecision?.source;
+  const docs=Array.isArray(data?.documents)?data.documents:[];
+  const packingDoc=docs.find(d=>/packing/i.test(d?.filename||""))||docs.find(d=>d?.extraction?.documentType==="packing_list");
+  const totalGross=numberValue(selectedWeightSource==="packing_list"?packingDoc?.extraction?.totalGrossWeight:data.totalGrossWeight);
   const totalPackages=numberValue(data.totalPackages);
 
   const requiredHeader=[
@@ -207,9 +210,25 @@ export function validateStandardCustomsRecord(data={}){
     pass("Goods line sequence","sequentialNo_SAD32","pass",lines.map(x=>x._lineNumber).join(", "),"1..n sequential numbering","Goods lines are sequential.");
   }
 
-  if(lines.length&&numberValue(data.totalGrossWeight)!==null){
-    const difference=Math.abs(lineGross-numberValue(data.totalGrossWeight));
-    if(difference>0.01) fail("Gross mass total reconciliation","totalGrossWeight","fail",`${lineGross} vs ${data.totalGrossWeight}`,"line gross total matches header total","Working line gross mass total does not reconcile to the header gross mass.",{expected:data.totalGrossWeight});
+  const weightConflicts=[];
+  if(packingDoc&&lines.length){
+    lines.forEach((line,index)=>{
+      const pl=findSourceLine(packingDoc,line);
+      if(!pl)return;
+      const invNet=numberValue(line.netMassKg);
+      const invGross=numberValue(line.grossMassKg);
+      const plNet=numberValue(pl.netMassKg);
+      const plGross=numberValue(pl.grossMassKg);
+      if((invNet!==null&&plNet!==null&&Math.abs(invNet-plNet)>0.0001)||(invGross!==null&&plGross!==null&&Math.abs(invGross-plGross)>0.0001)) weightConflicts.push(index+1);
+    });
+    if(weightConflicts.length&&!selectedWeightSource) review("Weight source decision","weightSourceDecision","review","", "Commercial Invoice or Packing List","Line-level weights differ between the Commercial Invoice and Packing List. Select the source to use before posting.",{lineNumbers:weightConflicts});
+    else if(weightConflicts.length&&selectedWeightSource) pass("Weight source decision","weightSourceDecision", "pass", selectedWeightSource, "Commercial Invoice or Packing List","Weight discrepancy has been resolved by selecting a working source.");
+    else pass("Weight source decision","weightSourceDecision","pass",selectedWeightSource||"No discrepancy","No unresolved weight discrepancy","No conflicting line-level weights were found between the available documents.");
+  }
+
+  if(lines.length&&totalGross!==null){
+    const difference=Math.abs(lineGross-totalGross);
+    if(difference>0.01) fail("Gross mass total reconciliation","totalGrossWeight","fail",`${lineGross} vs ${totalGross}`,"line gross total matches header total","Working line gross mass total does not reconcile to the header gross mass.",{expected:totalGross});
     else pass("Gross mass total reconciliation","totalGrossWeight","pass",lineGross,"line gross total matches header total","Working line gross mass total reconciles to the header gross mass.");
   }
 
