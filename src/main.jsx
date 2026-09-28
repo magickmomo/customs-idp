@@ -628,10 +628,16 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
        sourcePage:sourceFor(invoiceDoc)
      });
    }
-   if(!hasValue(invoice.exporterAddressLine1)||!hasValue(invoice.exporterPostcode)||!hasValue(invoice.exporterCity)||!hasValue(invoice.exporterCountryIso)){
+   const missingExporterAddressFields=[
+     !hasValue(invoice.exporterAddressLine1)?"Address line 1":null,
+     !hasValue(invoice.exporterPostcode)?"Postcode/ZIP":null,
+     !hasValue(invoice.exporterCity)?"City":null,
+     !hasValue(invoice.exporterCountryIso)?"Country ISO":null
+   ].filter(Boolean);
+   if(missingExporterAddressFields.length){
      agentIssues.push({
        title:"Exporter address incomplete",
-       detail:"One or more structured exporter address fields are missing. Check the commercial invoice and correct the missing address component before posting to LCA.",
+       detail:"Missing structured field(s): "+missingExporterAddressFields.join(", ")+". The full exporter address is still shown below; check the commercial invoice and correct only the missing component(s) before posting to LCA.",
        sourceDocumentId:invoiceDoc?.id||null,
        sourcePage:sourceFor(invoiceDoc)
      });
