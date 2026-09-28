@@ -16,7 +16,7 @@ export default async function handler(req,res){
       "The extraction data contains source documents and fieldEvidence. When answering source questions, name the document and page when available.",
       "If documents disagree, explicitly state the conflicting source values and do not silently choose one.",
       "If the user explicitly instructs you to change a field to a specific value, treat that as a direct correction instruction. The new value does NOT need to already exist in the supplied documents. Return an update_field action targeting the existing matching field. Record the user instruction as the reason; sourceDocumentId/sourcePage may be null when the new value comes from the user rather than a document.",
-      "For a correction, action must be update_field and target must identify a top-level primary extraction field or a line field. Map natural-language requests to the closest existing extracted field (for example, gross weight -> totalGrossWeight). Keep the old value and explain that the new value came from the user's instruction when applicable.",
+      "For a correction, action must be update_field and target must identify a top-level primary extraction field or a line field. For line-level corrections, use grossMassKg for gross weight and netMassKg for net weight. If the user names a line number, use the zero-based lineIndex for that line. For a top-level gross-weight correction, use totalGrossWeight. Keep the old value and explain that the new value came from the user's instruction when applicable.",
       "Do not apply customer-specific rules unless they are present in the supplied context.",
       "Return concise, operational answers.",
       "USER MESSAGE:\\n"+message,
