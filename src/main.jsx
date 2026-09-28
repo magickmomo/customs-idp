@@ -163,7 +163,7 @@ function App(){
       const confidences=extractedDocuments.map(d=>Number(d.extraction?.confidence)||0).filter(Boolean);
       const primaryDoc=extractedDocuments.find(d=>d.extraction?.documentType==="commercial_invoice")||extractedDocuments[0];
       const processed={...processing,status:"Needs review",confidence:confidences.length?Math.round(confidences.reduce((a,b)=>a+b,0)/confidences.length*100):0,extractedData:{...(primaryDoc?.extraction||{}),documents:extractedDocuments,documentCount:extractedDocuments.length,sourceDocuments:extractedDocuments.map(d=>({id:d.id,filename:d.filename,mimeType:d.mimeType,documentType:d.extraction?.documentType||"unknown",confidence:d.extraction?.confidence||0})),agentMessages:[],extractionRunId:new Date().toISOString()}};
-      setSelectedPack(processed);setLivePacks(prev=>prev.map(p=>p.id===processed.id?processed:p));persistPack(processed);notify("Re-processing complete — "+extractedDocuments.length+" documents extracted");
+      const validated=buildValidatedPack(processed);setSelectedPack(validated);setLivePacks(prev=>prev.map(p=>p.id===validated.id?validated:p));persistPack(validated);notify("Re-processing complete — "+extractedDocuments.length+" documents extracted and validation completed");
     }catch(error){const failed={...processing,status:"Needs review",processingError:error.message};setSelectedPack(failed);setLivePacks(prev=>prev.map(p=>p.id===failed.id?failed:p));persistPack(failed);notify("Re-processing failed — check the pack for details");}
   };
 
@@ -246,10 +246,11 @@ function App(){
           sourceDocuments:extractedDocuments.map(d=>({id:d.id,filename:d.filename,mimeType:d.mimeType,documentType:d.extraction?.documentType||"unknown",confidence:d.extraction?.confidence||0}))
         }
       };
-      setSelectedPack(processed);
-      setLivePacks(prev=>prev.map(p=>p.id===id?processed:p));
-      persistPack(processed);
-      notify(`${extractedDocuments.length} document${extractedDocuments.length===1?"":"s"} extracted successfully`);
+      const validated=buildValidatedPack(processed);
+      setSelectedPack(validated);
+      setLivePacks(prev=>prev.map(p=>p.id===id?validated:p));
+      persistPack(validated);
+      notify(extractedDocuments.length+" document"+(extractedDocuments.length===1?"":"s")+" extracted and validation completed");
     } catch(error) {
       const failed={...newPack,status:"Needs review",processingError:error.message};
       setSelectedPack(failed);
@@ -272,31 +273,29 @@ function App(){
     setLivePacks(prev=>prev.map(p=>p.id===pack.id?pack:p));
     persistPack(pack);
   };
-  const validatePack=()=>{
-  if(!selectedPack)return;
-  const data=selectedPack.extractedData||{};
-  const standard=validateStandardCustomsRecord(data);
-  const checks=standard.checks;
-  const hasFail=checks.some(x=>x.status==="fail");
-  const hasReview=checks.some(x=>x.status==="review");
-  const validated={
-    ...selectedPack,
-    status:(hasFail||hasReview)?"Needs review":"Ready",
-    validationStatus:(hasFail||hasReview)?"Failed":"Validated",
-    validationChecks:checks,
-    validationSummary:standard.summary
+  const buildValidatedPack=(pack)=>{
+    if(!pack)return pack;
+    const data=pack.extractedData||{};
+    const standard=validateStandardCustomsRecord(data);
+    const checks=standard.checks;
+    const hasFail=checks.some(x=>x.status==="fail");
+    const hasReview=checks.some(x=>x.status==="review");
+    return {...pack,status:(hasFail||hasReview)?"Needs review":"Ready",validationStatus:(hasFail||hasReview)?"Failed":"Validated",validationChecks:checks,validationSummary:standard.summary};
   };
-  setSelectedPack(validated);
-  setLivePacks(prev=>prev.map(p=>p.id===validated.id?validated:p));
-  persistPack(validated);
-  notify(
-    hasFail
-      ?"Validation failed — "+checks.filter(x=>x.status==="fail").map(x=>x.check).slice(0,4).join(", ")
-      :hasReview
-        ?"Validation requires review — "+checks.filter(x=>x.status==="review").map(x=>x.check).slice(0,4).join(", ")
-        :"Data validation complete — all standard checks passed"
-  );
-};
+  const persistValidatedPack=async(pack,showToast=false)=>{
+    if(!pack)return pack;
+    const validated=buildValidatedPack(pack);
+    setSelectedPack(validated);
+    setLivePacks(prev=>prev.map(p=>p.id===validated.id?validated:p));
+    await persistPack(validated);
+    if(showToast){
+      const failed=validated.validationChecks.filter(x=>x.status==="fail");
+      const review=validated.validationChecks.filter(x=>x.status==="review");
+      notify(failed.length?"Validation failed — "+failed.map(x=>x.check).slice(0,4).join(", "):review.length?"Validation requires review — "+review.map(x=>x.check).slice(0,4).join(", "):"Data validation complete — all standard checks passed");
+    }
+    return validated;
+  };
+  const validatePack=()=>{if(!selectedPack)return;persistValidatedPack(selectedPack,true);};
 const postToLCA=()=>{
   if(!selectedPack)return;
   if(selectedPack.validationStatus!=="Validated" || selectedPack.status!=="Ready"){
