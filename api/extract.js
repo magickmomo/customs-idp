@@ -274,6 +274,32 @@ The downstream workflow will use this extraction as the canonical source layer b
       return res.status(502).json({ error: "The extraction engine returned invalid structured data." });
     }
 
+    const deriveCityFromAddress=(address,addressLine1,postcode,country)=>{
+      if(!address||!postcode)return null;
+      const text=String(address).replace(/\\r/g,"").trim();
+      const line1=String(addressLine1||"").trim();
+      const postcodeText=String(postcode).trim();
+      const candidates=[line1,...text.split(/\\n|,/).map(x=>x.trim())].filter(Boolean);
+      for(const candidate of candidates){
+        const compact=candidate.replace(/\\s+/g," ").trim();
+        const match=compact.match(/(?:^|,|\\b(?:Unit|Suite|Building|Warehouse|Office)\\s+[^,]+,?\\s+)([A-Za-z][A-Za-z .'-]*?)\\s+(?:Industrial|Business)\\s+(?:Park|Estate)\\b/i);
+        if(match?.[1]){
+          const city=match[1].trim().replace(/^[,\\s]+|[,\\s]+$/g,"");
+          if(city&&city.length>1)return city;
+        }
+      }
+      return null;
+    };
+
+    if(!extraction.exporterCity){
+      const derivedCity=deriveCityFromAddress(extraction.exporterAddress,extraction.exporterAddressLine1,extraction.exporterPostcode,extraction.exporterCountryIso);
+      if(derivedCity)extraction.exporterCity=derivedCity;
+    }
+    if(!extraction.consigneeCity){
+      const derivedCity=deriveCityFromAddress(extraction.consigneeAddress,extraction.consigneeAddressLine1,extraction.consigneePostcode,extraction.consigneeCountryIso);
+      if(derivedCity)extraction.consigneeCity=derivedCity;
+    }
+
     return res.status(200).json({
       extraction,
       extractionVersion: "v2",
