@@ -231,11 +231,24 @@ export function validateStandardCustomsRecord(data={}){
     else pass("Gross mass total reconciliation","totalGrossWeight","pass",lineGross,"line gross total matches header total","Working line gross mass total reconciles to the header gross mass.");
   }
 
-  const invoiceTotal=numberValue(data.totalInvoicedAmount??data.totalAmountInvoiced??data.totalInvoiceValue);
+  const invoiceTotal=numberValue(data.totalInvoicedAmount??data.totalAmountInvoiced??data.totalInvoiceValue);\n  const freightAmount=numberValue(data.freightAmount);\n  const freightCurrency=text(data.freightCurrency||currency).toUpperCase();
   if(invoiceTotal!==null&&allLineValuesNumeric){
-    const difference=Math.abs(lineValue-invoiceTotal);
-    if(difference>0.01) fail("Invoice amount reconciliation","totalInvoicedAmount","fail",`${lineValue} vs ${invoiceTotal}`,"line amounts reconcile to invoice total","Sum of working line amounts does not reconcile to the invoice total.",{expected:invoiceTotal});
-    else pass("Invoice amount reconciliation","totalInvoicedAmount","pass",lineValue,"line amounts reconcile to invoice total","Working line amounts reconcile to the invoice total.");
+    const freight=freightAmount??0;
+    const expectedInvoiceTotal=lineValue+freight;
+    const difference=Math.abs(expectedInvoiceTotal-invoiceTotal);
+
+    if(freightAmount!==null&&freightCurrency!==currency){
+      fail("Freight currency","freightCurrency","fail",freightCurrency,currency,"Freight currency does not match the invoice currency.");
+    }else if(difference>0.01){
+      const detail=freightAmount!==null
+        ? `Goods line total (${lineValue}) + freight (${freightAmount}) does not reconcile to invoice total (${invoiceTotal}).`
+        : `Goods line total (${lineValue}) does not reconcile to invoice total (${invoiceTotal}), and no separate freight charge was extracted.`;
+      fail("Invoice amount reconciliation","totalInvoicedAmount","fail",`${expectedInvoiceTotal} vs ${invoiceTotal}`,"goods lines + freight reconcile to invoice total",detail,{expected:invoiceTotal,lineTotal:lineValue,freightAmount:freightAmount??0});
+    }else{
+      pass("Invoice amount reconciliation","totalInvoicedAmount","pass",expectedInvoiceTotal,"goods lines + freight reconcile to invoice total",freightAmount!==null
+        ? `Goods line total (${lineValue}) + freight (${freightAmount}) reconciles to invoice total (${invoiceTotal}).`
+        : `Goods line total (${lineValue}) reconciles to invoice total (${invoiceTotal}); no separate freight charge is present.`);
+    }
   }
 
   return {
