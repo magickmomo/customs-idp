@@ -593,7 +593,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      return ev.find(x=>x.page)?.page||1;
    };
    const lineKey=line=>String(line?.hsCode||"")+"|"+String(line?.description||"").trim().toLowerCase();
-   const lines=Array.isArray(invoice.lines)?invoice.lines:[];
+   const lines=Array.isArray(pack.extractedData?.lines)?pack.extractedData.lines:(Array.isArray(invoice.lines)?invoice.lines:[]);
    const findSourceLine=(doc,invLine)=>{
      const sourceLines=Array.isArray(doc?.extraction?.lines)?doc.extraction.lines:[];
      return sourceLines.find(l=>lineKey(l)===lineKey(invLine))||sourceLines.find(l=>String(l.description||"").trim().toLowerCase()===String(invLine.description||"").trim().toLowerCase());
@@ -684,8 +684,8 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
          invoice:value(invoice.invoiceNumber),exporter:value(invoice.exporter),consignee:value(invoice.consignee),
          currency:value(invoice.currency),invoiceValue:value(invoice.totalInvoiceValue),exportCountry:value(invoice.countryOfExport),exporterAddress:value(invoice.exporterAddress),exporterAddressLine1:value(invoice.exporterAddressLine1),exporterPostcode:value(invoice.exporterPostcode),exporterCity:value(invoice.exporterCity),exporterCountryIso:value(invoice.exporterCountryIso),exporterEoriNo:value(invoice.exporterEoriNo),consigneeAddress:value(invoice.consigneeAddress),consigneeAddressLine1:value(invoice.consigneeAddressLine1),consigneePostcode:value(invoice.consigneePostcode),consigneeCity:value(invoice.consigneeCity),consigneeCountryIso:value(invoice.consigneeCountryIso),
          destination:value(invoice.sourceCountryOfDestination),packages:value(invoice.totalPackages),
-         gross:value(selectedWeightSource==="packing_list"?packingDoc?.extraction?.totalGrossWeight:invoice.totalGrossWeight),
-         net:value(selectedWeightSource==="packing_list"?packingDoc?.extraction?.totalNetWeight:invoice.totalNetWeight),
+         gross:value(selectedWeightSource==="packing_list"?packingDoc?.extraction?.totalGrossWeight:(pack.extractedData?.totalGrossWeight??invoice.totalGrossWeight)),
+         net:value(selectedWeightSource==="packing_list"?packingDoc?.extraction?.totalNetWeight:(pack.extractedData?.totalNetWeight??invoice.totalNetWeight)),
          deliveryTerm:value(invoice.deliveryTerm),lines:customsLines,
          sourceLabel:invoiceDoc?.filename||"Commercial Invoice",sourceDocumentId:invoiceDoc?.id||null,sourcePage:sourceFor(invoiceDoc),weightSourceDecision:pack.extractedData?.weightSourceDecision?.source||null
        },
