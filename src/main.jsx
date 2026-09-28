@@ -693,13 +693,15 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
        text:"Weight discrepancy detected. The invoice and packing list contain different line-level weights. No value has been silently chosen.",
        conflicts,
        persist:false
-     }]:[{type:"agent",text:"Cross-document validation: no line-level weight source conflicts require a decision.",persist:false}])
+     }]:[])
    ];
  };
  useEffect(()=>{
    const saved=Array.isArray(pack.extractedData?.agentMessages)?pack.extractedData.agentMessages:[];
-   setMessages([...buildSummary(),...saved]);
- },[pack.id,pack.extractedData?.extractionRunId,pack.validationStatus,pack.validationChecks,pack.extractedData?.validationStatus,pack.extractedData?.validationChecks,extractedDocuments]);
+   const weightResolved=Boolean(pack.extractedData?.weightSourceDecision?.source);
+   const cleanedSaved=saved.filter(m=>!(weightResolved&&((m.type==="weightDecision")||/weight discrepancy detected/i.test(String(m.text||"")))));
+   setMessages([...buildSummary(),...cleanedSaved]);
+ },[pack.id,pack.extractedData?.extractionRunId,pack.validationStatus,pack.validationChecks,pack.extractedData?.validationStatus,pack.extractedData?.validationChecks,pack.extractedData?.weightSourceDecision?.source,extractedDocuments]);
  useEffect(()=>{if(!documentRows.length){setSelectedDocumentId(null);return;}setSelectedDocumentId(current=>documentRows.some(d=>(d.id||d.name)===current)?current:(documentRows[0].id||documentRows[0].name));},[pack.id,pack.uploadedFiles?.length]);
 
  const selectedDocument=documentRows.find(d=>(d.id||d.name)===selectedDocumentId)||documentRows[0];
