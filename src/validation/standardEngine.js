@@ -68,8 +68,7 @@ export function validateStandardCustomsRecord(data={}){
     ["Country of export","countryOfExport",countryExport,"ISO 3166-1 alpha-2 code"],
     ["Country of destination","sourceCountryOfDestination",destination,"ISO 3166-1 alpha-2 code"],
     ["Invoice currency","currency",currency,"3-letter ISO currency code"],
-    ["Total amount invoiced","totalInvoicedAmount",totalAmount,"numeric non-negative amount"],
-    ["Total gross mass","totalGrossWeight",totalGross,"numeric non-negative kg"]
+    ["Total amount invoiced","totalInvoicedAmount",totalAmount,"numeric non-negative amount"]
   ];
 
   requiredHeader.forEach(([label,field,value,expected])=>{
