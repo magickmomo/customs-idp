@@ -193,16 +193,16 @@ export function validateStandardCustomsRecord(data={}){
     else if(currency&&lineCurrency!==currency) fail(prefix+" item currency","itemPrice_SAD42Currency","fail",lineCurrency,currency,"Line currency does not match the header invoice currency.",{lineNumber:index+1});
     else pass(prefix+" item currency","itemPrice_SAD42Currency","pass",lineCurrency,"3-letter ISO currency code","Line currency is valid.",{lineNumber:index+1});
 
-    if(net===null) fail(prefix+" net mass","netMass_SAD38","fail",line._netMass,"non-negative kg value","Working net mass is missing.",{lineNumber:index+1});
-    else if(net<0) fail(prefix+" net mass","netMass_SAD38","fail",net,"non-negative kg value","Working net mass cannot be negative.",{lineNumber:index+1});
-    else {lineNet+=net;pass(prefix+" net mass","netMass_SAD38","pass",net,"non-negative kg value","Working net mass is valid.",{lineNumber:index+1});}
+    if(net===null) fail(prefix+" net weight","netMass_SAD38","fail",line._netMass,"non-negative kg value","Working net weight is missing.",{lineNumber:index+1});
+    else if(net<0) fail(prefix+" net weight","netMass_SAD38","fail",net,"non-negative kg value","Working net mass cannot be negative.",{lineNumber:index+1});
+    else {lineNet+=net;pass(prefix+" net weight","netMass_SAD38","pass",net,"non-negative kg value","Working net weight is valid.",{lineNumber:index+1});}
 
-    if(gross===null) fail(prefix+" gross mass","grossMass_SAD35","fail",line._grossMass,"non-negative kg value","Working gross mass is missing.",{lineNumber:index+1});
-    else if(gross<0) fail(prefix+" gross mass","grossMass_SAD35","fail",gross,"non-negative kg value","Working gross mass cannot be negative.",{lineNumber:index+1});
-    else {lineGross+=gross;pass(prefix+" gross mass","grossMass_SAD35","pass",gross,"non-negative kg value","Working gross mass is valid.",{lineNumber:index+1});}
+    if(gross===null) fail(prefix+" gross weight","grossMass_SAD35","fail",line._grossMass,"non-negative kg value","Working gross weight is missing.",{lineNumber:index+1});
+    else if(gross<0) fail(prefix+" gross weight","grossMass_SAD35","fail",gross,"non-negative kg value","Working gross mass cannot be negative.",{lineNumber:index+1});
+    else {lineGross+=gross;pass(prefix+" gross weight","grossMass_SAD35","pass",gross,"non-negative kg value","Working gross weight is valid.",{lineNumber:index+1});}
 
-    if(net!==null&&gross!==null&&net>gross) fail(prefix+" weight relationship","netMass_SAD38/grossMass_SAD35","fail",`${net}/${gross}`,"net mass <= gross mass","Net mass cannot exceed gross mass.",{lineNumber:index+1});
-    else if(net!==null&&gross!==null) pass(prefix+" weight relationship","netMass_SAD38/grossMass_SAD35","pass",`${net}/${gross}`,"net mass <= gross mass","Net/gross relationship is valid.",{lineNumber:index+1});
+    if(net!==null&&gross!==null&&net>gross) fail(prefix+" weight relationship","netMass_SAD38/grossMass_SAD35","fail",`${net}/${gross}`,"net weight <= gross weight","Net weight cannot exceed gross weight.",{lineNumber:index+1});
+    else if(net!==null&&gross!==null) pass(prefix+" weight relationship","netMass_SAD38/grossMass_SAD35","pass",`${net}/${gross}`,"net weight <= gross weight","Net/gross relationship is valid.",{lineNumber:index+1});
   });
 
   if(lines.length&&lines.every((line,index)=>numberValue(line._lineNumber)===index+1)){
@@ -227,8 +227,8 @@ export function validateStandardCustomsRecord(data={}){
 
   if(lines.length&&totalGross!==null){
     const difference=Math.abs(lineGross-totalGross);
-    if(difference>0.01) fail("Gross mass total reconciliation","totalGrossWeight","fail",`${lineGross} vs ${totalGross}`,"line gross total matches header total","Working line gross mass total does not reconcile to the header gross mass.",{expected:totalGross});
-    else pass("Gross mass total reconciliation","totalGrossWeight","pass",lineGross,"line gross total matches header total","Working line gross mass total reconciles to the header gross mass.");
+    if(difference>0.01) fail("Gross weight total reconciliation","totalGrossWeight","fail",`${lineGross} vs ${totalGross}`,"line gross total matches header total","Working line gross weight total does not reconcile to the header gross weight.",{expected:totalGross});
+    else pass("Gross weight total reconciliation","totalGrossWeight","pass",lineGross,"line gross total matches header total","Working line gross weight total reconciles to the header gross weight.");
   }
 
   const invoiceTotal=numberValue(data.totalInvoicedAmount??data.totalAmountInvoiced??data.totalInvoiceValue);
