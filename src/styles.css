@@ -1269,3 +1269,158 @@ body.review-resizing .review-horizontal-resizer span{
   .review-show-document-btn{padding:7px 9px}
   .review-show-document-btn svg{width:13px;height:13px}
 }
+
+
+/* Polished validation results */
+.validation-summary-card{
+  margin-top:10px;
+  border:1px solid #dfe5ec;
+  border-radius:14px;
+  background:#fff;
+  overflow:hidden;
+  box-shadow:0 3px 14px rgba(15,23,42,.035);
+}
+.validation-summary-card .customs-summary-title{
+  padding:15px 18px 14px;
+  background:#fff;
+  border-bottom:1px solid #edf0f4;
+}
+.validation-summary-card .summary-kicker{
+  display:block;
+  font-size:9px;
+  line-height:1.2;
+  font-weight:800;
+  letter-spacing:.1em;
+  color:#7b8798;
+}
+.validation-summary-card .customs-summary-title h3{
+  margin:4px 0 0;
+  font-size:15px;
+  line-height:1.25;
+  letter-spacing:-.01em;
+  color:#172033;
+}
+.validation-group{
+  padding:0;
+}
+.validation-group-title{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-height:42px;
+  padding:0 18px;
+  border-bottom:1px solid #edf0f4;
+  font-size:12px;
+  line-height:1;
+  font-weight:750;
+  color:#273246;
+}
+.validation-group:first-of-type .validation-group-title{
+  background:#fffafa;
+  border-left:3px solid #ef4444;
+}
+.validation-group:nth-of-type(2) .validation-group-title{
+  background:#fffdf5;
+  border-left:3px solid #f59e0b;
+}
+.validation-check-list{
+  padding:0 18px;
+}
+.validation-check{
+  display:grid;
+  grid-template-columns:24px minmax(0,1fr);
+  gap:9px;
+  align-items:start;
+  padding:10px 0;
+  border-bottom:1px solid #f0f2f5;
+}
+.validation-check:last-child{border-bottom:0}
+.validation-check>span{
+  width:22px;
+  height:22px;
+  display:grid;
+  place-items:center;
+  border-radius:6px;
+  font-size:11px;
+  line-height:1;
+  font-weight:800;
+  margin-top:0;
+}
+.validation-check.fail>span{
+  background:#fef2f2;
+  color:#dc2626;
+  border:1px solid #fecaca;
+}
+.validation-check.review>span{
+  background:#fffbeb;
+  color:#d97706;
+  border:1px solid #fde68a;
+}
+.validation-check.pass>span{
+  background:#f0fdf4;
+  color:#16a34a;
+  border:1px solid #bbf7d0;
+}
+.validation-check.not_applicable>span{
+  background:#f8fafc;
+  color:#94a3b8;
+  border:1px solid #e2e8f0;
+}
+.validation-check b{
+  display:block;
+  font-size:11px;
+  line-height:1.35;
+  font-weight:750;
+  color:#1f2937;
+}
+.validation-check small{
+  display:block;
+  margin-top:3px;
+  color:#667085;
+  font-size:10px;
+  line-height:1.45;
+}
+.validation-details{
+  border-top:1px solid #e8edf2;
+  background:#fafbfc;
+}
+.validation-details summary{
+  list-style:none;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  min-height:42px;
+  padding:0 18px;
+  color:#475467;
+  font-size:11px;
+  font-weight:700;
+  user-select:none;
+}
+.validation-details summary::-webkit-details-marker{display:none}
+.validation-details summary:before{
+  content:"›";
+  display:inline-block;
+  margin-right:8px;
+  color:#667085;
+  font-size:17px;
+  line-height:1;
+  transform:rotate(0deg);
+  transition:transform .15s ease;
+}
+.validation-details[open] summary:before{transform:rotate(90deg)}
+.validation-details .validation-check-list{
+  background:#fff;
+  border-top:1px solid #edf0f4;
+  max-height:320px;
+  overflow:auto;
+}
+.validation-success-message{
+  margin:12px 18px 14px;
+  padding:10px 12px;
+  border:1px solid #bbf7d0;
+  border-radius:9px;
+  background:#f0fdf4;
+  color:#166534;
+  font-size:11px;
+  font-weight:650;
+}
