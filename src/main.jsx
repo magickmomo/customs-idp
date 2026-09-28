@@ -553,6 +553,23 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
  },[pack.id,pack.extractedData,pack.uploadedFiles]);
  const evidenceFor=doc=>{const e=doc?.extraction||{};const all=[...(e.fieldEvidence||[])];(e.lines||[]).forEach(line=>(line.evidence||[]).forEach(x=>all.push(x)));return all;};
  const getEvidence=(doc,fields=[])=>{const ev=evidenceFor(doc);return ev.find(x=>fields.includes(x.field)&&x.page)||ev.find(x=>x.page);};
+ const getWeightConflicts=()=>{
+   const docs=extractedDocuments;
+   const invoiceDoc=docs.find(d=>d.extraction?.documentType==="commercial_invoice")||docs[0];
+   const invoice=invoiceDoc?.extraction||{};
+   const packingDoc=docs.find(d=>/packing/i.test(d.filename||""))||docs.find(d=>d.extraction?.documentType==="packing_list");
+   if(!invoiceDoc||!packingDoc)return [];
+   const invoiceLines=Array.isArray(invoice.lines)?invoice.lines:[];
+   const sourceLines=Array.isArray(packingDoc.extraction?.lines)?packingDoc.extraction.lines:[];
+   const key=line=>String(line?.hsCode||"")+"|"+String(line?.description||"").trim().toLowerCase();
+   return invoiceLines.map(inv=>{
+     const line=sourceLines.find(x=>key(x)===key(inv))||sourceLines.find(x=>String(x?.description||"").trim().toLowerCase()===String(inv?.description||"").trim().toLowerCase());
+     if(!line)return null;
+     const netDifferent=inv?.netMassKg!=null&&line?.netMassKg!=null&&String(inv.netMassKg)!==String(line.netMassKg);
+     const grossDifferent=inv?.grossMassKg!=null&&line?.grossMassKg!=null&&String(inv.grossMassKg)!==String(line.grossMassKg);
+     return netDifferent||grossDifferent?{doc:packingDoc,line,invoice:inv}:null;
+   }).filter(Boolean);
+ };
  const sourceButton=(label,docId,page)=><button type="button" className="source-reference" onClick={()=>{setSelectedDocumentId(docId);setPreviewPage(Number(page)||1);setShowPreview(true);}}>{label}</button>;
 
  const buildSummary=()=>{
@@ -857,7 +874,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      const reviews=m.checks.filter(check=>check.status==="review");
      const passed=m.checks.filter(check=>check.status==="pass");
      const notApplicable=m.checks.filter(check=>check.status==="not_applicable");
-     const renderCheck=(check,idx,status)=> <div className={"validation-check "+status} key={status+"-"+idx}><span>{status==="pass"?"✓":status==="not_applicable"?"—":"!"}</span><div><b>{check.label||check.check||"Validation check"}</b><small>{check.detail||check.message||""}</small></div></div>;
+     const renderCheck=(check,idx,status)=> <div className={"validation-check "+status} key={status+"-"+idx}><span>{status==="pass"?"✓":status==="not_applicable"?"—":"!"}</span><div><b>{check.label||check.check||"Validation check"}</b><small>{check.detail||check.message||""}</small>{status==="review"&&(check.label||check.check)==="Weight source decision"&&<div className="validation-weight-actions"><button type="button" className="primary" onClick={()=>decideWeights("invoice",getWeightConflicts())}>Use Commercial Invoice</button><button type="button" className="secondary" onClick={()=>decideWeights("packing_list",getWeightConflicts())}>Use Packing List</button><button type="button" className="secondary" onClick={()=>emailWeightIssue(getWeightConflicts())}><Mail size={13}/> Email customer</button></div>}</div></div>;
      return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><ShieldCheck size={15}/></div><div className="chat-message-content"><div className="validation-summary-card">
        <div className="customs-summary-title"><div><span className="summary-kicker">VALIDATION RESULTS</span><h3>Document and customs checks</h3></div></div>
        {failures.length>0&&<div className="validation-group"><div className="validation-group-title">❌ {failures.length} issue{failures.length===1?"":"s"} found</div><div className="validation-check-list">{failures.map((check,idx)=>renderCheck(check,idx,"fail"))}</div></div>}
@@ -884,7 +901,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
          <div><span>DOCUMENT SOURCE · PAGE {previewPage}</span><b>{selectedDocument?.name||"Source document"}</b></div>
          <button type="button" className="row-btn" onClick={()=>setShowPreview(false)}><X size={18}/></button>
        </div>
-       <div className="review-source-modal-toolbar"><div><FileText size={14}/><span>{selectedDocument?.name||"Source document"}</span></div><div className="review-viewer-controls"><span>Page {previewPage}</span><button type="button" onClick={()=>setPreviewPage(p=>Math.max(1,p-1))}>−</button><button type="button" onClick={()=>setPreviewPage(p=>p+1)}>+</button></div></div>
+       <div className="review-source-modal-toolbar"><div className="review-document-picker"><FileText size={14}/><select value={selectedDocumentId||""} onChange={e=>{setSelectedDocumentId(e.target.value);setPreviewPage(1);}} aria-label="Select source document">{documentRows.map(doc=><option key={doc.id||doc.name} value={doc.id||doc.name}>{doc.name}</option>)}</select></div><div className="review-viewer-controls"><span>Page {previewPage}</span><button type="button" onClick={()=>setPreviewPage(p=>Math.max(1,p-1))}>−</button><button type="button" onClick={()=>setPreviewPage(p=>p+1)}>+</button></div></div>
        <div className={"review-source-modal-body "+(selectedDocumentIsImage?"image-document":"pdf-document")}>{selectedDocumentUrl?(selectedDocumentIsImage?<img src={selectedDocumentUrl} alt={selectedDocument?.name||"Document preview"}/>:<iframe src={selectedDocumentFrameUrl} title={selectedDocument?.name||"Document preview"}/>):<div className="review-document-empty"><FileText size={28}/><b>{selectedDocument?.name||"No document available"}</b><span>The document is not available for preview yet.</span></div>}</div>
      </div>
    </div>}
