@@ -794,7 +794,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
  const emailCustomerReview=checks=>{
    const currentChecks=Array.isArray(checks)?checks:validateStandardCustomsRecord(pack.extractedData||{}).checks;
    const missing=currentChecks.filter(check=>/missing|not extracted|required.*value/i.test(String(check.detail||check.message||"")));
-   const conflicts=getWeightConflicts();
+   const conflicts=pack.extractedData?.weightSourceDecision?.source?[]:getWeightConflicts();
    if(!missing.length&&!conflicts.length)return;
    const displayValue=v=>v===undefined||v===null||v===""?"—":String(v);
    const sections=[];
