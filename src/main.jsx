@@ -756,6 +756,8 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
        if(target.scope==="line"){
          const aliases={grossWeight:"grossMassKg",grossMass:"grossMassKg",gross_mass:"grossMassKg",netWeight:"netMassKg",netMass:"netMassKg",net_mass:"netMassKg"};
          target.field=aliases[target.field]||target.field;
+         const explicitLine=q.match(/\bline\s*(\d+)\b/i);
+         if(explicitLine) target.lineIndex=Number(explicitLine[1])-1;
        }
        const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
        if(target.scope==="line"&&Number.isInteger(target.lineIndex)&&data.lines?.[target.lineIndex]) data.lines[target.lineIndex][target.field]=target.value;
