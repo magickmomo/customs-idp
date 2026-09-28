@@ -560,7 +560,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
  const getWeightConflicts=()=>{
    const docs=extractedDocuments;
    const invoiceDoc=docs.find(d=>d.extraction?.documentType==="commercial_invoice")||docs[0];
-   const invoice=invoiceDoc?.extraction||{};
+   // The customs summary is the human-facing working record. Start from the original invoice extraction, then overlay all user/agent corrections from the working pack data.\n   const invoice={...(invoiceDoc?.extraction||{}),...(pack.extractedData||{})};
    const packingDoc=docs.find(d=>/packing/i.test(d.filename||""))||docs.find(d=>d.extraction?.documentType==="packing_list");
    if(!invoiceDoc||!packingDoc)return [];
    const invoiceLines=Array.isArray(invoice.lines)?invoice.lines:[];
@@ -682,7 +682,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
        type:"customsEntrySummary",
        summary:{
          invoice:value(invoice.invoiceNumber),exporter:value(invoice.exporter),consignee:value(invoice.consignee),
-         currency:value(pack.extractedData?.currency??invoice.currency),invoiceValue:value(pack.extractedData?.totalInvoiceValue??invoice.totalInvoiceValue),exportCountry:value(pack.extractedData?.countryOfExport??invoice.countryOfExport),exporterAddress:value(invoice.exporterAddress),exporterAddressLine1:value(invoice.exporterAddressLine1),exporterPostcode:value(invoice.exporterPostcode),exporterCity:value(invoice.exporterCity),exporterCountryIso:value(invoice.exporterCountryIso),exporterEoriNo:value(invoice.exporterEoriNo),consigneeAddress:value(invoice.consigneeAddress),consigneeAddressLine1:value(invoice.consigneeAddressLine1),consigneePostcode:value(invoice.consigneePostcode),consigneeCity:value(invoice.consigneeCity),consigneeCountryIso:value(invoice.consigneeCountryIso),
+         currency:value(invoice.currency),invoiceValue:value(invoice.totalInvoiceValue),exportCountry:value(invoice.countryOfExport),exporterAddress:value(invoice.exporterAddress),exporterAddressLine1:value(invoice.exporterAddressLine1),exporterPostcode:value(invoice.exporterPostcode),exporterCity:value(invoice.exporterCity),exporterCountryIso:value(invoice.exporterCountryIso),exporterEoriNo:value(invoice.exporterEoriNo),consigneeAddress:value(invoice.consigneeAddress),consigneeAddressLine1:value(invoice.consigneeAddressLine1),consigneePostcode:value(invoice.consigneePostcode),consigneeCity:value(invoice.consigneeCity),consigneeCountryIso:value(invoice.consigneeCountryIso),
          destination:value(invoice.sourceCountryOfDestination),packages:value(invoice.totalPackages),
          gross:value(selectedWeightSource==="packing_list"?packingDoc?.extraction?.totalGrossWeight:(pack.extractedData?.totalGrossWeight??invoice.totalGrossWeight)),
          net:value(selectedWeightSource==="packing_list"?packingDoc?.extraction?.totalNetWeight:(pack.extractedData?.totalNetWeight??invoice.totalNetWeight)),
