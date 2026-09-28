@@ -602,8 +602,8 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
    const selectedWeightSource=pack.extractedData?.weightSourceDecision?.source||null;
    const customsLines=lines.map((line,index)=>{
      const plLine=packingDoc?findSourceLine(packingDoc,line):null;
-     const workingNet=selectedWeightSource==="packing_list"?plLine?.netMassKg:line.netMassKg;
-     const workingGross=selectedWeightSource==="packing_list"?plLine?.grossMassKg:line.grossMassKg;
+     const workingNet=selectedWeightSource==="packing_list"?plLine?.netMassKg:(line.netMassKg??line.netWeight??line.netMass);
+     const workingGross=selectedWeightSource==="packing_list"?plLine?.grossMassKg:(line.grossMassKg??line.grossWeight??line.grossMass);
      return {
        no:index+1,
        description:value(line.description)||"Unnamed goods line",
@@ -752,7 +752,11 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      let reply=result.reply||"I couldn't produce an answer from the supplied pack.";
      let savedPack=pack;
      if(result.action==="update_field"&&result.target){
-       const target=result.target;
+       const target={...result.target};
+       if(target.scope==="line"){
+         const aliases={grossWeight:"grossMassKg",grossMass:"grossMassKg",gross_mass:"grossMassKg",netWeight:"netMassKg",netMass:"netMassKg",net_mass:"netMassKg"};
+         target.field=aliases[target.field]||target.field;
+       }
        const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
        if(target.scope==="line"&&Number.isInteger(target.lineIndex)&&data.lines?.[target.lineIndex]) data.lines[target.lineIndex][target.field]=target.value;
        else if(target.scope==="primary"&&target.field) data[target.field]=target.value;
