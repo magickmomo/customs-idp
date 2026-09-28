@@ -276,21 +276,19 @@ The downstream workflow will use this extraction as the canonical source layer b
 
     const deriveCityFromAddress=(address,addressLine1,postcode,country)=>{
       if(!address||!postcode)return null;
-      const text=String(address).replace(/\\r/g,"").trim();
+      const text=String(address).replace(/\r/g,"").trim();
       const line1=String(addressLine1||"").trim();
-      const postcodeText=String(postcode).trim();
-      const candidates=[line1,...text.split(/\\n|,/).map(x=>x.trim())].filter(Boolean);
+      const candidates=[line1,...text.split(/\n|,/).map(x=>x.trim())].filter(Boolean);
       for(const candidate of candidates){
-        const compact=candidate.replace(/\\s+/g," ").trim();
-        const match=compact.match(/(?:^|,|\\b(?:Unit|Suite|Building|Warehouse|Office)\\s+[^,]+,?\\s+)([A-Za-z][A-Za-z .'-]*?)\\s+(?:Industrial|Business)\\s+(?:Park|Estate)\\b/i);
-        if(match?.[1]){
-          const city=match[1].trim().replace(/^[,\\s]+|[,\\s]+$/g,"");
+        const compact=candidate.replace(/\s+/g," ").trim();
+        const industrial=compact.match(/^([A-Za-z][A-Za-z .'-]*?)\s+(?:Industrial|Business)\s+(?:Park|Estate)\b/i);
+        if(industrial?.[1]){
+          const city=industrial[1].trim().replace(/^(?:Unit|Suite|Building|Warehouse|Office)\s+\d+[,:-]?\s*/i,"").trim();
           if(city&&city.length>1)return city;
         }
       }
       return null;
     };
-
     if(!extraction.exporterCity){
       const derivedCity=deriveCityFromAddress(extraction.exporterAddress,extraction.exporterAddressLine1,extraction.exporterPostcode,extraction.exporterCountryIso);
       if(derivedCity)extraction.exporterCity=derivedCity;
