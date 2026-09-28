@@ -93,14 +93,31 @@ export function validateStandardCustomsRecord(data={}){
     else pass(label,field,"pass",value,"two-letter ISO code","Country ISO format is valid.");
   });
 
+  const exporterAddress=text(data.exporterAddress);
   const exporterAddressLine1=text(data.exporterAddressLine1);
   const exporterPostcode=text(data.exporterPostcode);
   const exporterCity=text(data.exporterCity);
   const exporterAddressCountry=text(data.exporterCountryIso).toUpperCase();
-  [["Exporter address line 1","exporterAddressLine1",exporterAddressLine1],["Exporter postcode/ZIP","exporterPostcode",exporterPostcode],["Exporter city","exporterCity",exporterCity],["Exporter country ISO","exporterCountryIso",exporterCountry]].forEach(([label,field,value])=>{
-    if(!hasValue(value)) fail(label,field,"fail",value,"extracted address component","Exporter address component is missing.");
-    else pass(label,field,"pass",value,"extracted address component","Exporter address component is present.");
+
+  // Use only components that can be identified directly from the visible address.
+  // Do not infer a city from a street/business name.
+  const addressPostcodeFallback=(exporterPostcode||exporterAddress.match(/\\b[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}\\b/i)?.[0]||"").trim();
+  const addressCountryFallback=exporterAddressCountry||(/(?:^|[,\\n])\\s*(?:United Kingdom|UK|GB)\\s*$/i.test(exporterAddress)?"GB":"");
+  const addressLineFallback=exporterAddress
+    ? exporterAddress.split(/,|\\n/).map(x=>x.trim()).filter(Boolean).filter(x=>!/^([A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2})$/i.test(x)&&!/(?:United Kingdom|UK|GB)$/i.test(x)).join(", ")
+    : "";
+
+  const addressChecks=[
+    ["Exporter address line 1","exporterAddressLine1",exporterAddressLine1||addressLineFallback],
+    ["Exporter postcode/ZIP","exporterPostcode",addressPostcodeFallback],
+    ["Exporter city","exporterCity",exporterCity],
+    ["Exporter country ISO","exporterCountryIso",addressCountryFallback]
+  ];
+  addressChecks.forEach(([label,field,value])=>{
+    if(!hasValue(value)) fail(label,field,"fail",value,"extracted address component","This specific exporter address component is missing from the structured working record.");
+    else pass(label,field,"pass",value,"extracted address component","Exporter address component is present in the working record.");
   });
+
 
   const isGBExporter=countryExport==="GB"||exporterAddressCountry==="GB";
   const exporterEori=text(data.exporterEoriNo);
