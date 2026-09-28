@@ -789,6 +789,13 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
    updatePack?.(next);
    notify?.(sourceLabel+" weights selected — "+changed+" line"+(changed===1?"":"s")+" updated");
  };
+ const emailMissingInformation=checks=>{
+   const missing=checks.filter(check=>/missing|not extracted|required.*value/i.test(String(check.detail||check.message||"")));
+   if(!missing.length)return;
+   const subject="Customs IDP - missing information required";
+   const body="Hello,\\n\\nWe are preparing your customs declaration and the following information is missing from the documents provided:\\n\\n"+missing.map(check=>"- "+(check.label||check.check||"Required information")+": "+(check.detail||"Missing from the supplied documents.")).join("\\n")+"\\n\\nPlease provide the missing information so we can complete the customs declaration.\\n\\nRegards\\nCustoms IDP";
+   setEmailDraft({to:"",subject,body});
+ };
  const emailWeightIssue=conflicts=>{
    const displayValue=v=>v===undefined||v===null||v===""?"—":String(v);
    const subject="Customs IDP - weight confirmation required";
@@ -874,10 +881,10 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      const reviews=m.checks.filter(check=>check.status==="review");
      const passed=m.checks.filter(check=>check.status==="pass");
      const notApplicable=m.checks.filter(check=>check.status==="not_applicable");
-     const renderCheck=(check,idx,status)=> <div className={"validation-check "+status} key={status+"-"+idx}><span>{status==="pass"?"✓":status==="not_applicable"?"—":"!"}</span><div><b>{check.label||check.check||"Validation check"}</b><small>{check.detail||check.message||""}</small>{status==="review"&&(check.label||check.check)==="Weight source decision"&&<div className="validation-weight-actions"><button type="button" className="primary" onClick={()=>decideWeights("invoice",getWeightConflicts())}>Use Commercial Invoice</button><button type="button" className="secondary" onClick={()=>decideWeights("packing_list",getWeightConflicts())}>Use Packing List</button><button type="button" className="secondary" onClick={()=>emailWeightIssue(getWeightConflicts())}><Mail size={13}/> Email customer</button></div>}</div></div>;
+     const renderCheck=(check,idx,status)=> <div className={"validation-check "+status} key={status+"-"+idx}><span>{status==="pass"?"✓":status==="not_applicable"?"—":"!"}</span><div><b>{check.label||check.check||"Validation check"}</b><small>{check.detail||check.message||""}</small>{status==="review"&&(check.label||check.check)==="Weight source decision"&&<div className="validation-weight-actions"><button type="button" className="secondary" onClick={()=>decideWeights("invoice",getWeightConflicts())}>Use Commercial Invoice</button><button type="button" className="secondary" onClick={()=>decideWeights("packing_list",getWeightConflicts())}>Use Packing List</button><button type="button" className="secondary" onClick={()=>emailWeightIssue(getWeightConflicts())}><Mail size={13}/> Email customer</button></div>}</div></div>;
      return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><ShieldCheck size={15}/></div><div className="chat-message-content"><div className="validation-summary-card">
        <div className="customs-summary-title"><div><span className="summary-kicker">VALIDATION RESULTS</span><h3>Document and customs checks</h3></div></div>
-       {failures.length>0&&<div className="validation-group"><div className="validation-group-title">❌ {failures.length} issue{failures.length===1?"":"s"} found</div><div className="validation-check-list">{failures.map((check,idx)=>renderCheck(check,idx,"fail"))}</div></div>}
+       {failures.length>0&&<div className="validation-group"><div className="validation-group-title">❌ {failures.length} issue{failures.length===1?"":"s"} found</div><div className="validation-check-list">{failures.map((check,idx)=>renderCheck(check,idx,"fail"))}{failures.some(check=>/missing|not extracted|required.*value/i.test(String(check.detail||check.message||"")))&&<div className="validation-missing-actions"><button type="button" className="secondary" onClick={()=>emailMissingInformation(failures)}><Mail size={13}/> Email customer for missing information</button></div>}</div></div>}
        {reviews.length>0&&<div className="validation-group"><div className="validation-group-title">⚠️ {reviews.length} decision{reviews.length===1?"":"s"} required</div><div className="validation-check-list">{reviews.map((check,idx)=>renderCheck(check,idx,"review"))}</div></div>}
        {!failures.length&&!reviews.length&&<div className="validation-success-message">✓ No validation issues found.</div>}
        <details className="validation-details"><summary>Show passed checks ({passed.length}){notApplicable.length?" · "+notApplicable.length+" not applicable":""}</summary><div className="validation-check-list">{passed.map((check,idx)=>renderCheck(check,idx,"pass"))}{notApplicable.map((check,idx)=>renderCheck(check,idx,"not_applicable"))}</div></details>
