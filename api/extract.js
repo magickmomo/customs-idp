@@ -33,7 +33,7 @@ Your job is accurate source extraction, NOT guessing and NOT customer-rule appli
 9. Check arithmetic where possible: line totals versus invoice total, quantities versus packages, and line weights versus document totals.
 10. Do NOT apply customer-specific rules, weight apportionment, ISO middleware substitutions, padding of procedure codes, or other downstream transformations. Those happen after extraction.
 11. For countries, preserve the document/source code in sourceCountryCode/country fields. Do not convert RS to XS or perform other middleware mappings.
-12. Return evidence for important fields. Evidence must describe what was actually visible in the source; do not fabricate quotations.
+12. Extract separately stated invoice-level freight/transport charges when they are explicitly shown. Put the numeric freight amount in freightAmount and its currency in freightCurrency. Do not include freight in line totalValue. If freight is not explicitly stated, return freightAmount as null. Return evidence for freight when present.\n13. Return evidence for important fields. Evidence must describe what was actually visible in the source; do not fabricate quotations.
 13. If the document contains multiple invoices or distinct customs references, report them rather than silently choosing one.
 
 The downstream workflow will use this extraction as the canonical source layer before customer strategy, reconciliation and middleware validation.`
