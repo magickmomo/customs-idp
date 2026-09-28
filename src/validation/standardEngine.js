@@ -232,24 +232,32 @@ export function validateStandardCustomsRecord(data={}){
   }
 
   const invoiceTotal=numberValue(data.totalInvoicedAmount??data.totalAmountInvoiced??data.totalInvoiceValue);\n  const freightAmount=numberValue(data.freightAmount);\n  const freightCurrency=text(data.freightCurrency||currency).toUpperCase();
+  const freightToInvoiceExchangeRate=numberValue(data.freightToInvoiceExchangeRate);
   if(invoiceTotal!==null&&allLineValuesNumeric){
     const freight=freightAmount??0;
     const expectedInvoiceTotal=lineValue+freight;
     const difference=Math.abs(expectedInvoiceTotal-invoiceTotal);
 
-    if(freightAmount!==null&&freightCurrency!==currency){
-      fail("Freight currency","freightCurrency","fail",freightCurrency,currency,"Freight currency does not match the invoice currency.");
-    }else if(difference>0.01){
-      const detail=freightAmount!==null
-        ? `Goods line total (${lineValue}) + freight (${freightAmount}) does not reconcile to invoice total (${invoiceTotal}).`
-        : `Goods line total (${lineValue}) does not reconcile to invoice total (${invoiceTotal}), and no separate freight charge was extracted.`;
-      fail("Invoice amount reconciliation","totalInvoicedAmount","fail",`${expectedInvoiceTotal} vs ${invoiceTotal}`,"goods lines + freight reconcile to invoice total",detail,{expected:invoiceTotal,lineTotal:lineValue,freightAmount:freightAmount??0});
+    const currenciesDiffer=freightAmount!==null&&freightCurrency&&currency&&freightCurrency!==currency;
+    if(currenciesDiffer&&(!freightToInvoiceExchangeRate||freightToInvoiceExchangeRate<=0)){
+      review("Freight currency conversion","freightToInvoiceExchangeRate","review",freightCurrency+" → "+currency,"documented positive exchange rate","Freight is stated in a different currency from the invoice. A supported exchange rate is required before the invoice total can be reconciled.",{freightAmount,freightCurrency,invoiceCurrency:currency});
     }else{
-      pass("Invoice amount reconciliation","totalInvoicedAmount","pass",expectedInvoiceTotal,"goods lines + freight reconcile to invoice total",freightAmount!==null
-        ? `Goods line total (${lineValue}) + freight (${freightAmount}) reconciles to invoice total (${invoiceTotal}).`
-        : `Goods line total (${lineValue}) reconciles to invoice total (${invoiceTotal}); no separate freight charge is present.`);
-    }
-  }
+      const convertedFreight=freightAmount===null?0:(currenciesDiffer?freightAmount*freightToInvoiceExchangeRate:freightAmount);
+      const expectedInvoiceTotal=lineValue+convertedFreight;
+      const difference=Math.abs(expectedInvoiceTotal-invoiceTotal);
+      if(difference>0.01){
+        const detail=freightAmount!==null
+          ? currenciesDiffer
+            ? "Goods line total ("+lineValue+") + converted freight ("+convertedFreight+") does not reconcile to invoice total ("+invoiceTotal+"). Freight: "+freightAmount+" "+freightCurrency+", rate: "+freightToInvoiceExchangeRate+" "+freightCurrency+"→"+currency+"."
+            : "Goods line total ("+lineValue+") + freight ("+freightAmount+") does not reconcile to invoice total ("+invoiceTotal+")."
+          : "Goods line total ("+lineValue+") does not reconcile to invoice total ("+invoiceTotal+"), and no separate freight charge was extracted.";
+        fail("Invoice amount reconciliation","totalInvoicedAmount","fail",expectedInvoiceTotal+" vs "+invoiceTotal,"goods lines + freight reconcile to invoice total",detail,{expected:invoiceTotal,lineTotal:lineValue,freightAmount:freightAmount??0,convertedFreight});
+      }else{
+        pass("Invoice amount reconciliation","totalInvoicedAmount","pass",expectedInvoiceTotal,"goods lines + freight reconcile to invoice total",freightAmount!==null
+          ? "Goods line total ("+lineValue+") + "+(currenciesDiffer?"converted ":"")+"freight reconciles to invoice total ("+invoiceTotal+")."
+          : "Goods line total ("+lineValue+") reconciles to invoice total ("+invoiceTotal+"); no separate freight charge is present.");
+      }
+    }  }
 
   return {
     checks,
