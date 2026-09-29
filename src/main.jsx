@@ -1255,22 +1255,162 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
 function Customers({notify}){return <section><div className="page-head"><div><div className="eyebrow">Configuration</div><h1>Customers</h1><p>Customer-specific extraction strategies, mailboxes and validation rules.</p></div><button className="primary" onClick={()=>notify("Customer creation flow opened")}><Plus size={17}/> Add customer</button></div><div className="customer-grid">{customers.map(c=><div className="customer-card" key={c.code}><div className="customer-top"><div className="customer-logo">{c.name.split(" ").map(x=>x[0]).slice(0,2).join("")}</div><button className="row-btn"><MoreHorizontal size={17}/></button></div><h3>{c.name}</h3><span className="code">{c.code}</span><div className="customer-info"><div><Mail size={15}/><span>{c.mailbox}</span></div><div><Settings size={15}/><span>{c.rules} extraction rules</span></div><div><Activity size={15}/><span>{c.processed} documents processed</span></div></div><button className="full-btn">Open strategy <ArrowRight size={15}/></button></div>)}</div></section>}
 
 function AgentPage(){
- const [messages,setMessages]=useState([{role:"agent",text:"Hi. I can inspect extracted customs data, explain decisions, validate fields, and prepare corrections. Try asking about HU, gross weight, HS codes or customer rules."}]);
+ const [selectedAgent,setSelectedAgent]=useState("review");
+ const [messages,setMessages]=useState([{role:"agent",text:"I am the Review & Decision Agent. I work with the extracted pack, source evidence, customer strategy and validation results to explain decisions, make user-approved corrections and resolve review exceptions."}]);
  const [input,setInput]=useState("");
+
+ const agents=[
+   {
+     id:"extract",
+     name:"Document Extraction Agent",
+     status:"Online",
+     model:"GPT-5.6 Luna",
+     endpoint:"/api/extract",
+     type:"AI agent",
+     icon:<FileText size={18}/>,
+     role:"Reads the complete document pack and creates the canonical source extraction.",
+     tasks:[
+       "Classify each document",
+       "Extract header and party data",
+       "Extract every goods line separately",
+       "Capture line-level net and gross weights",
+       "Extract freight and invoice totals",
+       "Record field evidence and confidence"
+     ],
+     knowledge:[
+       "Commercial invoices",
+       "Packing lists",
+       "CMR and transport documents",
+       "Exporter / importer address structures",
+       "UK EORI identification",
+       "ISO 3166-1 country codes",
+       "Line values, quantities and weights",
+       "Freight and invoice totals",
+       "Source evidence and page references"
+     ]
+   },
+   {
+     id:"review",
+     name:"Review & Decision Agent",
+     status:"Online",
+     model:"GPT-5.6 Luna",
+     endpoint:"/api/agent",
+     type:"AI agent",
+     icon:<Sparkles size={18}/>,
+     role:"Works with a live pack to explain extraction, handle corrections, surface discrepancies and guide human decisions.",
+     tasks:[
+       "Explain where an extracted value came from",
+       "Make explicit user-approved corrections",
+       "Compare primary and supporting documents",
+       "Handle weight-source decisions",
+       "Apply approved weight apportionment",
+       "Explain validation failures",
+       "Use customer strategy when supplied",
+       "Keep corrections auditable"
+     ],
+     knowledge:[
+       "Current pack and uploaded documents",
+       "Field evidence and source pages",
+       "Primary invoice hierarchy",
+       "Supporting-document fallback rules",
+       "Customer-specific strategy",
+       "Middleware field mapping",
+       "Standard validation results",
+       "Weight reconciliation and apportionment",
+       "Freight reconciliation",
+       "UK customs / EORI rules"
+     ]
+   }
+ ];
+
+ const supporting=[
+   {name:"Standard Validation Engine",type:"Deterministic engine",icon:<ShieldCheck size={17}/>,description:"Runs repeatable customs and middleware checks without relying on an AI judgement.",items:["Required-field checks","ISO country validation","HS / procedure-code validation","Line and header weight reconciliation","Invoice + same-currency freight reconciliation","EORI and address checks"]},
+   {name:"Customer Strategy Layer",type:"Rules & configuration",icon:<Settings size={17}/>,description:"Supplies customer-specific rules to the workflow. It is configuration, not a separate AI agent.",items:["Customer extraction rules","Weight apportionment settings","Customer-specific validation","Mailbox / customer context","Future rule versioning and audit trail"]}
+ ];
+
+ const selected=agents.find(agent=>agent.id===selectedAgent)||agents[1];
+
  const send=(textValue=input)=>{
    const q=textValue.trim(); if(!q) return;
    setMessages(m=>[...m,{role:"user",text:q}]); setInput("");
    const l=q.toLowerCase(); let reply;
-   if(l.includes("gross")||l.includes("weight")) reply="The current pack uses the configured gross-weight apportionment logic: gross weight is distributed across eligible lines using each line's net-weight ratio. Bancale Legno is excluded from the net-weight calculation. In production, I will calculate this from the uploaded documents and show the source values before applying the rule.";
-   else if(l.includes("hu")||l.includes("origin")) reply="HU is the ISO country code for Hungary. I would trace the value back to the source document, show the extracted text and confidence, then apply the customer's country-of-origin rule if one exists.";
-   else if(l.includes("validate")) reply="I can validate required middleware fields, ISO country codes, procedure-code length and numeric fields. Any failure will be shown with the affected field and source document.";
-   else if(l.includes("rule")) reply="I can inspect the customer's active rules and, after you confirm a correction, turn a repeated correction into a customer-specific rule. Rule changes should be recorded in the audit trail.";
-   else if(l.includes("change")||l.includes("correct")||l.includes("wrong")) reply="I can make that correction once the pack is loaded. I will show the proposed old value → new value, explain the reason, recalculate dependent fields, and re-run validation before approval.";
-   else reply="I understand. In the live version I will use the uploaded pack, extracted fields, source documents and customer strategy as context rather than answering from a generic knowledge base.";
-   setTimeout(()=>setMessages(m=>[...m,{role:"agent",text:reply}]),250);
+   if(l.includes("knowledge")) reply=selected.name+" has access to "+selected.knowledge.slice(0,5).join(", ")+". Its context is supplied by the platform for the current workflow rather than a generic answer.";
+   else if(l.includes("gross")||l.includes("weight")) reply="The Review & Decision Agent can use the pack's document-level and line-level weight evidence, the selected source and the customer strategy. When apportionment is approved, the platform applies the configured method and keeps the resulting values in the working record.";
+   else if(l.includes("extract")) reply="The Document Extraction Agent reads the complete uploaded document and returns structured customs data, line items, evidence and confidence. It does not apply customer rules or silently guess missing values.";
+   else if(l.includes("validate")) reply="Validation is deliberately separate from the AI agents. The Standard Validation Engine performs deterministic checks, then the Review & Decision Agent can explain the result and help resolve any human decision.";
+   else if(l.includes("rule")||l.includes("customer")) reply="Customer strategy is supplied as configuration to the workflow. The Review & Decision Agent can use those supplied rules, but it should not invent or apply a customer-specific rule that is not present in the pack context.";
+   else if(l.includes("change")||l.includes("correct")||l.includes("wrong")) reply="The Review & Decision Agent can make an explicit correction when the user specifies the new value. It records the instruction, updates the working data and the platform can re-run validation.";
+   else reply="This Agent Control Centre shows which intelligence component is responsible for each stage, the knowledge it is given, and the deterministic controls that sit around it.";
+   setTimeout(()=>setMessages(m=>[...m,{role:"agent",text:reply}]),180);
  };
- return <section><div className="page-head"><div><div className="eyebrow">Automation & intelligence</div><h1>AI Agent</h1><p>Explain extraction decisions, validate customs data and maintain customer-specific rules.</p></div><span className="online-pill"><span></span> Online</span></div><div className="agent-page-grid"><div className="panel"><div className="panel-head"><div><h2>Agent capabilities</h2><p>Actions the production agent will perform against a pack</p></div></div>{["Explain why a field was extracted","Correct an extracted value","Create or update a customer rule","Validate middleware fields and ISO codes","Apply weight apportionment rules","Flag low-confidence customs data"].map(x=><div className="capability" key={x}><div className="cap-icon"><Sparkles size={15}/></div><span>{x}</span><CheckCircle2 size={16}/></div>)}</div><div className="panel chat-large"><div className="agent-title"><div className="agent-orb"><Sparkles size={18}/></div><div><b>Customs IDP Agent</b><span>Pack-aware workflow assistant</span></div></div><div className="chat-history">{messages.map((m,i)=><div className={"message "+m.role} key={i}>{m.text}</div>)}<div className="suggestions"><button onClick={()=>send("Why was the gross weight apportioned?")}>Why was the gross weight apportioned?</button><button onClick={()=>send("Show Acme's active rules")}>Show Acme's active rules</button><button onClick={()=>send("Validate this pack for middleware")}>Validate this pack for middleware</button></div></div><div className="chat-input"><input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder="Ask the agent anything about this operation..."/><button onClick={()=>send()}><ArrowRight size={16}/></button></div></div></div></section>}
 
+ return <section>
+   <div className="page-head">
+     <div><div className="eyebrow">Automation & intelligence</div><h1>AI Agents</h1><p>See which agents process customs data, what they do and the operational knowledge supplied to them.</p></div>
+     <span className="online-pill"><span></span> 2 AI agents online</span>
+   </div>
+
+   <div className="agent-control-hero">
+     <div className="agent-control-hero-icon"><Bot size={24}/></div>
+     <div className="agent-control-hero-copy">
+       <div className="eyebrow">Current AI architecture</div>
+       <h2>Customs IDP intelligence layer</h2>
+       <p>Two specialised AI agents work around a deterministic validation engine and customer strategy layer. This keeps extraction flexible while keeping critical validation repeatable.</p>
+     </div>
+     <div className="agent-control-hero-stat"><b>2</b><span>AI agents</span></div>
+     <div className="agent-control-hero-stat"><b>1</b><span>Validation engine</span></div>
+   </div>
+
+   <div className="agent-directory">
+     <div className="agent-directory-head"><div><span className="summary-kicker">AI AGENT DIRECTORY</span><h2>Agents in this platform</h2><p>Select an agent to see its role, tasks and specific knowledge.</p></div></div>
+     <div className="agent-directory-grid">
+       {agents.map(agent=><button type="button" className={"agent-directory-card "+(selectedAgent===agent.id?"selected":"")} key={agent.id} onClick={()=>setSelectedAgent(agent.id)}>
+         <div className="agent-directory-card-top"><div className="agent-directory-icon">{agent.icon}</div><span className="agent-online"><i></i>{agent.status}</span></div>
+         <h3>{agent.name}</h3>
+         <span className="agent-directory-type">{agent.type} · {agent.model}</span>
+         <p>{agent.role}</p>
+         <div className="agent-directory-meta"><span>{agent.tasks.length} tasks</span><span>{agent.knowledge.length} knowledge areas</span></div>
+       </button>)}
+     </div>
+   </div>
+
+   <div className="agent-detail-grid">
+     <div className="panel agent-detail-panel">
+       <div className="panel-head">
+         <div><span className="summary-kicker">SELECTED AGENT</span><h2>{selected.name}</h2><p>{selected.endpoint} · {selected.model}</p></div>
+         <span className="online-pill"><span></span>{selected.status}</span>
+       </div>
+       <div className="agent-detail-body">
+         <div className="agent-detail-intro"><div className="agent-directory-icon">{selected.icon}</div><div><b>What this agent does</b><p>{selected.role}</p></div></div>
+         <div className="agent-detail-section"><h3>Tasks</h3><div className="agent-task-grid">{selected.tasks.map(task=><div className="agent-task" key={task}><CheckCircle2 size={15}/><span>{task}</span></div>)}</div></div>
+         <div className="agent-detail-section"><h3>Specific knowledge supplied</h3><p className="agent-knowledge-note">This is the operational knowledge/context the agent is designed to use for this workflow. It is not a generic unrestricted knowledge base.</p><div className="agent-knowledge-grid">{selected.knowledge.map(item=><div className="agent-knowledge-chip" key={item}><Zap size={13}/><span>{item}</span></div>)}</div></div>
+       </div>
+     </div>
+
+     <div className="panel agent-runtime-panel">
+       <div className="panel-head"><div><span className="summary-kicker">SUPPORTING INTELLIGENCE</span><h2>Controls around the agents</h2><p>Components that keep the workflow predictable.</p></div></div>
+       <div className="supporting-agent-list">
+         {supporting.map(item=><div className="supporting-agent" key={item.name}><div className="supporting-agent-head"><div className="supporting-agent-icon">{item.icon}</div><div><b>{item.name}</b><span>{item.type}</span></div></div><p>{item.description}</p><div className="supporting-agent-items">{item.items.map(x=><span key={x}>{x}</span>)}</div></div>)}
+       </div>
+       <div className="agent-flow"><span>Documents</span><ArrowRight size={14}/><b>Extraction Agent</b><ArrowRight size={14}/><b>Review Agent</b><ArrowRight size={14}/><b>Validation</b><ArrowRight size={14}/><span>Post to LCA</span></div>
+     </div>
+   </div>
+
+   <div className="panel chat-large agent-chat-control">
+     <div className="agent-title"><div className="agent-orb"><Sparkles size={18}/></div><div><b>{selected.name}</b><span>Operational knowledge and workflow assistant</span></div></div>
+     <div className="chat-history">
+       {messages.map((m,i)=><div className={"message "+m.role} key={i}>{m.text}</div>)}
+       <div className="suggestions">
+         <button onClick={()=>send("What knowledge does this agent use?")}>What knowledge does this agent use?</button>
+         <button onClick={()=>send("Explain the weight rules")}>Explain the weight rules</button>
+         <button onClick={()=>send("What does the extraction agent do?")}>What does the extraction agent do?</button>
+         <button onClick={()=>send("How does validation work?")}>How does validation work?</button>
+       </div>
+     </div>
+     <div className="chat-input"><input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder="Ask about an agent, its tasks or its knowledge..."/><button onClick={()=>send()}><ArrowRight size={16}/></button></div>
+   </div>
+ </section>
+}
 function SettingsPage(){return <section><div className="page-head"><div><div className="eyebrow">Platform</div><h1>Settings</h1><p>Core processing, middleware and integration configuration.</p></div></div><div className="settings-grid"><div className="panel settings-card"><h2>Middleware</h2><p>Configure the output contract used by the downstream customs system.</p><label>Endpoint</label><input value="https://middleware.internal/customs/orders" readOnly/><label>Format</label><select><option>JSON</option></select><label>Destination</label><input value="ASM UK" readOnly/></div><div className="panel settings-card"><h2>Processing defaults</h2><p>Global fallbacks used when a customer has no overriding rule.</p><Toggle label="Automatic validation" on/><Toggle label="Low-confidence review queue" on/><Toggle label="Auto-send validated packs" on/></div></div></section>}
 
 function Toggle({label,on}){return <div className="toggle-row"><span>{label}</span><div className={"toggle "+(on?"on":"")}><i></i></div></div>}
