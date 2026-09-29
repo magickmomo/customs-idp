@@ -451,26 +451,38 @@ function App(){
     const basisTotal=basis.reduce((sum,v)=>sum+(v||0),0);
 
     if((allNetMissing&&totalNetForApportion!==null&&basisTotal>0)||(allGrossMissing&&totalGrossForApportion!==null&&basisTotal>0)){
-      const apportioned=mergedLines.map((line,index)=>{
-        const share=(basis[index]||0)/basisTotal;
-        return {
-          ...line,
-          ...(allNetMissing&&totalNetForApportion!==null?{netMassKg:Math.round(totalNetForApportion*share*1000)/1000}:{}),
-          ...(allGrossMissing&&totalGrossForApportion!==null?{grossMassKg:Math.round(totalGrossForApportion*share*1000)/1000}:{}),
-          _weightApportionment:"Derived from document-level total using line-value allocation"
-        };
-      });
+      const apportioned=mergedLines.map(line=>({...line}));
 
-      // Correct rounding on the final line so the derived line total exactly
-      // reconciles to the document-level total.
+      // Net weight is allocated from the document total using line value
+      // (or quantity/equal split fallback).
       if(allNetMissing&&totalNetForApportion!==null){
+        apportioned.forEach((line,index)=>{
+          const share=(basis[index]||0)/basisTotal;
+          line.netMassKg=Math.round(totalNetForApportion*share*1000)/1000;
+          line._weightApportionment="Derived from document-level total using line-value allocation";
+        });
         const roundedBeforeLast=apportioned.slice(0,-1).reduce((sum,line)=>sum+toNumber(line.netMassKg),0);
         apportioned[apportioned.length-1].netMassKg=Math.round((totalNetForApportion-roundedBeforeLast)*1000)/1000;
       }
+
+      // Gross weight follows the established rule: allocate by the derived
+      // net-weight ratio, rather than independently using line value.
       if(allGrossMissing&&totalGrossForApportion!==null){
+        const netBasis=apportioned.map(line=>toNumber(line.netMassKg));
+        const netBasisTotal=netBasis.every(v=>v!==null&&v>=0)&&netBasis.some(v=>v>0)
+          ? netBasis.reduce((sum,v)=>sum+(v||0),0)
+          : basisTotal;
+        apportioned.forEach((line,index)=>{
+          const share=netBasisTotal>0
+            ? (netBasis[index]||0)/netBasisTotal
+            : (basis[index]||0)/basisTotal;
+          line.grossMassKg=Math.round(totalGrossForApportion*share*1000)/1000;
+          line._weightApportionment=line._weightApportionment||"Derived from document-level total using line-value allocation";
+        });
         const roundedBeforeLast=apportioned.slice(0,-1).reduce((sum,line)=>sum+toNumber(line.grossMassKg),0);
         apportioned[apportioned.length-1].grossMassKg=Math.round((totalGrossForApportion-roundedBeforeLast)*1000)/1000;
       }
+
       mergedLines.splice(0,mergedLines.length,...apportioned);
     }
 
