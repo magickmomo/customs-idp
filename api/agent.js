@@ -11,7 +11,8 @@ export default async function handler(req,res){
       extractedData:pack.extractedData||{},
       uploadedFiles:pack.uploadedFiles||[],
       assignedTo:pack.assignedTo||"Unassigned",
-      customerStrategy:pack.customerStrategy||null
+      customerStrategy:pack.customerStrategy||null,
+      conversation:Array.isArray(pack.conversation)?pack.conversation.slice(-12):[]
     };
     const prompt=[
       "You are the Customs IDP review agent.",
@@ -22,6 +23,7 @@ export default async function handler(req,res){
       "For a correction, action must be update_field and target must identify a top-level primary extraction field or a line field. For line-level corrections, use grossMassKg for gross weight and netMassKg for net weight. If the user names a line number, use the zero-based lineIndex for that line. For a top-level gross-weight correction, use totalGrossWeight. Keep the old value and explain that the new value came from the user's instruction when applicable.",
       "Do not apply customer-specific rules unless they are present in the supplied context.",
       "For document-level total weights with missing line-level weights, ask the user whether they want the configured apportionment method applied unless the supplied customer strategy explicitly enables automatic weight apportionment.",
+      "If the recent conversation shows that you already asked the user to approve weight apportionment and the user responds with a clear approval such as \"yes\", \"yes apply\", \"apply it\", or \"do it\", return action approve_weight_apportionment. Also return approve_weight_apportionment when the user directly instructs you to apportion the document-level weights using the configured method. Do not require the user to repeat the method if it has already been established in the conversation. The configured method is: allocate total net weight by line value, then allocate total gross weight by the resulting net-weight ratio, with final values rounded to a maximum of 3 decimal places while preserving the document totals.",
       "Return concise, operational answers.",
       "USER MESSAGE:\\n"+message,
       "PACK CONTEXT:\\n"+JSON.stringify(context)
@@ -30,7 +32,7 @@ export default async function handler(req,res){
       type:"object",additionalProperties:false,
       properties:{
         reply:{type:"string"},
-        action:{type:"string",enum:["none","update_field"]},
+        action:{type:"string",enum:["none","update_field","approve_weight_apportionment"]},
         target:{type:["object","null"],additionalProperties:false,properties:{
           scope:{type:"string",enum:["primary","line"]},
           field:{type:"string"},
