@@ -581,7 +581,7 @@ const postToLCA=()=>{
         {page==="dashboard" && <Dashboard navigate={navigate} notify={notify} livePacks={livePacks}/>}
         {page==="inbox" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{setSelectedPack(p);navigate("review")}} onUpload={handleUpload} onAssign={assignPack}/>}
         
-        {page==="review" && <Review pack={selectedPack} back={()=>navigate("inbox")} notify={notify} onAssign={assignPack} updatePack={updatePack} validatePack={validatePack} postToLCA={postToLCA} reprocessPack={reprocessPack}/>}
+        {page==="review" && <Review pack={selectedPack} back={()=>navigate("inbox")} notify={notify} onAssign={assignPack} updatePack={updatePack} validatePack={validatePack} postToLCA={postToLCA} reprocessPack={reprocessPack} persistValidatedPack={persistValidatedPack}/>}
         {page==="customers" && <Customers notify={notify}/>}
         {page==="agent" && <AgentPage/>}
         {page==="settings" && <SettingsPage/>}
@@ -762,7 +762,7 @@ function reconcilePackDocuments(pack){
   return {status:conflicts.length?"conflict":"pass",summary:conflicts.length?(conflicts.length+" cross-document conflict"+(conflicts.length===1?"":"s")+" found."):"Extracted document values reconcile with no conflicts detected.",checks,conflicts,documentCount:docs.length};
 }
 
-function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,reprocessPack}){
+function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,reprocessPack,persistValidatedPack}){
  const [docUrls,setDocUrls]=useState({});
  const [chat,setChat]=useState("");
  const [messages,setMessages]=useState([]);
@@ -1052,7 +1052,8 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
    const next={...pack,extractedData:data,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
    updatePack?.(next);
    notify?.("Weight apportionment approved — validating the derived line weights");
-   setTimeout(()=>persistValidatedPack(next,true),0);
+   if(typeof persistValidatedPack==="function") setTimeout(()=>persistValidatedPack(next,true),0);
+   else notify?.("Weight apportionment saved — press Validate data to run the checks");
  };
  const declineWeightApportionment=()=>{
    const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
