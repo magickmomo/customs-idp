@@ -201,18 +201,49 @@ function App(){
       const extractedDocuments=[];
       for(const uploaded of files){
         let source=null;
-        if(uploaded.storagePath){const sr=await fetch("/api/storage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"signed-url",path:uploaded.storagePath})});const sd=await sr.json();if(!sr.ok)throw new Error(sd.error||"Stored document could not be opened");const fr=await fetch(sd.signedUrl);if(!fr.ok)throw new Error("Stored document could not be downloaded");source=await fr.blob();}else source=await getUploadedDocument(uploaded.id);
+        if(uploaded.storagePath){
+          const sr=await fetch("/api/storage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"signed-url",path:uploaded.storagePath})});
+          const sd=await sr.json().catch(()=>({}));
+          if(!sr.ok)throw new Error("Storage access failed for "+uploaded.name+": "+(sd.error||("HTTP "+sr.status)));
+          if(!sd.signedUrl)throw new Error("Storage access failed for "+uploaded.name+": no signed URL was returned");
+          const fr=await fetch(sd.signedUrl);
+          if(!fr.ok)throw new Error("Document download failed for "+uploaded.name+": HTTP "+fr.status);
+          source=await fr.blob();
+        }else{
+          source=await getUploadedDocument(uploaded.id);
+        }
         if(!source)throw new Error("Uploaded document is unavailable: "+uploaded.name);
-        const bytes=new Uint8Array(await source.arrayBuffer());let binary="";for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+0x8000,bytes.length)));
-        const response=await fetch("/api/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({fileData:"data:"+(source.type||uploaded.type||"application/octet-stream")+";base64,"+btoa(binary),filename:uploaded.name,mimeType:source.type||uploaded.type})});
-        const result=await response.json();if(!response.ok)throw new Error(result.error||("Extraction failed for "+uploaded.name));
-        extractedDocuments.push({id:uploaded.id,filename:uploaded.name,mimeType:source.type||uploaded.type,extraction:result.extraction});
+
+        let binary="";
+        try{
+          const bytes=new Uint8Array(await source.arrayBuffer());
+          for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+0x8000,bytes.length)));
+        }catch(error){
+          throw new Error("Could not read document "+uploaded.name+": "+(error.message||"unknown read error"));
+        }
+
+        const mimeType=source.type||uploaded.type||"application/octet-stream";
+        const response=await fetch("/api/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({fileData:"data:"+mimeType+";base64,"+btoa(binary),filename:uploaded.name,mimeType})});
+        const result=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error("Extraction failed for "+uploaded.name+": "+(result.error||("HTTP "+response.status)));
+        if(!result.extraction)throw new Error("Extraction failed for "+uploaded.name+": no extraction result was returned");
+        extractedDocuments.push({id:uploaded.id,filename:uploaded.name,mimeType,extraction:result.extraction});
       }
       const confidences=extractedDocuments.map(d=>Number(d.extraction?.confidence)||0).filter(Boolean);
       const primaryDoc=extractedDocuments.find(d=>d.extraction?.documentType==="commercial_invoice")||extractedDocuments[0];
       const processed={...processing,status:"Needs review",confidence:confidences.length?Math.round(confidences.reduce((a,b)=>a+b,0)/confidences.length*100):0,extractedData:{...(primaryDoc?.extraction||{}),documents:extractedDocuments,documentCount:extractedDocuments.length,sourceDocuments:extractedDocuments.map(d=>({id:d.id,filename:d.filename,mimeType:d.mimeType,documentType:d.extraction?.documentType||"unknown",confidence:d.extraction?.confidence||0})),agentMessages:[],extractionRunId:new Date().toISOString()}};
-      const validated=buildValidatedPack(processed);setSelectedPack(validated);setLivePacks(prev=>prev.map(p=>p.id===validated.id?validated:p));persistPack(validated);notify("Re-processing complete — "+extractedDocuments.length+" documents extracted and validation completed");
-    }catch(error){const failed={...processing,status:"Needs review",processingError:error.message};setSelectedPack(failed);setLivePacks(prev=>prev.map(p=>p.id===failed.id?failed:p));persistPack(failed);notify("Re-processing failed — check the pack for details");}
+      const validated=buildValidatedPack(processed);
+      setSelectedPack(validated);setLivePacks(prev=>prev.map(p=>p.id===validated.id?validated:p));
+      const saved=await persistPack(validated);
+      if(!saved)throw new Error("Database save failed after re-processing completed");
+      notify("Re-processing complete — "+extractedDocuments.length+" documents extracted and validation completed");
+    }catch(error){
+      const message=error?.message||"Unknown re-processing error";
+      const failed={...processing,status:"Needs review",processingError:message};
+      setSelectedPack(failed);setLivePacks(prev=>prev.map(p=>p.id===failed.id?failed:p));
+      await persistPack(failed);
+      notify("Re-processing failed — "+message);
+    }
   };
 
   const handleUpload=async(files)=>{
