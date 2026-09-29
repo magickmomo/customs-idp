@@ -1051,7 +1051,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
              </div>
            </div>
            <div className="customs-header-table">
-             <div><span>Invoice No.</span><b>{s.invoice||"—"}</b></div>
+             <div><span>Invoice number</span><b>{s.invoice||"—"}</b></div>
              <div><span>Currency</span><b>{s.currency||"—"}</b></div>
              <div><span>Invoice Value</span><b>{s.invoiceValue?((s.currency||"")+" "+s.invoiceValue):"—"}</b></div>
              <div><span>Export</span><b>{s.exportCountry||"—"}</b></div>
