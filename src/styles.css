@@ -1498,3 +1498,172 @@ body.review-resizing .review-horizontal-resizer span{
   font-size:10px;
   font-weight:700;
 }
+
+
+/* Desktop readability and monitor scaling pass */
+@media (min-width: 901px) {
+  html { font-size: 16px; }
+  body { font-size: 14px; }
+
+  .sidebar {
+    width: 270px;
+    padding: 24px 16px;
+  }
+  .main {
+    margin-left: 270px;
+    width: calc(100% - 270px);
+    min-width: 0;
+  }
+  .topbar {
+    height: 68px;
+    padding: 0 34px;
+  }
+  .content {
+    width: 100%;
+    max-width: 1900px;
+    padding: 34px 38px 44px;
+  }
+
+  .brand strong { font-size: 16px; }
+  .brand span, .workspace span, .system-status span { font-size: 11px; }
+  .workspace { padding: 11px; font-size: 12px; }
+  .workspace b { font-size: 12px; }
+  .nav-item { padding: 12px; font-size: 14px; }
+  .nav-item em { font-size: 10px; }
+  .system-status b { font-size: 10px; }
+
+  .crumb { font-size: 13px; }
+  .page-head { margin-bottom: 28px; }
+  .eyebrow { font-size: 11px; }
+  .page-head h1 { font-size: 30px; }
+  .page-head p { font-size: 14px; line-height: 1.5; }
+
+  .primary, .secondary, .filter, .select {
+    min-height: 42px;
+    padding: 10px 15px;
+    font-size: 13px;
+    border-radius: 8px;
+  }
+
+  .metric-grid { gap: 16px; margin-bottom: 20px; }
+  .metric { padding: 19px; gap: 14px; }
+  .metric-copy span { font-size: 12px; }
+  .metric-copy strong { font-size: 26px; }
+  .metric-copy small { font-size: 11px; }
+
+  .panel-head { padding: 19px 21px; }
+  .panel h2 { font-size: 16px; }
+  .panel p { font-size: 12px; }
+  .select { padding: 8px 11px; }
+
+  th { font-size: 10px; padding: 13px 16px; }
+  td { font-size: 12px; padding: 15px 16px; }
+  td b { font-size: 12px; }
+  td small { font-size: 10px; }
+  .status { font-size: 11px; }
+  .confidence { font-size: 12px; }
+
+  .review-head { margin-bottom: 22px; }
+  .review-head h1 { font-size: 30px; }
+  .review-head p { font-size: 13px; }
+  .review-actions { gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+
+  .chat-review-full { border-radius: 15px; }
+  .chat-review-head { padding: 17px 20px; }
+  .chat-review-intro { padding: 13px 20px; font-size: 12px; line-height: 1.6; }
+  .chat-review-history {
+    padding: 24px 22px;
+    gap: 20px;
+    min-height: calc(100vh - 370px);
+  }
+  .chat-message-text {
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+  .chat-message-avatar {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
+    font-size: 10px;
+  }
+  .chat-message-content { max-width: calc(100% - 44px); }
+  .chat-source, .chat-source button { font-size: 11px; }
+  .chat-review-input { padding: 12px; }
+  .chat-review-input input { height: 42px; font-size: 13px; }
+  .chat-review-input button { width: 42px; height: 42px; }
+
+  .extraction-summary-card { padding: 20px; }
+  .summary-kicker { font-size: 11px; }
+  .extraction-summary-head h3 { font-size: 16px; }
+  .summary-meta span { font-size: 12px; padding: 7px 9px; }
+  .summary-total-grid { gap: 10px; }
+  .summary-total-grid small { font-size: 11px; }
+  .summary-total-grid b { font-size: 13px; }
+  .summary-section-title { font-size: 12px; }
+  .summary-line-main>b { font-size: 12px; }
+  .summary-line-main span { font-size: 11px; }
+
+  .customs-summary-title { padding: 18px 20px; }
+  .customs-summary-title h3 { font-size: 17px; }
+  .customs-summary-title .summary-status { font-size: 12px; }
+  .customs-party-card { padding: 15px 18px; }
+  .customs-party-label { font-size: 11px; }
+  .customs-party-card>b { font-size: 14px; }
+  .customs-address-block { font-size: 13px; line-height: 1.5; gap: 3px; }
+  .customs-header-table>div { padding: 12px 14px; }
+  .customs-header-table span { font-size: 11px; }
+  .customs-header-table b { font-size: 14px; }
+  .customs-summary-section { padding: 17px 20px; }
+  .customs-line-table { font-size: 12px; }
+  .customs-line-table th { font-size: 10px; }
+  .customs-line-table th, .customs-line-table td { padding: 11px 12px; }
+
+  .validation-summary-card .customs-summary-title { padding: 17px 20px 16px; }
+  .validation-summary-card .summary-kicker { font-size: 10px; }
+  .validation-summary-card .customs-summary-title h3 { font-size: 17px; }
+  .validation-group-title { min-height: 46px; padding: 0 20px; font-size: 13px; }
+  .validation-check-list { padding: 0 20px; }
+  .validation-check { grid-template-columns: 28px minmax(0,1fr); gap: 11px; padding: 12px 0; }
+  .validation-check>span { width: 24px; height: 24px; font-size: 12px; }
+  .validation-check b { font-size: 13px; }
+  .validation-check small { font-size: 12px; line-height: 1.5; }
+  .validation-details summary { min-height: 46px; padding: 0 20px; font-size: 12px; }
+
+  .customer-grid, .agent-page-grid, .settings-grid { gap: 18px; }
+  .customer-card { padding: 20px; }
+  .customer-card h3 { font-size: 16px; }
+  .customer-info div { font-size: 11px; }
+  .full-btn { padding: 10px; font-size: 11px; }
+
+  .capability { padding: 15px 20px; font-size: 12px; }
+  .chat-large { min-height: 500px; }
+  .chat-large .agent-title { padding: 20px; }
+  .suggestions button { padding: 9px 11px; font-size: 10px; }
+
+  .settings-card { padding: 22px; }
+  .settings-card>label { font-size: 11px; }
+  .settings-card>input, .settings-card>select { padding: 11px; font-size: 11px; }
+  .toggle-row { padding: 15px 0; font-size: 12px; }
+}
+
+/* Larger monitors: use the screen rather than leaving a narrow central canvas */
+@media (min-width: 1600px) {
+  .content, .review-chat-page {
+    max-width: none;
+  }
+  .content {
+    padding-left: 42px;
+    padding-right: 42px;
+  }
+}
+
+/* Prevent the review header from being squeezed on wide screens */
+@media (min-width: 901px) {
+  .review-head > div:first-child {
+    min-width: 260px;
+  }
+  .review-actions {
+    max-width: 70%;
+  }
+}
