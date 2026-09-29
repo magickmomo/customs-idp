@@ -1904,3 +1904,16 @@ body {
     display: block;
   }
 }
+
+/* Keep unused customs header grid space white when fewer fields are present. */
+.customs-header-table{
+  gap:0;
+  background:#fff;
+}
+.customs-header-table>div{
+  border-right:1px solid #e5e7eb;
+  border-bottom:1px solid #e5e7eb;
+}
+.customs-header-table>div:nth-child(4n){
+  border-right:0;
+}
