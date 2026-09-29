@@ -41,6 +41,36 @@ const TEST_USERS=[
   {id:"processor2",name:"Data Processor 2",role:"user",initials:"P2"}
 ];
 
+function PasswordLogin({onSuccess}){
+  const [password,setPassword]=useState("");
+  const [error,setError]=useState("");
+  const [busy,setBusy]=useState(false);
+  const submit=async(e)=>{
+    e.preventDefault();
+    setError("");
+    setBusy(true);
+    try{
+      const response=await fetch("/api/auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password})});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||"Unable to sign in");
+      onSuccess();
+    }catch(error){setError(error.message||"Unable to sign in");}
+    finally{setBusy(false);}
+  };
+  return <div className="test-login">
+    <div className="test-login-card">
+      <div className="test-login-brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div>
+      <div className="test-login-copy"><div className="eyebrow">Secure access</div><h1>Enter password</h1><p>This system is restricted. Enter the access password to continue.</p></div>
+      <form onSubmit={submit} className="password-login-form">
+        <label>Password</label>
+        <input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoFocus autoComplete="current-password" placeholder="Enter access password"/>
+        {error&&<div className="password-login-error">{error}</div>}
+        <button className="primary-action password-login-submit" type="submit" disabled={busy||!password}>{busy?"Signing in…":"Sign in"}</button>
+      </form>
+    </div>
+  </div>;
+}
+
 function TestUserLogin({onSelect}){
   return <div className="test-login">
     <div className="test-login-card">
@@ -58,6 +88,15 @@ function TestUserLogin({onSelect}){
 }
 
 function App(){
+  const [authenticated,setAuthenticated]=useState(null);
+  useEffect(()=>{
+    let active=true;
+    fetch("/api/auth",{credentials:"include"})
+      .then(response=>response.json())
+      .then(data=>{if(active)setAuthenticated(Boolean(data.authenticated));})
+      .catch(()=>{if(active)setAuthenticated(false);});
+    return()=>{active=false;};
+  },[]);
   const [currentUser,setCurrentUser]=useState(()=>{
     try{
       const saved=localStorage.getItem("customs-idp-user");
@@ -81,6 +120,7 @@ function App(){
   });
   const [dataSource,setDataSource]=useState("local");
   useEffect(()=>{
+    if(authenticated!==true)return;
     let active=true;
     (async()=>{
       try {
@@ -132,7 +172,7 @@ function App(){
       } catch { /* keep local prototype data until database credentials are configured */ }
     })();
     return()=>{active=false;};
-  },[]);
+  },[authenticated]);
   useEffect(()=>{ try { localStorage.setItem("customs-idp-packs",JSON.stringify(livePacks)); } catch {} },[livePacks]);
   const persistPack=async(pack)=>{
     try{
@@ -407,6 +447,8 @@ const postToLCA=()=>{
   navigate("inbox");
 };
 
+  if(authenticated===null)return <div className="test-login"><div className="test-login-card"><div className="test-login-brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><div className="test-login-copy"><div className="eyebrow">Secure access</div><h1>Checking access…</h1><p>Please wait.</p></div></div></div>;
+  if(!authenticated)return <PasswordLogin onSuccess={()=>setAuthenticated(true)}/>;
   if(!currentUser)return <TestUserLogin onSelect={user=>{
     setCurrentUser(user);
     try{localStorage.setItem("customs-idp-user",user.id);}catch{}
