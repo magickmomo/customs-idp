@@ -5,6 +5,12 @@ const IM_PROCEDURE=/^\d{10}$/;
 
 const hasValue=value=>value!==undefined&&value!==null&&String(value).trim()!=="";
 const text=value=>String(value??"").trim();
+const normalizeCountryCode=value=>{
+  const raw=text(value);
+  const upper=raw.toUpperCase();
+  const map={"UNITED KINGDOM":"GB","GREAT BRITAIN":"GB","UK":"GB","ENGLAND":"GB","SCOTLAND":"GB","WALES":"GB","NORTHERN IRELAND":"GB"};
+  return map[upper]||upper;
+};
 const numberValue=value=>{
   if(value===undefined||value===null||value==="") return null;
   const n=Number(String(value).replace(/,/g,""));
@@ -48,8 +54,8 @@ export function validateStandardCustomsRecord(data={}){
   const pass=(...args)=>checks.push(result(...args));
   const review=(...args)=>checks.push(result(...args));
 
-  const countryExport=text(data.countryOfExport||data.exporterCountryIso).toUpperCase();
-  const destination=text(data.sourceCountryOfDestination||data.countryOfDestination).toUpperCase();
+  const countryExport=normalizeCountryCode(data.countryOfExport||data.exporterCountryIso);
+  const destination=normalizeCountryCode(data.sourceCountryOfDestination||data.countryOfDestination);
   const currency=text(data.currency).toUpperCase();
   const invoiceNumber=text(data.invoiceNumber);
   const exporter=text(data.exporterName||data.exporter);
@@ -88,8 +94,8 @@ export function validateStandardCustomsRecord(data={}){
     }
   });
 
-  const exporterCountry=text(data.exporterCountryIso).toUpperCase();
-  const consigneeCountry=text(data.consigneeCountryIso).toUpperCase();
+  const exporterCountry=normalizeCountryCode(data.exporterCountryIso);
+  const consigneeCountry=normalizeCountryCode(data.consigneeCountryIso);
   [["Exporter country ISO","exporterCountryIso",exporterCountry],["Consignee country ISO","consigneeCountryIso",consigneeCountry]].forEach(([label,field,value])=>{
     if(!hasValue(value)) review(label,field,"review",value,"two-letter ISO code","Country ISO was not extracted; confirm the source document before posting.");
     else if(!ISO2.test(value)) fail(label,field,"fail",value,"two-letter ISO code","Country ISO must contain exactly two letters.");
@@ -100,7 +106,7 @@ export function validateStandardCustomsRecord(data={}){
   const exporterAddressLine1=text(data.exporterAddressLine1);
   const exporterPostcode=text(data.exporterPostcode);
   const exporterCity=text(data.exporterCity);
-  const exporterAddressCountry=text(data.exporterCountryIso).toUpperCase();
+  const exporterAddressCountry=normalizeCountryCode(data.exporterCountryIso);
 
   // Use only components that can be identified directly from the visible address.
   // Do not infer a city from a street/business name.
@@ -153,7 +159,7 @@ export function validateStandardCustomsRecord(data={}){
     const prefix="Line "+(index+1);
     const description=text(line.description);
     const hs=text(line.hsCode).replace(/\s+/g,"");
-    const origin=text(line.sourceCountryCode||line.countryOfOrigin).toUpperCase();
+    const origin=normalizeCountryCode(line.sourceCountryCode||line.countryOfOrigin);
     const quantity=numberValue(line.quantity);
     const amount=numberValue(line.totalValue??line.lineValue??line.unitValue);
     const lineCurrency=text(line.currency||currency).toUpperCase();
