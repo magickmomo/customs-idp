@@ -762,7 +762,7 @@ function reconcilePackDocuments(pack){
   return {status:conflicts.length?"conflict":"pass",summary:conflicts.length?(conflicts.length+" cross-document conflict"+(conflicts.length===1?"":"s")+" found."):"Extracted document values reconcile with no conflicts detected.",checks,conflicts,documentCount:docs.length};
 }
 
-function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,reprocessPack,persistValidatedPack}){
+function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePack,postToLCA,reprocessPack,persistValidatedPack}){
  const [docUrls,setDocUrls]=useState({});
  const [chat,setChat]=useState("");
  const [messages,setMessages]=useState([]);
