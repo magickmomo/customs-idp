@@ -1099,8 +1099,9 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
    return <div className={"chat-message-row "+(m.type||"agent")} key={i}><div className="chat-message-avatar">{m.type==="user"?"You":<Sparkles size={15}/>}</div><div className="chat-message-content"><div className="chat-message-text">{m.text}</div>{source&&<div className="chat-source">{source}</div>}</div></div>;
  };
 
- const summaryHeaderData=pack.workingRecord||pack.extractedData||{};
- const summaryInvoiceNumber=summaryHeaderData.invoiceNumber||summaryHeaderData.invoiceNo||summaryHeaderData.invoice||"—";
+ const summaryHeaderData=pack.workingRecord||{};
+ const summaryFallbackData=pack.extractedData||{};
+ const summaryInvoiceNumber=summaryHeaderData.invoiceNumber||summaryHeaderData.invoiceNo||summaryHeaderData.invoice||summaryFallbackData.invoiceNumber||summaryFallbackData.invoiceNo||summaryFallbackData.invoice||"—";
 
  return <section className="review-chat-page">
    <button className="back" onClick={back}>← Back to inbox</button>
