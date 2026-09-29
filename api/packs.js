@@ -1,4 +1,6 @@
+import { requireAuth } from "./authGuard.js";
 export default async function handler(req,res){
+  if(!requireAuth(req,res))return;
   if(req.method==="GET"){
     try{
       const rows=await supabaseFetch("document_packs?select=*&order=created_at.desc");
