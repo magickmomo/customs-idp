@@ -297,6 +297,17 @@ The downstream workflow will use this extraction as the canonical source layer b
       }
       return null;
     };
+    const normalizeCountryCode=value=>{
+      const raw=String(value??"").trim();
+      const upper=raw.toUpperCase();
+      const map={"UNITED KINGDOM":"GB","GREAT BRITAIN":"GB","UK":"GB","ENGLAND":"GB","SCOTLAND":"GB","WALES":"GB","NORTHERN IRELAND":"GB"};
+      return map[upper]||upper;
+    };
+    ["countryOfExport","sourceCountryOfDestination","exporterCountryIso","consigneeCountryIso"].forEach(field=>{
+      if(extraction[field]) extraction[field]=normalizeCountryCode(extraction[field]);
+    });
+    if(Array.isArray(extraction.lines)) extraction.lines=extraction.lines.map(line=>line?.sourceCountryCode?{...line,sourceCountryCode:normalizeCountryCode(line.sourceCountryCode)}:line);
+
     if(!extraction.exporterCity){
       const derivedCity=deriveCityFromAddress(extraction.exporterAddress,extraction.exporterAddressLine1,extraction.exporterPostcode,extraction.exporterCountryIso);
       if(derivedCity)extraction.exporterCity=derivedCity;
