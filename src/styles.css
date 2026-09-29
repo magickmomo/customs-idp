@@ -1757,3 +1757,98 @@ body {
     font-size: 11px;
   }
 }
+
+
+/* Dedicated customs summary viewer */
+.customs-summary-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  background: rgba(15, 23, 42, .46);
+  backdrop-filter: blur(4px);
+}
+
+.customs-summary-modal {
+  width: min(1180px, 94vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, .10);
+  border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .22);
+}
+
+.customs-summary-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e8edf3;
+  background: #fff;
+}
+
+.customs-summary-modal-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.customs-summary-modal-head b {
+  font-size: 15px;
+  font-weight: 650;
+  color: #172033;
+}
+
+.customs-summary-modal-body {
+  overflow: auto;
+  padding: 22px;
+  background: #f7f9fc;
+}
+
+.customs-summary-modal-body .chat-message-row {
+  margin: 0;
+}
+
+.customs-summary-modal-body .chat-message-avatar {
+  display: none;
+}
+
+.customs-summary-modal-body .chat-message-content {
+  width: 100%;
+  max-width: none;
+}
+
+.customs-summary-modal-body .customs-entry-summary-card {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.review-show-summary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+@media (max-width: 900px) {
+  .customs-summary-modal-overlay {
+    padding: 12px;
+  }
+
+  .customs-summary-modal {
+    width: 100%;
+    max-height: 94vh;
+    border-radius: 12px;
+  }
+
+  .customs-summary-modal-body {
+    padding: 14px;
+  }
+}
