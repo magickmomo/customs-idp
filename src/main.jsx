@@ -360,10 +360,10 @@ function App(){
     if(!invoiceDoc)return primary;
 
     const invoice={...primary};
+    const isMissing=v=>v===undefined||v===null||v==="";
     ["countryOfExport","sourceCountryOfDestination","exporterCountryIso","consigneeCountryIso"].forEach(field=>{
       if(!isMissing(invoice[field])) invoice[field]=normalizeCountryCode(invoice[field]);
     });
-    const isMissing=v=>v===undefined||v===null||v==="";
 
     // The primary document always wins. Supporting documents only fill fields
     // that are genuinely absent from the primary extraction.
