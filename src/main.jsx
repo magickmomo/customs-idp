@@ -1039,7 +1039,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
                </div>
              </div>
              <div className="customs-party-card">
-               <span className="customs-party-label">Consignee</span>
+               <span className="customs-party-label">Importer</span>
                <b>{s.consignee||"—"}</b>
                <div className="customs-address-block">
                  {s.consigneeAddressLine1
