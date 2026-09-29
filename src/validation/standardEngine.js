@@ -59,6 +59,7 @@ export function validateStandardCustomsRecord(data={}){
   const docs=Array.isArray(data?.documents)?data.documents:[];
   const packingDoc=docs.find(d=>/packing/i.test(d?.filename||""))||docs.find(d=>d?.extraction?.documentType==="packing_list");
   const totalGross=numberValue(selectedWeightSource==="packing_list"?packingDoc?.extraction?.totalGrossWeight:data.totalGrossWeight);
+  const totalNet=numberValue(selectedWeightSource==="packing_list"?packingDoc?.extraction?.totalNetWeight:data.totalNetWeight);
   const totalPackages=numberValue(data.totalPackages);
 
   const requiredHeader=[
@@ -225,10 +226,26 @@ export function validateStandardCustomsRecord(data={}){
     else pass("Weight source decision","weightSourceDecision","pass",selectedWeightSource||"No discrepancy","No unresolved weight discrepancy","No conflicting line-level weights were found between the available documents.");
   }
 
+  if(lines.length&&totalNet!==null){
+    const missingNetLines=lines.map((line,index)=>numberValue(line._netMass)===null?index+1:null).filter(Boolean);
+    if(missingNetLines.length){
+      review("Net weight line discrepancy","netMass_SAD38","review",missingNetLines.join(", "),"Every item line has net weight when a total net weight exists","Total net weight ("+totalNet+" kg) exists, but net weight is missing from item line(s): "+missingNetLines.join(", ")+". Confirm the source document before posting.",{lineNumbers:missingNetLines,expected:totalNet});
+    }else{
+      const difference=Math.abs(lineNet-totalNet);
+      if(difference>0.01) fail("Net weight total reconciliation","totalNetWeight","fail",`${lineNet} vs ${totalNet}`,"line net total matches header total","Working line net weight total does not reconcile to the header net weight.",{expected:totalNet});
+      else pass("Net weight total reconciliation","totalNetWeight","pass",lineNet,"line net total matches header total","Working line net weight total reconciles to the header net weight.");
+    }
+  }
+
   if(lines.length&&totalGross!==null){
-    const difference=Math.abs(lineGross-totalGross);
-    if(difference>0.01) fail("Gross weight total reconciliation","totalGrossWeight","fail",`${lineGross} vs ${totalGross}`,"line gross total matches header total","Working line gross weight total does not reconcile to the header gross weight.",{expected:totalGross});
-    else pass("Gross weight total reconciliation","totalGrossWeight","pass",lineGross,"line gross total matches header total","Working line gross weight total reconciles to the header gross weight.");
+    const missingGrossLines=lines.map((line,index)=>numberValue(line._grossMass)===null?index+1:null).filter(Boolean);
+    if(missingGrossLines.length){
+      review("Gross weight line discrepancy","grossMass_SAD35","review",missingGrossLines.join(", "),"Every item line has gross weight when a total gross weight exists","Total gross weight ("+totalGross+" kg) exists, but gross weight is missing from item line(s): "+missingGrossLines.join(", ")+". Confirm the source document before posting.",{lineNumbers:missingGrossLines,expected:totalGross});
+    }else{
+      const difference=Math.abs(lineGross-totalGross);
+      if(difference>0.01) fail("Gross weight total reconciliation","totalGrossWeight","fail",`${lineGross} vs ${totalGross}`,"line gross total matches header total","Working line gross weight total does not reconcile to the header gross weight.",{expected:totalGross});
+      else pass("Gross weight total reconciliation","totalGrossWeight","pass",lineGross,"line gross total matches header total","Working line gross weight total reconciles to the header gross weight.");
+    }
   }
 
   const invoiceTotal=numberValue(data.totalInvoicedAmount??data.totalAmountInvoiced??data.totalInvoiceValue);
