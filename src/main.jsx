@@ -430,6 +430,50 @@ function App(){
       return mergedLine;
     });
 
+    // If only document-level totals are available, derive line weights using
+    // the established apportionment rule rather than treating the lines as missing.
+    // Prefer line value as the allocation basis; fall back to quantity, then equal split.
+    const toNumber=value=>{
+      const n=Number(String(value??"").replace(/,/g,"").trim());
+      return Number.isFinite(n)?n:null;
+    };
+    const totalNetForApportion=toNumber(merged.totalNetWeight);
+    const totalGrossForApportion=toNumber(merged.totalGrossWeight);
+    const allNetMissing=mergedLines.length>0&&mergedLines.every(line=>isMissing(line.netMassKg)&&isMissing(line.netWeight)&&isMissing(line.netMass));
+    const allGrossMissing=mergedLines.length>0&&mergedLines.every(line=>isMissing(line.grossMassKg)&&isMissing(line.grossWeight)&&isMissing(line.grossMass));
+    const allocationBasis=mergedLines.map(line=>toNumber(line.totalValue??line.lineValue??line.unitValue));
+    const quantityBasis=mergedLines.map(line=>toNumber(line.quantity));
+    const basis=allocationBasis.every(v=>v!==null&&v>=0)&&allocationBasis.some(v=>v>0)
+      ? allocationBasis
+      : quantityBasis.every(v=>v!==null&&v>=0)&&quantityBasis.some(v=>v>0)
+        ? quantityBasis
+        : mergedLines.map(()=>1);
+    const basisTotal=basis.reduce((sum,v)=>sum+(v||0),0);
+
+    if((allNetMissing&&totalNetForApportion!==null&&basisTotal>0)||(allGrossMissing&&totalGrossForApportion!==null&&basisTotal>0)){
+      const apportioned=mergedLines.map((line,index)=>{
+        const share=(basis[index]||0)/basisTotal;
+        return {
+          ...line,
+          ...(allNetMissing&&totalNetForApportion!==null?{netMassKg:Math.round(totalNetForApportion*share*1000)/1000}:{}),
+          ...(allGrossMissing&&totalGrossForApportion!==null?{grossMassKg:Math.round(totalGrossForApportion*share*1000)/1000}:{}),
+          _weightApportionment:"Derived from document-level total using line-value allocation"
+        };
+      });
+
+      // Correct rounding on the final line so the derived line total exactly
+      // reconciles to the document-level total.
+      if(allNetMissing&&totalNetForApportion!==null){
+        const roundedBeforeLast=apportioned.slice(0,-1).reduce((sum,line)=>sum+toNumber(line.netMassKg),0);
+        apportioned[apportioned.length-1].netMassKg=Math.round((totalNetForApportion-roundedBeforeLast)*1000)/1000;
+      }
+      if(allGrossMissing&&totalGrossForApportion!==null){
+        const roundedBeforeLast=apportioned.slice(0,-1).reduce((sum,line)=>sum+toNumber(line.grossMassKg),0);
+        apportioned[apportioned.length-1].grossMassKg=Math.round((totalGrossForApportion-roundedBeforeLast)*1000)/1000;
+      }
+      mergedLines.splice(0,mergedLines.length,...apportioned);
+    }
+
     merged.lines=mergedLines;
     merged.workingRecordSource="primary invoice + supporting documents";
     merged.sourceDiscrepancies=sourceDiscrepancies;
