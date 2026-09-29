@@ -144,21 +144,6 @@ function App(){
       const local=localPackMap.get(pack.id);
       return pack.uploadedFiles?.length ? pack : (local?.uploadedFiles?.length ? {...pack,uploadedFiles:local.uploadedFiles} : pack);
     });
-    try{
-      const resetKey="customs-idp-inbox-reset-v2";
-      if(!localStorage.getItem(resetKey)){
-        nextPacks=nextPacks.map(pack=>({
-          ...pack,
-          status:pack.status==="Validated"||pack.status==="Posted to LCA"?"Needs review":pack.status,
-          processingCompletedAt:undefined,
-          validationStatus:undefined,
-          validationChecks:undefined,
-          postedToLCAAt:undefined
-        }));
-        await Promise.all(nextPacks.map(pack=>fetch("/api/packs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pack)})));
-        localStorage.setItem(resetKey,"1");
-      }
-    }catch{}
     setLivePacks(nextPacks);
     // Backfill document metadata to Supabase for packs restored from local browser storage.
     const restoredWithDocuments=nextPacks.filter(pack=>{
