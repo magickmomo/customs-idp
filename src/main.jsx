@@ -299,8 +299,10 @@ function App(){
     });
     const first=(...keys)=>{
       for(const key of keys){
-        const v=invoice[key]??packingDoc.extraction?.[key];
-        if(v!==undefined&&v!==null&&v!=="")return v;
+        const primary=invoice[key];
+        if(primary!==undefined&&primary!==null&&primary!=="")return primary;
+        const supporting=packingDoc.extraction?.[key];
+        if(supporting!==undefined&&supporting!==null&&supporting!=="")return supporting;
       }
       return undefined;
     };
@@ -625,7 +627,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
  const buildSummary=()=>{
    const docs=extractedDocuments;
    const invoiceDoc=docs.find(d=>d.extraction?.documentType==="commercial_invoice")||docs[0];
-   const workingData={...(pack.extractedData||{})};
+   const workingData={...(pack.workingRecord||pack.extractedData||{})};
    const hasOwn=(obj,key)=>Object.prototype.hasOwnProperty.call(obj,key);
    const primaryOverrides=Array.isArray(workingData.reviewOverrides)?workingData.reviewOverrides.filter(o=>o?.scope==="primary"&&o?.field):[];
    primaryOverrides.forEach(o=>{if(o.newValue!==undefined)workingData[o.field]=o.newValue;});
@@ -736,8 +738,8 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
          invoice:value(invoice.invoiceNumber),exporter:value(invoice.exporter),consignee:value(invoice.consignee),
          currency:value(invoice.currency),invoiceValue:value(invoice.totalInvoiceValue),exportCountry:value(invoice.countryOfExport),exporterAddress:value(invoice.exporterAddress),exporterAddressLine1:value(invoice.exporterAddressLine1),exporterPostcode:value(invoice.exporterPostcode),exporterCity:value(invoice.exporterCity),exporterCountryIso:value(invoice.exporterCountryIso),exporterEoriNo:value(invoice.exporterEoriNo),consigneeAddress:value(invoice.consigneeAddress),consigneeAddressLine1:value(invoice.consigneeAddressLine1),consigneePostcode:value(invoice.consigneePostcode),consigneeCity:value(invoice.consigneeCity),consigneeCountryIso:value(invoice.consigneeCountryIso),
          destination:value(invoice.sourceCountryOfDestination),packages:value(invoice.totalPackages),
-         gross:value(selectedWeightSource==="packing_list"?packingDoc?.extraction?.totalGrossWeight:(pack.extractedData?.totalGrossWeight??invoice.totalGrossWeight)),
-         net:value(selectedWeightSource==="packing_list"?packingDoc?.extraction?.totalNetWeight:(pack.extractedData?.totalNetWeight??invoice.totalNetWeight)),
+         gross:value(selectedWeightSource==="packing_list"?(packingDoc?.extraction?.totalGrossWeight??invoice.totalGrossWeight):invoice.totalGrossWeight),
+         net:value(selectedWeightSource==="packing_list"?(packingDoc?.extraction?.totalNetWeight??invoice.totalNetWeight):invoice.totalNetWeight),
          freightAmount:value(invoice.freightAmount),
          freightCurrency:value(invoice.freightCurrency||invoice.currency),
          freightExchangeRate:value(invoice.freightToInvoiceExchangeRate),
@@ -746,7 +748,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
        },
        persist:false
      },
-     {type:"validationSummary",checks:(()=>{const standard=validateStandardCustomsRecord(pack.extractedData||{});return standard.checks;})(),persist:false},
+     {type:"validationSummary",checks:Array.isArray(pack.validationChecks)?pack.validationChecks:validateStandardCustomsRecord(pack.workingRecord||pack.extractedData||{}).checks,persist:false},
      ...(conflicts.length&&!pack.extractedData?.weightSourceDecision?[{
        type:"weightDecision",
        text:"Weight discrepancy detected. The invoice and packing list contain different line-level weights. No value has been silently chosen.",
@@ -760,7 +762,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
    const weightResolved=Boolean(pack.extractedData?.weightSourceDecision?.source);
    const cleanedSaved=saved.filter(m=>!(weightResolved&&((m.type==="weightDecision")||/weight discrepancy detected/i.test(String(m.text||"")))));
    setMessages([...buildSummary().filter(m=>m.type!=="customsEntrySummary"),...cleanedSaved]);
- },[pack.id,pack.extractedData,pack.validationStatus,pack.validationChecks,extractedDocuments]);
+ },[pack.id,pack.extractedData,pack.workingRecord,pack.validationStatus,pack.validationChecks,extractedDocuments]);
  useEffect(()=>{if(!documentRows.length){setSelectedDocumentId(null);return;}setSelectedDocumentId(current=>documentRows.some(d=>(d.id||d.name)===current)?current:(documentRows[0].id||documentRows[0].name));},[pack.id,pack.uploadedFiles?.length]);
 
  const selectedDocument=documentRows.find(d=>(d.id||d.name)===selectedDocumentId)||documentRows[0];
