@@ -459,7 +459,8 @@ function App(){
         : mergedLines.map(()=>1);
     const basisTotal=basis.reduce((sum,v)=>sum+(v||0),0);
 
-    const weightApportionmentApproved = pack?.extractedData?.weightApportionmentDecision?.status==="approved" || getCustomerStrategy(pack?.customer).autoApplyWeightApportionment===true;\n    if(weightApportionmentApproved && ((allNetMissing&&totalNetForApportion!==null&&basisTotal>0)||(allGrossMissing&&totalGrossForApportion!==null&&basisTotal>0))){
+    const weightApportionmentApproved = pack?.extractedData?.weightApportionmentDecision?.status==="approved" || getCustomerStrategy(pack?.customer).autoApplyWeightApportionment===true;
+    if(weightApportionmentApproved && ((allNetMissing&&totalNetForApportion!==null&&basisTotal>0)||(allGrossMissing&&totalGrossForApportion!==null&&basisTotal>0))){
       const apportioned=mergedLines.map(line=>({...line}));
 
       // Net weight is allocated from the document total using line value
