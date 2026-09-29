@@ -1099,7 +1099,10 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
    return <div className={"chat-message-row "+(m.type||"agent")} key={i}><div className="chat-message-avatar">{m.type==="user"?"You":<Sparkles size={15}/>}</div><div className="chat-message-content"><div className="chat-message-text">{m.text}</div>{source&&<div className="chat-source">{source}</div>}</div></div>;
  };
 
- const summaryHeaderData=pack.workingRecord||pack.extractedData||{};\n const summaryInvoiceNumber=summaryHeaderData.invoiceNumber||summaryHeaderData.invoiceNo||summaryHeaderData.invoice||"—";\n\n return <section className="review-chat-page">
+ const summaryHeaderData=pack.workingRecord||pack.extractedData||{};
+ const summaryInvoiceNumber=summaryHeaderData.invoiceNumber||summaryHeaderData.invoiceNo||summaryHeaderData.invoice||"—";
+
+ return <section className="review-chat-page">
    <button className="back" onClick={back}>← Back to inbox</button>
    <div className="review-head"><div><div className="eyebrow">{pack.id} · {pack.ticket}</div><h1>{getPackCustomerLabel(pack)}</h1><p>{pack.docs} documents · received {pack.received}</p></div><div className="review-actions"><select className="owner-select review-owner" value={pack.assignedTo||"Unassigned"} onChange={e=>onAssign?.(pack.id,e.target.value)}><option>Unassigned</option><option>Liam Wingrove</option><option>Data Processor 1</option><option>Data Processor 2</option><option>Muhammad Amer</option></select><Status status={pack.status}/><button className="secondary" onClick={()=>reprocessPack?.(pack)}>Re-process</button><button className="secondary" onClick={validatePack}>Validate data</button><button className={pack.status==="Ready"?"primary":"secondary"} onClick={postToLCA}>Post to LCA</button></div></div>
    <div className="chat-review-panel chat-review-full">
