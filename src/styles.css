@@ -1852,3 +1852,10 @@ body {
     padding: 14px;
   }
 }
+
+
+/* Keep the customs summary perfectly centred inside its modal */
+.customs-summary-modal-body .chat-message-row {
+  width: 100%;
+  max-width: none;
+}
