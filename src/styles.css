@@ -1925,3 +1925,5 @@ body {
 .password-login-form input:focus{border-color:#667085;box-shadow:0 0 0 3px rgba(16,24,40,.08)}
 .password-login-submit{width:100%;justify-content:center;margin-top:4px}
 .password-login-error{font-size:13px;color:#b42318;background:#fef3f2;border:1px solid #fecdca;border-radius:8px;padding:9px 10px}
+
+.reprocess-error-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 20px 14px;padding:14px 16px;border:1px solid #fecaca;background:#fff7f7;border-radius:12px;color:#991b1b}.reprocess-error-banner>div{display:flex;flex-direction:column;gap:4px;min-width:0}.reprocess-error-banner b{font-size:13px}.reprocess-error-banner span{font-size:13px;line-height:1.45;overflow-wrap:anywhere}.reprocess-error-banner button{flex:0 0 auto}@media(max-width:700px){.reprocess-error-banner{align-items:stretch;flex-direction:column}.reprocess-error-banner button{width:100%}}
