@@ -34,6 +34,14 @@ const sampleLines = [
   {line:3,description:"Protective timber spacers",hs:"4415 10 90",origin:"HU",qty:18,net:"7.560",gross:"8.410",value:"216.00",confidence:94}
 ];
 
+
+const normalizeCountryCode=value=>{
+  const raw=String(value??"").trim();
+  const upper=raw.toUpperCase();
+  const map={"UNITED KINGDOM":"GB","GREAT BRITAIN":"GB","UK":"GB","ENGLAND":"GB","SCOTLAND":"GB","WALES":"GB","NORTHERN IRELAND":"GB"};
+  return map[upper]||upper;
+};
+
 const TEST_USERS=[
   {id:"liam",name:"Liam Wingrove",role:"manager",initials:"LW"},
   {id:"muhammad",name:"Muhammad Amer",role:"manager",initials:"MA"},
@@ -321,6 +329,9 @@ function App(){
     if(!invoiceDoc)return primary;
 
     const invoice={...primary};
+    ["countryOfExport","sourceCountryOfDestination","exporterCountryIso","consigneeCountryIso"].forEach(field=>{
+      if(!isMissing(invoice[field])) invoice[field]=normalizeCountryCode(invoice[field]);
+    });
     const isMissing=v=>v===undefined||v===null||v==="";
 
     // The primary document always wins. Supporting documents only fill fields
