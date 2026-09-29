@@ -1019,7 +1019,8 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
          maxDecimalPlaces:3
        };
        savedPack={...pack,extractedData:data,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
-       reply+=" I applied the configured weight apportionment method: net weight by line value, then gross weight by the resulting net-weight ratio, rounded to a maximum of 3 decimal places. I will now re-run validation.";
+       savedPack=buildValidatedPack(savedPack);
+       reply+=" I applied the configured weight apportionment method: net weight by line value, then gross weight by the resulting net-weight ratio, rounded to a maximum of 3 decimal places. The derived line weights have been applied and the pack has been revalidated.";
      }
      if(result.action==="update_field"&&result.target){
        const target={...result.target};
