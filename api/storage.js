@@ -1,3 +1,4 @@
+import { requireAuth } from "./authGuard.js";
 import { createClient } from "@supabase/supabase-js";
 
 const BUCKET="CUSTOMS-DOCUMENTS";
@@ -14,6 +15,7 @@ function cleanSegment(value){
 }
 
 export default async function handler(req,res){
+  if(!requireAuth(req,res))return;
   try{
     const supabase=getClient();
 
