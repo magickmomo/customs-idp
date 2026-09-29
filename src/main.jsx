@@ -1004,11 +1004,23 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
    const conversationBefore=[...messages,userMessage];
    setIsSending(true);setMessages([...conversationBefore,thinking]);setChat("");
    try{
-     const response=await fetch("/api/agent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:q,pack:{...pack,customerStrategy:getCustomerStrategy(pack.customer),extractedData:{...(pack.extractedData||{}),agentMessages:undefined}}})});
+     const response=await fetch("/api/agent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:q,pack:{...pack,customerStrategy:getCustomerStrategy(pack.customer),conversation:conversationBefore.slice(-12).map(m=>({type:m.type||"agent",text:m.text||""})),extractedData:{...(pack.extractedData||{}),agentMessages:undefined}}})});
      const result=await response.json();
      if(!response.ok)throw new Error(result.error||"Agent request failed");
      let reply=result.reply||"I couldn't produce an answer from the supplied pack.";
      let savedPack=pack;
+     if(result.action==="approve_weight_apportionment"){
+       const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
+       data.weightApportionmentDecision={
+         status:"approved",
+         approvedBy:currentUserName,
+         approvedAt:new Date().toISOString(),
+         method:"line-value net allocation, then net-ratio gross allocation",
+         maxDecimalPlaces:3
+       };
+       savedPack={...pack,extractedData:data,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
+       reply+=" I applied the configured weight apportionment method: net weight by line value, then gross weight by the resulting net-weight ratio, rounded to a maximum of 3 decimal places. I will now re-run validation.";
+     }
      if(result.action==="update_field"&&result.target){
        const target={...result.target};
        if(target.scope==="line"){
