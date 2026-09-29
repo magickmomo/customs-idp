@@ -693,6 +693,9 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
          destination:value(invoice.sourceCountryOfDestination),packages:value(invoice.totalPackages),
          gross:value(selectedWeightSource==="packing_list"?packingDoc?.extraction?.totalGrossWeight:(pack.extractedData?.totalGrossWeight??invoice.totalGrossWeight)),
          net:value(selectedWeightSource==="packing_list"?packingDoc?.extraction?.totalNetWeight:(pack.extractedData?.totalNetWeight??invoice.totalNetWeight)),
+         freightAmount:value(invoice.freightAmount),
+         freightCurrency:value(invoice.freightCurrency||invoice.currency),
+         freightExchangeRate:value(invoice.freightToInvoiceExchangeRate),
          deliveryTerm:value(invoice.deliveryTerm),lines:customsLines,
          sourceLabel:invoiceDoc?.filename||"Commercial Invoice",sourceDocumentId:invoiceDoc?.id||null,sourcePage:sourceFor(invoiceDoc),weightSourceDecision:pack.extractedData?.weightSourceDecision?.source||null
        },
@@ -894,6 +897,8 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
              <div><span>Packages</span><b>{s.packages||"—"}</b></div>
              <div><span>Gross Weight</span><b>{s.gross?s.gross+" kg":"—"}</b></div>
              <div><span>Net Weight</span><b>{s.net?s.net+" kg":"—"}</b></div>
+             <div><span>Freight Cost</span><b>{s.freightAmount?((s.freightCurrency||s.currency||"")+" "+s.freightAmount):"—"}</b></div>
+             <div><span>Freight Currency</span><b>{s.freightCurrency||"—"}</b></div>
              <div><span>Delivery Term</span><b>{s.deliveryTerm||"—"}</b></div>
            </div>
            <div className="customs-summary-section">
