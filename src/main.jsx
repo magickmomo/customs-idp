@@ -860,9 +860,14 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
                <b>{s.exporter||"—"}</b>
                <div className="customs-address-block">
                  {s.exporterAddressLine1
-                   ? <>{renderAddress(s.exporterAddressLine1,"","")}<span>{s.exporterPostcode||""}</span><span>{s.exporterCity||""}</span><span>{s.exporterCountryIso||""}</span></>
-                   : renderAddress("",s.exporterAddress,"")}
-                 {s.exporterEoriNo&&<span><strong>EORI:</strong> {s.exporterEoriNo}</span>}
+                   ? <>
+                       <span><strong>Address line 1:</strong> {s.exporterAddressLine1}</span>
+                       <span><strong>Postcode/ZIP:</strong> {s.exporterPostcode||"—"}</span>
+                       <span><strong>City:</strong> {s.exporterCity||"—"}</span>
+                       <span><strong>Country:</strong> {s.exporterCountryIso||"—"}</span>
+                     </>
+                   : renderAddress("",s.exporterAddress,"—")}
+                 <span><strong>EORI:</strong> {s.exporterEoriNo||"—"}</span>
                </div>
              </div>
              <div className="customs-party-card">
@@ -870,8 +875,13 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
                <b>{s.consignee||"—"}</b>
                <div className="customs-address-block">
                  {s.consigneeAddressLine1
-                   ? <>{renderAddress(s.consigneeAddressLine1,"","")}<span>{s.consigneePostcode||""}</span><span>{s.consigneeCity||""}</span><span>{s.consigneeCountryIso||""}</span></>
-                   : renderAddress("",s.consigneeAddress,"")}
+                   ? <>
+                       <span><strong>Address line 1:</strong> {s.consigneeAddressLine1}</span>
+                       <span><strong>Postcode/ZIP:</strong> {s.consigneePostcode||"—"}</span>
+                       <span><strong>City:</strong> {s.consigneeCity||"—"}</span>
+                       <span><strong>Country:</strong> {s.consigneeCountryIso||"—"}</span>
+                     </>
+                   : renderAddress("",s.consigneeAddress,"—")}
                </div>
              </div>
            </div>
