@@ -273,14 +273,59 @@ function App(){
     setLivePacks(prev=>prev.map(p=>p.id===pack.id?pack:p));
     persistPack(pack);
   };
+  const buildWorkingCustomsRecord=(pack)=>{
+    const data={...(pack?.extractedData||{})};
+    const docs=Array.isArray(data.documents)?data.documents:[];
+    const invoiceDoc=docs.find(d=>d?.extraction?.documentType==="commercial_invoice")||docs[0];
+    const packingDoc=docs.find(d=>/packing/i.test(d?.filename||""))||docs.find(d=>d?.extraction?.documentType==="packing_list");
+    if(!invoiceDoc||!packingDoc)return data;
+    const invoice={...data};
+    const invoiceLines=Array.isArray(invoice.lines)?invoice.lines:[];
+    const packingLines=Array.isArray(packingDoc.extraction?.lines)?packingDoc.extraction.lines:[];
+    const norm=v=>String(v??"").trim().toLowerCase().replace(/\\s+/g," ");
+    const matchLine=inv=>{
+      const exact=packingLines.find(pl=>String(pl?.hsCode||"")===String(inv?.hsCode||"")&&norm(pl?.description)===norm(inv?.description));
+      return exact||packingLines.find(pl=>norm(pl?.description)===norm(inv?.description));
+    };
+    const mergedLines=invoiceLines.map(inv=>{
+      const pl=matchLine(inv);
+      if(!pl)return inv;
+      const merged={...inv};
+      ["sourceCountryCode","netMassKg","grossMassKg","packages","packagingType","marks"].forEach(field=>{
+        const missing=merged[field]===undefined||merged[field]===null||merged[field]==="";
+        if(missing&&pl[field]!==undefined&&pl[field]!==null&&pl[field]!=="")merged[field]=pl[field];
+      });
+      return merged;
+    });
+    const first=(...keys)=>{
+      for(const key of keys){
+        const v=invoice[key]??packingDoc.extraction?.[key];
+        if(v!==undefined&&v!==null&&v!=="")return v;
+      }
+      return undefined;
+    };
+    const working={
+      ...invoice,
+      lines:mergedLines,
+      exporterEoriNo:first("exporterEoriNo","exporterEori","eori"),
+      totalPackages:first("totalPackages"),
+      totalNetWeight:first("totalNetWeight"),
+      totalGrossWeight:first("totalGrossWeight"),
+      countryOfExport:first("countryOfExport"),
+      sourceCountryOfDestination:first("sourceCountryOfDestination"),
+      deliveryTerm:first("deliveryTerm"),
+      workingRecordSource:"invoice + matched packing list"
+    };
+    return working;
+  };
   const buildValidatedPack=(pack)=>{
     if(!pack)return pack;
-    const data=pack.extractedData||{};
+    const data=buildWorkingCustomsRecord(pack);
     const standard=validateStandardCustomsRecord(data);
     const checks=standard.checks;
     const hasFail=checks.some(x=>x.status==="fail");
     const hasReview=checks.some(x=>x.status==="review");
-    return {...pack,status:(hasFail||hasReview)?"Needs review":"Ready",validationStatus:(hasFail||hasReview)?"Failed":"Validated",validationChecks:checks,validationSummary:standard.summary};
+    return {...pack,workingRecord:data,status:(hasFail||hasReview)?"Needs review":"Ready",validationStatus:(hasFail||hasReview)?"Failed":"Validated",validationChecks:checks,validationSummary:standard.summary};
   };
   const persistValidatedPack=async(pack,showToast=false)=>{
     if(!pack)return pack;
@@ -561,7 +606,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
  const getWeightConflicts=()=>{
    const docs=extractedDocuments;
    const invoiceDoc=docs.find(d=>d.extraction?.documentType==="commercial_invoice")||docs[0];
-   // The customs summary is the human-facing working record. Start from the original invoice extraction, then overlay all user/agent corrections from the working pack data.\n   const workingData={...(pack.extractedData||{})};\n   const primaryAliases={exporterEori:"exporterEoriNo",eori:"exporterEoriNo",exporterEORI:"exporterEoriNo",invoiceTotal:"totalInvoiceValue",invoiceValue:"totalInvoiceValue",countryOfExportCode:"countryOfExport",destinationCountry:"sourceCountryOfDestination"};\n   Object.entries(primaryAliases).forEach(([from,to])=>{if((workingData[to]===undefined||workingData[to]===null||workingData[to]==="")&&workingData[from]!==undefined&&workingData[from]!==null&&workingData[from]!=="")workingData[to]=workingData[from];});\n   const reviewOverrides=Array.isArray(workingData.reviewOverrides)?workingData.reviewOverrides:[];\n   reviewOverrides.filter(o=>o?.scope==="primary"&&o?.field).forEach(o=>{if(o.newValue!==undefined)workingData[o.field]=o.newValue;});\n   const invoice={...(invoiceDoc?.extraction||{}),...workingData};
+   // The customs summary is the human-facing working record. Start from the original invoice extraction, then overlay all user/agent corrections from the working pack data.\n   const workingData={...(pack.workingRecord||pack.extractedData||{})};\n   const primaryAliases={exporterEori:"exporterEoriNo",eori:"exporterEoriNo",exporterEORI:"exporterEoriNo",invoiceTotal:"totalInvoiceValue",invoiceValue:"totalInvoiceValue",countryOfExportCode:"countryOfExport",destinationCountry:"sourceCountryOfDestination"};\n   Object.entries(primaryAliases).forEach(([from,to])=>{if((workingData[to]===undefined||workingData[to]===null||workingData[to]==="")&&workingData[from]!==undefined&&workingData[from]!==null&&workingData[from]!=="")workingData[to]=workingData[from];});\n   const reviewOverrides=Array.isArray(workingData.reviewOverrides)?workingData.reviewOverrides:[];\n   reviewOverrides.filter(o=>o?.scope==="primary"&&o?.field).forEach(o=>{if(o.newValue!==undefined)workingData[o.field]=o.newValue;});\n   const invoice={...(invoiceDoc?.extraction||{}),...workingData};
    const packingDoc=docs.find(d=>/packing/i.test(d.filename||""))||docs.find(d=>d.extraction?.documentType==="packing_list");
    if(!invoiceDoc||!packingDoc)return [];
    const invoiceLines=Array.isArray(invoice.lines)?invoice.lines:[];
@@ -600,7 +645,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      return ev.find(x=>x.page)?.page||1;
    };
    const lineKey=line=>String(line?.hsCode||"")+"|"+String(line?.description||"").trim().toLowerCase();
-   const lines=Array.isArray(pack.extractedData?.lines)?pack.extractedData.lines:(Array.isArray(invoice.lines)?invoice.lines:[]);
+   const lines=Array.isArray(pack.workingRecord?.lines)?pack.workingRecord.lines:(Array.isArray(pack.extractedData?.lines)?pack.extractedData.lines:(Array.isArray(invoice.lines)?invoice.lines:[]));
    const findSourceLine=(doc,invLine)=>{
      const sourceLines=Array.isArray(doc?.extraction?.lines)?doc.extraction.lines:[];
      return sourceLines.find(l=>lineKey(l)===lineKey(invLine))||sourceLines.find(l=>String(l.description||"").trim().toLowerCase()===String(invLine.description||"").trim().toLowerCase());
