@@ -242,7 +242,7 @@ function App(){
       const failed={...processing,status:"Needs review",processingError:message};
       setSelectedPack(failed);setLivePacks(prev=>prev.map(p=>p.id===failed.id?failed:p));
       await persistPack(failed);
-      notify("Re-processing failed — "+message);
+      notify("Re-processing failed: "+message);
     }
   };
 
