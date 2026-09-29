@@ -1859,3 +1859,48 @@ body {
   width: 100%;
   max-width: none;
 }
+
+
+/* Validation results: use the available review width instead of a long single-column list */
+@media (min-width: 901px) {
+  .chat-message-row.agent:has(.validation-summary-card) {
+    width: 100%;
+    max-width: none;
+  }
+
+  .chat-message-row.agent:has(.validation-summary-card) .chat-message-content {
+    width: 100%;
+    max-width: none;
+  }
+
+  .validation-summary-card .validation-check-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 22px;
+    padding: 8px 18px 12px;
+  }
+
+  .validation-summary-card .validation-check {
+    min-width: 0;
+    padding: 11px 0;
+    border-bottom: 1px solid #f0f2f5;
+  }
+
+  .validation-summary-card .validation-missing-actions,
+  .validation-summary-card .validation-weight-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1500px) {
+  .validation-summary-card .validation-check-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: 26px;
+  }
+}
+
+@media (max-width: 900px) {
+  .validation-summary-card .validation-check-list {
+    display: block;
+  }
+}
