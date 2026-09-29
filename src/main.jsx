@@ -560,7 +560,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
  const getWeightConflicts=()=>{
    const docs=extractedDocuments;
    const invoiceDoc=docs.find(d=>d.extraction?.documentType==="commercial_invoice")||docs[0];
-   // The customs summary is the human-facing working record. Start from the original invoice extraction, then overlay all user/agent corrections from the working pack data.\n   const invoice={...(invoiceDoc?.extraction||{}),...(pack.extractedData||{})};
+   // The customs summary is the human-facing working record. Start from the original invoice extraction, then overlay all user/agent corrections from the working pack data.\n   const workingData={...(pack.extractedData||{})};\n   const primaryAliases={exporterEori:"exporterEoriNo",eori:"exporterEoriNo",exporterEORI:"exporterEoriNo",invoiceTotal:"totalInvoiceValue",invoiceValue:"totalInvoiceValue",countryOfExportCode:"countryOfExport",destinationCountry:"sourceCountryOfDestination"};\n   Object.entries(primaryAliases).forEach(([from,to])=>{if((workingData[to]===undefined||workingData[to]===null||workingData[to]==="")&&workingData[from]!==undefined&&workingData[from]!==null&&workingData[from]!=="")workingData[to]=workingData[from];});\n   const invoice={...(invoiceDoc?.extraction||{}),...workingData};
    const packingDoc=docs.find(d=>/packing/i.test(d.filename||""))||docs.find(d=>d.extraction?.documentType==="packing_list");
    if(!invoiceDoc||!packingDoc)return [];
    const invoiceLines=Array.isArray(invoice.lines)?invoice.lines:[];
@@ -705,7 +705,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
    const weightResolved=Boolean(pack.extractedData?.weightSourceDecision?.source);
    const cleanedSaved=saved.filter(m=>!(weightResolved&&((m.type==="weightDecision")||/weight discrepancy detected/i.test(String(m.text||"")))));
    setMessages([...buildSummary(),...cleanedSaved]);
- },[pack.id,pack.extractedData?.extractionRunId,pack.extractedData?.reviewOverrides?.length,pack.validationStatus,pack.validationChecks,pack.extractedData?.validationStatus,pack.extractedData?.validationChecks,pack.extractedData?.weightSourceDecision?.source,extractedDocuments]);
+ },[pack.id,pack.extractedData,pack.validationStatus,pack.validationChecks,extractedDocuments]);
  useEffect(()=>{if(!documentRows.length){setSelectedDocumentId(null);return;}setSelectedDocumentId(current=>documentRows.some(d=>(d.id||d.name)===current)?current:(documentRows[0].id||documentRows[0].name));},[pack.id,pack.uploadedFiles?.length]);
 
  const selectedDocument=documentRows.find(d=>(d.id||d.name)===selectedDocumentId)||documentRows[0];
