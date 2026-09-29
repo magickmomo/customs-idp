@@ -1,3 +1,4 @@
+import { normalizeCountryCode } from "../utils/countryCodes.js";
 const ISO2=/^[A-Z]{2}$/;
 const CURRENCY=/^[A-Z]{3}$/;
 const HS=/^\d{4,10}$/;
@@ -5,12 +6,6 @@ const IM_PROCEDURE=/^\d{10}$/;
 
 const hasValue=value=>value!==undefined&&value!==null&&String(value).trim()!=="";
 const text=value=>String(value??"").trim();
-const normalizeCountryCode=value=>{
-  const raw=text(value);
-  const upper=raw.toUpperCase();
-  const map={"UNITED KINGDOM":"GB","GREAT BRITAIN":"GB","UK":"GB","ENGLAND":"GB","SCOTLAND":"GB","WALES":"GB","NORTHERN IRELAND":"GB"};
-  return map[upper]||upper;
-};
 const numberValue=value=>{
   if(value===undefined||value===null||value==="") return null;
   const n=Number(String(value).replace(/,/g,""));
