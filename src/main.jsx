@@ -274,51 +274,99 @@ function App(){
     persistPack(pack);
   };
   const buildWorkingCustomsRecord=(pack)=>{
-    const data={...(pack?.extractedData||{})};
-    const docs=Array.isArray(data.documents)?data.documents:[];
+    const primary={...(pack?.extractedData||{})};
+    const docs=Array.isArray(primary.documents)?primary.documents:[];
     const invoiceDoc=docs.find(d=>d?.extraction?.documentType==="commercial_invoice")||docs[0];
-    const packingDoc=docs.find(d=>/packing/i.test(d?.filename||""))||docs.find(d=>d?.extraction?.documentType==="packing_list");
-    if(!invoiceDoc||!packingDoc)return data;
-    const invoice={...data};
-    const invoiceLines=Array.isArray(invoice.lines)?invoice.lines:[];
-    const packingLines=Array.isArray(packingDoc.extraction?.lines)?packingDoc.extraction.lines:[];
-    const norm=v=>String(v??"").trim().toLowerCase().replace(/\\s+/g," ");
-    const matchLine=inv=>{
-      const exact=packingLines.find(pl=>String(pl?.hsCode||"")===String(inv?.hsCode||"")&&norm(pl?.description)===norm(inv?.description));
-      return exact||packingLines.find(pl=>norm(pl?.description)===norm(inv?.description));
-    };
-    const mergedLines=invoiceLines.map(inv=>{
-      const pl=matchLine(inv);
-      if(!pl)return inv;
-      const merged={...inv};
-      ["sourceCountryCode","netMassKg","grossMassKg","packages","packagingType","marks"].forEach(field=>{
-        const missing=merged[field]===undefined||merged[field]===null||merged[field]==="";
-        if(missing&&pl[field]!==undefined&&pl[field]!==null&&pl[field]!=="")merged[field]=pl[field];
-      });
-      return merged;
-    });
-    const first=(...keys)=>{
-      for(const key of keys){
-        const primary=invoice[key];
-        if(primary!==undefined&&primary!==null&&primary!=="")return primary;
-        const supporting=packingDoc.extraction?.[key];
-        if(supporting!==undefined&&supporting!==null&&supporting!=="")return supporting;
+    const supportingDocs=docs.filter(d=>d&&d!==invoiceDoc);
+    if(!invoiceDoc)return primary;
+
+    const invoice={...primary};
+    const isMissing=v=>v===undefined||v===null||v==="";
+
+    // The primary document always wins. Supporting documents only fill fields
+    // that are genuinely absent from the primary extraction.
+    const supportingValues=(key)=>{
+      for(const doc of supportingDocs){
+        const value=doc?.extraction?.[key];
+        if(!isMissing(value))return value;
       }
       return undefined;
     };
-    const working={
-      ...invoice,
-      lines:mergedLines,
-      exporterEoriNo:first("exporterEoriNo","exporterEori","eori"),
-      totalPackages:first("totalPackages"),
-      totalNetWeight:first("totalNetWeight"),
-      totalGrossWeight:first("totalGrossWeight"),
-      countryOfExport:first("countryOfExport"),
-      sourceCountryOfDestination:first("sourceCountryOfDestination"),
-      deliveryTerm:first("deliveryTerm"),
-      workingRecordSource:"invoice + matched packing list"
+
+    const merged={...invoice};
+    const topLevelKeys=new Set();
+    supportingDocs.forEach(doc=>{
+      Object.keys(doc?.extraction||{}).forEach(key=>{
+        if(key!=="lines"&&key!=="documents"&&key!=="sourceDocuments"&&key!=="agentMessages")topLevelKeys.add(key);
+      });
+    });
+    topLevelKeys.forEach(key=>{
+      if(isMissing(merged[key])){
+        const value=supportingValues(key);
+        if(!isMissing(value))merged[key]=value;
+      }
+    });
+
+    // Explicit aliases cover common naming differences between document types.
+    const aliases={
+      exporterEoriNo:["exporterEoriNo","exporterEori","eori"],
+      totalPackages:["totalPackages","packages"],
+      totalNetWeight:["totalNetWeight","totalNetMass","netWeight"],
+      totalGrossWeight:["totalGrossWeight","totalGrossMass","grossWeight"],
+      countryOfExport:["countryOfExport","countryOfOrigin","sourceCountryCode"],
+      sourceCountryOfDestination:["sourceCountryOfDestination","countryOfDestination"],
+      deliveryTerm:["deliveryTerm","terms"]
     };
-    return working;
+    Object.entries(aliases).forEach(([target,keys])=>{
+      if(!isMissing(merged[target]))return;
+      for(const key of keys){
+        const value=merged[key]??supportingValues(key);
+        if(!isMissing(value)){merged[target]=value;break;}
+      }
+    });
+
+    const invoiceLines=Array.isArray(invoice.lines)?invoice.lines:[];
+    const supportingLineSets=supportingDocs
+      .map(doc=>({doc,lines:Array.isArray(doc?.extraction?.lines)?doc.extraction.lines:[]}))
+      .filter(x=>x.lines.length);
+    const norm=v=>String(v??"").trim().toLowerCase().replace(/\\s+/g," ");
+    const findMatch=(invLine,sourceLines)=>{
+      const hs=String(invLine?.hsCode??"").trim();
+      const desc=norm(invLine?.description);
+      return sourceLines.find(line=>hs&&String(line?.hsCode??"").trim()===hs&&desc&&norm(line?.description)===desc)
+        ||sourceLines.find(line=>desc&&norm(line?.description)===desc)
+        ||sourceLines.find(line=>String(line?.lineNo??line?.line??"")===String(invLine?.lineNo??invLine?.line??""));
+    };
+
+    const sourceDiscrepancies=[];
+    const mergedLines=invoiceLines.map((invLine,lineIndex)=>{
+      const mergedLine={...invLine};
+      for(const source of supportingLineSets){
+        const supportingLine=findMatch(invLine,source.lines);
+        if(!supportingLine)continue;
+        Object.keys(supportingLine).forEach(key=>{
+          if(key==="lineNo"||key==="line"||isMissing(supportingLine[key]))return;
+          if(isMissing(mergedLine[key])){
+            mergedLine[key]=supportingLine[key];
+          }else if(String(mergedLine[key])!==String(supportingLine[key])){
+            sourceDiscrepancies.push({
+              lineIndex,
+              field:key,
+              primaryValue:mergedLine[key],
+              supportingValue:supportingLine[key],
+              supportingDocumentId:source.doc.id,
+              supportingDocument:source.doc.filename
+            });
+          }
+        });
+      }
+      return mergedLine;
+    });
+
+    merged.lines=mergedLines;
+    merged.workingRecordSource="primary invoice + supporting documents";
+    merged.sourceDiscrepancies=sourceDiscrepancies;
+    return merged;
   };
   const buildValidatedPack=(pack)=>{
     if(!pack)return pack;
