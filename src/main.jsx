@@ -1018,8 +1018,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
        <div className="chat-message-content">
          <div className="customs-entry-summary-card">
            <div className="customs-summary-title">
-             <div><span className="summary-kicker">CUSTOMS ENTRY SUMMARY</span><h3>Working customs declaration view</h3></div>
-             <span className="summary-status">Source: {s.sourceLabel}</span>
+             <div><span className="summary-kicker">CUSTOMS ENTRY SUMMARY</span></div>
            </div>
            {s.weightSourceDecision&&<div className="weight-source-selected"><CheckCircle2 size={15}/><span><b>Working weights:</b> {s.weightSourceDecision==="packing_list"?"Packing List":"Commercial Invoice"} selected. The selected values are now used for customs validation and downstream data.</span></div>}
            <div className="customs-party-grid">
