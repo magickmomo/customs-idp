@@ -15,6 +15,15 @@ const packs = [
   { id:"PK-10479", customer:"Raven Industrial", docs:5, status:"Needs review", confidence:88, received:"16 Sep 2026, 15:12", ticket:"TK-88418" }
 ];
 
+const customerStrategies = {
+  "Acme Components Ltd": { autoApplyWeightApportionment: false },
+  "Northstar Manufacturing": { autoApplyWeightApportionment: false },
+  "Bancale Trading": { autoApplyWeightApportionment: false },
+  "Raven Industrial": { autoApplyWeightApportionment: false }
+};
+
+const getCustomerStrategy = customer => customerStrategies[customer] || { autoApplyWeightApportionment: false };
+
 const customers = [
   {name:"Acme Components Ltd", code:"ACME-001", mailbox:"customs.acme@inbox.example", rules:12, processed:"2,481"},
   {name:"Northstar Manufacturing", code:"NSTM-014", mailbox:"customs.northstar@inbox.example", rules:8, processed:"1,972"},
@@ -450,7 +459,7 @@ function App(){
         : mergedLines.map(()=>1);
     const basisTotal=basis.reduce((sum,v)=>sum+(v||0),0);
 
-    if((allNetMissing&&totalNetForApportion!==null&&basisTotal>0)||(allGrossMissing&&totalGrossForApportion!==null&&basisTotal>0)){
+    const weightApportionmentApproved = pack?.extractedData?.weightApportionmentDecision?.status==="approved" || getCustomerStrategy(pack?.customer).autoApplyWeightApportionment===true;\n    if(weightApportionmentApproved && ((allNetMissing&&totalNetForApportion!==null&&basisTotal>0)||(allGrossMissing&&totalGrossForApportion!==null&&basisTotal>0))){
       const apportioned=mergedLines.map(line=>({...line}));
 
       // Net weight is allocated from the document total using line value
