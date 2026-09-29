@@ -1030,6 +1030,32 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      updatePack?.(finalPack);
    }finally{setIsSending(false);}
  };
+ const decideWeightApportionment=()=>{
+   const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
+   data.weightApportionmentDecision={
+     status:"approved",
+     approvedBy:currentUserName,
+     approvedAt:new Date().toISOString(),
+     method:"line-value net allocation, then net-ratio gross allocation"
+   };
+   const next={...pack,extractedData:data,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
+   updatePack?.(next);
+   notify?.("Weight apportionment approved — validating the derived line weights");
+   setTimeout(()=>persistValidatedPack(next,true),0);
+ };
+ const declineWeightApportionment=()=>{
+   const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
+   data.weightApportionmentDecision={
+     status:"declined",
+     declinedBy:currentUserName,
+     declinedAt:new Date().toISOString()
+   };
+   const next={...pack,extractedData:data,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
+   updatePack?.(next);
+   notify?.("Weight apportionment declined — line weights remain unresolved");
+   setMessages(current=>[...current,{type:"agent",text:"Understood. I will not apportion the document-level weights. The pack will remain on review until line-level weights are provided or a different source is selected.",persist:true}]);
+ };
+
  const decideWeights=(source,conflicts)=>{
    const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
    const sourceLabel=source==="packing_list"?"Packing List":"Commercial Invoice";
@@ -1071,6 +1097,9 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
  };
  const renderMessage=(m,i)=>{
    const source=m.sourceDocumentId&&m.sourcePage?sourceButton(m.sourceLabel||("Source — page "+m.sourcePage),m.sourceDocumentId,m.sourcePage):null;
+   if(m.type==="weightApportionmentDecision"){
+     return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><Sparkles size={15}/></div><div className="chat-message-content"><div className="chat-message-text">{m.text}</div><div className="weight-decision-actions"><button className="secondary" onClick={decideWeightApportionment}>Apply weight apportionment</button><button className="secondary" onClick={declineWeightApportionment}>Do not apply</button><button className="secondary" onClick={()=>emailCustomerReview()}><Mail size={15}/> Email customer</button></div></div></div>;
+   }
    if(m.type==="weightDecision"){
      return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><Sparkles size={15}/></div><div className="chat-message-content"><div className="chat-message-text">{m.text.split("\n").map((x,j)=><React.Fragment key={j}>{x}{j<m.text.split("\n").length-1&&<br/>}</React.Fragment>)}</div><div className="weight-decision-actions"><button className="secondary" onClick={()=>decideWeights("invoice",m.conflicts)}>Use Commercial Invoice weights</button><button className="secondary" onClick={()=>decideWeights("packing_list",m.conflicts)}>Use Packing List weights</button><button className="secondary" onClick={()=>emailCustomerReview()}><Mail size={15}/> Email customer</button></div></div></div>;
    }
