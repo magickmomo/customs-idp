@@ -944,12 +944,12 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
        },
        persist:false
      },
+     {type:"validationSummary",checks:Array.isArray(pack.validationChecks)?pack.validationChecks:validateStandardCustomsRecord(pack.workingRecord||pack.extractedData||{}).checks,persist:false},
      ...(shouldAskWeightApportionment?[{
        type:"weightApportionmentDecision",
        text:"The document contains total weight information, but line-level weights are missing. I can apportion the total net weight across the goods lines using the configured line-value method, then apportion gross weight using the resulting net-weight ratio. Would you like me to apply this for this pack? If this customer strategy is configured to allow automatic apportionment, I will apply it without asking.",
        persist:false
      }]:[]),
-     {type:"validationSummary",checks:Array.isArray(pack.validationChecks)?pack.validationChecks:validateStandardCustomsRecord(pack.workingRecord||pack.extractedData||{}).checks,persist:false},
      ...(conflicts.length&&!pack.extractedData?.weightSourceDecision?[{
        type:"weightDecision",
        text:"Weight discrepancy detected. The invoice and packing list contain different line-level weights. No value has been silently chosen.",
