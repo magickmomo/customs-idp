@@ -579,9 +579,15 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
  const buildSummary=()=>{
    const docs=extractedDocuments;
    const invoiceDoc=docs.find(d=>d.extraction?.documentType==="commercial_invoice")||docs[0];
-   const invoice=invoiceDoc?.extraction||{};
+   const workingData={...(pack.extractedData||{})};
+   const primaryOverrides=Array.isArray(workingData.reviewOverrides)?workingData.reviewOverrides.filter(o=>o?.scope==="primary"&&o?.field):[];
+   primaryOverrides.forEach(o=>{if(o.newValue!==undefined)workingData[o.field]=o.newValue;});
+   const primaryAliases={exporterEori:"exporterEoriNo",eori:"exporterEoriNo",exporterEORI:"exporterEoriNo",invoiceTotal:"totalInvoiceValue",invoiceValue:"totalInvoiceValue"};
+   Object.entries(primaryAliases).forEach(([from,to])=>{if(!hasOwn(workingData,to)&&hasOwn(workingData,from))workingData[to]=workingData[from];});
+   const invoice={...(invoiceDoc?.extraction||{}),...workingData};
    const value=v=>v===undefined||v===null||v===""?"":String(v);
    const hasValue=v=>v!==undefined&&v!==null&&v!=="";
+   const hasOwn=(obj,key)=>Object.prototype.hasOwnProperty.call(obj,key);
    if(!docs.length){
      return [{type:"agent",text:pack.processingError?"I couldn't complete the extraction. "+pack.processingError:"I'm waiting for document extraction to finish."}];
    }
