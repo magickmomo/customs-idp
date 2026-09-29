@@ -1018,7 +1018,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
        <div className="chat-message-content">
          <div className="customs-entry-summary-card">
            <div className="customs-summary-title">
-             <div><span className="summary-kicker">CUSTOMS ENTRY SUMMARY</span><h3>{s.invoice||"Customs entry"}</h3></div>
+             <div><span className="summary-kicker">CUSTOMS ENTRY SUMMARY</span><h3>Working customs declaration view</h3></div>
              <span className="summary-status">Source: {s.sourceLabel}</span>
            </div>
            {s.weightSourceDecision&&<div className="weight-source-selected"><CheckCircle2 size={15}/><span><b>Working weights:</b> {s.weightSourceDecision==="packing_list"?"Packing List":"Commercial Invoice"} selected. The selected values are now used for customs validation and downstream data.</span></div>}
@@ -1054,6 +1054,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
              </div>
            </div>
            <div className="customs-header-table">
+             <div><span>Invoice No.</span><b>{s.invoice||"—"}</b></div>
              <div><span>Currency</span><b>{s.currency||"—"}</b></div>
              <div><span>Invoice Value</span><b>{s.invoiceValue?((s.currency||"")+" "+s.invoiceValue):"—"}</b></div>
              <div><span>Export</span><b>{s.exportCountry||"—"}</b></div>
@@ -1113,7 +1114,7 @@ function Review({pack,back,notify,onAssign,updatePack,validatePack,postToLCA,rep
      <div className="chat-history chat-review-history">{messages.map(renderMessage)}</div>
      <div className="chat-input chat-review-input"><input value={chat} onChange={e=>setChat(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendChat()} placeholder="Ask where a value came from, why it was used, or tell the agent what to change..."/><button onClick={sendChat}><ArrowRight size={16}/></button></div>
    </div>
-   {showSummary&&<div className="customs-summary-modal-overlay" onClick={()=>setShowSummary(false)}><div className="customs-summary-modal" onClick={e=>e.stopPropagation()}><div className="customs-summary-modal-head"><div><span className="summary-kicker">CUSTOMS ENTRY SUMMARY</span><b>Invoice No.: {summaryInvoiceNumber}</b></div><button type="button" className="row-btn" onClick={()=>setShowSummary(false)}><X size={18}/></button></div><div className="customs-summary-modal-body">{buildSummary().find(m=>m.type==="customsEntrySummary") ? renderMessage(buildSummary().find(m=>m.type==="customsEntrySummary"),0) : <div className="review-document-empty"><FileText size={28}/><b>Customs summary not available</b><span>Waiting for document extraction to complete.</span></div>}</div></div></div>}
+   {showSummary&&<div className="customs-summary-modal-overlay" onClick={()=>setShowSummary(false)}><div className="customs-summary-modal" onClick={e=>e.stopPropagation()}><div className="customs-summary-modal-head"><div><span className="summary-kicker">CUSTOMS ENTRY SUMMARY</span></div><button type="button" className="row-btn" onClick={()=>setShowSummary(false)}><X size={18}/></button></div><div className="customs-summary-modal-body">{buildSummary().find(m=>m.type==="customsEntrySummary") ? renderMessage(buildSummary().find(m=>m.type==="customsEntrySummary"),0) : <div className="review-document-empty"><FileText size={28}/><b>Customs summary not available</b><span>Waiting for document extraction to complete.</span></div>}</div></div></div>}
    {showPreview&&selectedDocumentUrl&&<div className="review-source-modal-overlay" onClick={()=>setShowPreview(false)}>
      <div className="review-source-modal" onClick={e=>e.stopPropagation()}>
        <div className="review-source-modal-head">
