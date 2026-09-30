@@ -588,7 +588,7 @@ const postToLCA=()=>{
       </div>
     </main>
 
-    {agentOpen && page!=="agent" && <button className="agent-fab" onClick={()=>navigate("agent")}><Sparkles size={18}/> AI Agent</button>}
+    {agentOpen && page!=="agent" && page!=="review" && <button className="agent-fab" onClick={()=>navigate("agent")}><Sparkles size={18}/> AI Agent</button>}
     {toast && <div className="toast"><CheckCircle2 size={17}/>{toast}</div>}
   </div>
 }
