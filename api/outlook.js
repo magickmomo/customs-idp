@@ -48,8 +48,9 @@ async function sync(req,res){
     let processed=0,duplicates=0,failed=0; const failures=[];
     for(const message of candidates){
       const messageId=message.internetMessageId||message.id;
-      const existing=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(messageId)+"&select=id&limit=1");
-      if(existing[0]){duplicates++;continue;}
+      const existing=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(messageId)+"&select=id,docs&limit=1");
+      const repair=Boolean(existing[0]&&Number(existing[0].docs||0)===0);
+      if(existing[0]&&!repair){duplicates++;continue;}
       try{
         const attachments=message.hasAttachments?await getAttachments(message.id,token):[];
         await postToIngest({
@@ -60,7 +61,8 @@ async function sync(req,res){
           html:message.body?.content||"",
           messageId,
           receivedAt:message.receivedDateTime||new Date().toISOString(),
-          attachments
+          attachments,
+          repair
         });
         processed++;
       }catch(error){failed++;failures.push(error.message||"Unknown failure");console.error("Outlook sync message failed",messageId,error);}
