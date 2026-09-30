@@ -2015,3 +2015,16 @@ body {
 .spreadsheet-preview-state{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:24px;box-sizing:border-box;text-align:center;color:#8a95a5;background:#f8fafc}
 .spreadsheet-preview-state b{color:#4d596c;font-size:11px}
 .spreadsheet-preview-state span{max-width:430px;font-size:9px;line-height:1.5}
+
+/* Source email context shown on email-ingested packs in Review. */
+.review-email-source{margin:10px 0 12px;padding:13px 15px;background:#f8fafc;border:1px solid #dfe5ec;border-radius:9px}
+.review-email-source-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.review-email-source-head h3{margin:4px 0 0;font-size:12px;line-height:1.35;color:#273247;font-weight:700}
+.review-email-source-badge{flex:0 0 auto;padding:4px 7px;border:1px solid #d9e0e8;border-radius:5px;background:#fff;color:#778398;font-size:7px;font-weight:700;letter-spacing:.08em}
+.review-email-source-meta{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:11px;padding-top:10px;border-top:1px solid #e8ecf1}
+.review-email-source-meta div{min-width:120px;display:flex;flex-direction:column;gap:3px}
+.review-email-source-meta span,.review-email-source-body>span{font-size:7px;color:#8a95a5;text-transform:uppercase;letter-spacing:.07em;font-weight:700}
+.review-email-source-meta b{font-size:9px;color:#4d596c;font-weight:600}
+.review-email-source-body{margin-top:11px;padding-top:10px;border-top:1px solid #e8ecf1}
+.review-email-source-body>div{margin-top:5px;max-height:120px;overflow:auto;white-space:pre-wrap;font-size:9px;line-height:1.55;color:#526176}
+.review-email-source-note{margin-top:10px;padding-top:9px;border-top:1px solid #e8ecf1;color:#8a95a5;font-size:8px;line-height:1.45}
