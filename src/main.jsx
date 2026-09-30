@@ -1344,7 +1344,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
            {pack.email.body&&<div className="review-source-email-body"><span>Email body</span><div>{String(pack.email.body).replace(/<[^>]*>/g,"").trim()}</div></div>}
            <div className="review-source-email-note">Email content is retained as source context. Customs data is extracted from the attached documents unless the Review Agent explicitly identifies email content as supporting context.</div>
          </div>
-       </details>
+       </details>}
        <div className={"review-source-modal-body "+(selectedDocumentIsSpreadsheet?"spreadsheet-document":selectedDocumentIsImage?"image-document":"pdf-document")}>{selectedDocumentUrl?(selectedDocumentIsSpreadsheet?<SpreadsheetPreview url={selectedDocumentUrl} sheetIndex={previewPage} setSheetIndex={setPreviewPage}/>:selectedDocumentIsImage?<img src={selectedDocumentUrl} alt={selectedDocument?.name||"Document preview"}/>:<iframe src={selectedDocumentFrameUrl} title={selectedDocument?.name||"Document preview"}/>):<div className="review-document-empty"><FileText size={28}/><b>{selectedDocument?.name||"No document available"}</b><span>The document is not available for preview yet.</span></div>}</div>
      </div>
    </div>}
