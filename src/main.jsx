@@ -141,6 +141,8 @@ function App(){
     let active=true;
     (async()=>{
       try {
+        // Pull any new CUSTOMS-IDP emails before loading the persistent pack list.
+        await fetch("/api/outlook/sync",{method:"POST",credentials:"include"}).catch(()=>null);
         const response=await fetch("/api/packs");
         if(!response.ok) throw new Error("Database unavailable");
         const data=await response.json();
