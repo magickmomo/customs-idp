@@ -136,13 +136,21 @@ function App(){
     catch { return packs; }
   });
   const [dataSource,setDataSource]=useState("local");
+  const [emailSyncStatus,setEmailSyncStatus]=useState({state:"idle",checked:0,processed:0,duplicates:0,failed:0,error:""});
   useEffect(()=>{
     if(authenticated!==true)return;
     let active=true;
     (async()=>{
       try {
         // Pull any new CUSTOMS-IDP emails before loading the persistent pack list.
-        await fetch("/api/outlook?action=sync",{method:"POST",credentials:"include"}).catch(()=>null);
+        try{
+          const syncResponse=await fetch("/api/outlook?action=sync",{method:"POST",credentials:"include"});
+          const syncData=await syncResponse.json().catch(()=>({}));
+          if(syncResponse.ok) setEmailSyncStatus({state:"success",checked:Number(syncData.checked)||0,processed:Number(syncData.processed)||0,duplicates:Number(syncData.duplicates)||0,failed:Number(syncData.failed)||0,error:""});
+          else setEmailSyncStatus({state:"error",checked:0,processed:0,duplicates:0,failed:0,error:syncData.error||("HTTP "+syncResponse.status)});
+        }catch(error){
+          setEmailSyncStatus({state:"error",checked:0,processed:0,duplicates:0,failed:0,error:error.message||"Outlook sync failed"});
+        }
         const response=await fetch("/api/packs");
         if(!response.ok) throw new Error("Database unavailable");
         const data=await response.json();
@@ -581,7 +589,7 @@ const postToLCA=()=>{
       <div className="content">
         {page==="manager" && canViewManager && <ManagerPage livePacks={livePacks} dataSource={dataSource}/>} 
         {page==="dashboard" && <Dashboard navigate={navigate} notify={notify} livePacks={livePacks}/>}
-        {page==="inbox" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{setSelectedPack(p);navigate("review")}} onUpload={handleUpload} onAssign={assignPack}/>}
+        {page==="inbox" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{setSelectedPack(p);navigate("review")}} onUpload={handleUpload} onAssign={assignPack} emailSyncStatus={emailSyncStatus}/>}
         
         {page==="review" && <Review pack={selectedPack} back={()=>navigate("inbox")} notify={notify} onAssign={assignPack} updatePack={updatePack} validatePack={validatePack} postToLCA={postToLCA} reprocessPack={reprocessPack} persistValidatedPack={persistValidatedPack}/>}
         {page==="customers" && <Customers notify={notify}/>}
@@ -724,8 +732,9 @@ function ManagerPage({livePacks,dataSource}){
 function Metric({label,value,delta,icon:Icon,warning}){return <div className="metric"><div className={"metric-icon "+(warning?"warning":"")}><Icon size={19}/></div><div className="metric-copy"><span>{label}</span><strong>{value}</strong><small className={delta.startsWith("-")?"positive":""}>{delta}</small></div></div>}
 function Queue({label,value,pct,cls}){return <div className="queue"><div><span className={"queue-dot "+cls}></span><b>{label}</b><strong>{value}</strong></div><div className="progress"><i className={cls} style={{width:pct+"%"}}></i></div><small>{pct}%</small></div>}
 
-function InboxPage({packs,query,setQuery,openPack,title="Inbox",onUpload,onAssign}){
+function InboxPage({packs,query,setQuery,openPack,title="Inbox",onUpload,onAssign,emailSyncStatus}){
  return <section><div className="page-head"><div><div className="eyebrow">Document processing</div><h1>{title}</h1><p>Review incoming document packs, extraction confidence and validation status.</p></div><button className="primary" onClick={()=>document.querySelector(".hidden-upload")?.click()}><Plus size={17}/> Upload documents</button></div>
+ <div className={"email-sync-debug "+(emailSyncStatus?.state==="error"?"error":"")}><strong>Outlook intake</strong><span>{emailSyncStatus?.state==="error" ? ("Sync error: "+emailSyncStatus.error) : emailSyncStatus?.state==="success" ? (emailSyncStatus.checked+" matching · "+emailSyncStatus.processed+" processed · "+emailSyncStatus.duplicates+" duplicate · "+emailSyncStatus.failed+" failed") : "Checking Outlook…"}</span></div>
  <div className="toolbar"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search packs, customers or tickets..."/></div><button className="filter">Status <ChevronDown size={15}/></button><button className="filter">Customer <ChevronDown size={15}/></button></div>
  <div className="panel"><PackTable packs={packs} onOpen={openPack} onAssign={onAssign}/></div></section>
 }
