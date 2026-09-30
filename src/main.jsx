@@ -762,7 +762,15 @@ function reconcilePackDocuments(pack){
   return {status:conflicts.length?"conflict":"pass",summary:conflicts.length?(conflicts.length+" cross-document conflict"+(conflicts.length===1?"":"s")+" found."):"Extracted document values reconcile with no conflicts detected.",checks,conflicts,documentCount:docs.length};
 }
 
-function SpreadsheetPreview({url}){\n return <div className="spreadsheet-preview-fallback">\n   <div className="spreadsheet-preview-fallback-icon"><FileText size={24}/></div>\n   <b>Spreadsheet document</b>\n   <span>This Excel document is stored in the pack and can be downloaded from the document source.</span>\n   <a href={url} target="_blank" rel="noreferrer" className="primary">Open spreadsheet</a>\n </div>;\n}\n\nfunction Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePack,postToLCA,reprocessPack,persistValidatedPack}){
+function SpreadsheetPreview({url}){
+  return <div className="spreadsheet-preview-fallback">
+    <div className="spreadsheet-preview-fallback-icon"><FileText size={24}/></div>
+    <b>Spreadsheet document</b>
+    <span>This Excel document is stored in the pack and can be downloaded from the document source.</span>
+    <a href={url} target="_blank" rel="noreferrer" className="primary">Open spreadsheet</a>
+  </div>;
+}
+\nfunction Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePack,postToLCA,reprocessPack,persistValidatedPack}){
  const [docUrls,setDocUrls]=useState({});
  const [chat,setChat]=useState("");
  const [messages,setMessages]=useState([]);
