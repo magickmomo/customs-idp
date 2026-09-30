@@ -1,7 +1,7 @@
 import { normalizeCountryCode } from "../utils/countryCodes.js";
 const ISO2=/^[A-Z]{2}$/;
 const CURRENCY=/^[A-Z]{3}$/;
-const HS=/^\d{4,10}$/;
+const HS=/^\d{6,11}$/;
 const IM_PROCEDURE=/^\d{10}$/;
 
 const hasValue=value=>value!==undefined&&value!==null&&String(value).trim()!=="";
