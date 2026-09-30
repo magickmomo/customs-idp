@@ -763,11 +763,13 @@ function reconcilePackDocuments(pack){
 }
 
 function SpreadsheetPreview({url}){
-  return <div className="spreadsheet-preview-fallback">
-    <div className="spreadsheet-preview-fallback-icon"><FileText size={24}/></div>
-    <b>Spreadsheet document</b>
-    <span>This Excel document is stored in the pack and can be downloaded from the document source.</span>
-    <a href={url} target="_blank" rel="noreferrer" className="primary">Open spreadsheet</a>
+  const officeUrl="https://view.officeapps.live.com/op/view.aspx?src="+encodeURIComponent(url);
+  return <div className="spreadsheet-preview-office">
+    <iframe src={officeUrl} title="Excel document preview" />
+    <div className="spreadsheet-preview-office-fallback">
+      <span>Excel preview is loading…</span>
+      <a href={url} target="_blank" rel="noreferrer" className="primary">Open spreadsheet</a>
+    </div>
   </div>;
 }
 function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePack,postToLCA,reprocessPack,persistValidatedPack}){
@@ -984,7 +986,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
  const selectedDocumentUrl=selectedDocument?docUrls[selectedDocument.id]:null;
  const selectedDocumentIsPdf=/\.pdf$/i.test(selectedDocument?.name||"");
  const selectedDocumentIsImage=/^image\//i.test(selectedDocument?.type||"")||/\.(png|jpe?g|webp|gif)$/i.test(selectedDocument?.name||"");
- const selectedDocumentIsSpreadsheet=false;
+ const selectedDocumentIsSpreadsheet=/\.(xlsx|xls|xlsm|xlsb|csv)$/i.test(selectedDocument?.name||"")||/spreadsheet|excel|csv/i.test(selectedDocument?.type||"");
  const selectedDocumentFrameUrl=selectedDocumentUrl&&selectedDocumentIsPdf?selectedDocumentUrl+"#page="+previewPage+"&view=FitH&zoom=page-width":selectedDocumentUrl;
 
  const applyAgentAction=action=>{
