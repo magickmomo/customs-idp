@@ -763,7 +763,33 @@ function reconcilePackDocuments(pack){
   return {status:conflicts.length?"conflict":"pass",summary:conflicts.length?(conflicts.length+" cross-document conflict"+(conflicts.length===1?"":"s")+" found."):"Extracted document values reconcile with no conflicts detected.",checks,conflicts,documentCount:docs.length};
 }
 
-function SpreadsheetPreview({url,sheetIndex,setSheetIndex}){\n const [state,setState]=useState({status:"loading",sheets:[],rows:[]});\n useEffect(()=>{let active=true;(async()=>{\n   if(!url){setState({status:"empty",sheets:[],rows:[]});return;}\n   try{\n     setState({status:"loading",sheets:[],rows:[]});\n     const response=await fetch(url);\n     if(!response.ok)throw new Error("Could not load the spreadsheet");\n     const buffer=await response.arrayBuffer();\n     const workbook=XLSX.read(buffer,{type:"array",cellDates:true});\n     const sheets=workbook.SheetNames||[];\n     const safeIndex=Math.min(Math.max((Number(sheetIndex)||1)-1,0),Math.max(sheets.length-1,0));\n     const worksheet=sheets.length?workbook.Sheets[sheets[safeIndex]]:null;\n     const rows=worksheet?XLSX.utils.sheet_to_json(worksheet,{header:1,defval:"",blankrows:false,raw:false}):[];\n     if(active)setState({status:sheets.length?"ready":"empty",sheets,rows});\n   }catch(error){if(active)setState({status:"error",sheets:[],rows:[],error:error?.message||"Unable to preview spreadsheet"});}\n })();return()=>{active=false;};},[url,sheetIndex]);\n if(state.status==="loading")return <div className="spreadsheet-preview-state"><FileText size={28}/><b>Opening spreadsheet…</b><span>Loading the workbook for review.</span></div>;\n if(state.status==="error")return <div className="spreadsheet-preview-state"><AlertCircle size={28}/><b>Spreadsheet preview unavailable</b><span>{state.error}</span></div>;\n if(state.status==="empty")return <div className="spreadsheet-preview-state"><FileText size={28}/><b>No worksheet data found</b><span>The workbook could not be displayed in the review viewer.</span></div>;\n return <div className="spreadsheet-preview">\n   <div className="spreadsheet-preview-sheetbar">{state.sheets.map((name,index)=><button type="button" key={name+index} className={index===((Number(sheetIndex)||1)-1)?"active":""} onClick={()=>setSheetIndex?.(index+1)}>{name}</button>)}</div>\n   <div className="spreadsheet-preview-table-wrap"><table className="spreadsheet-preview-table"><tbody>{state.rows.map((row,r)=><tr key={r}>{row.map((cell,col)=><td key={col}>{cell===null||cell===undefined?"":String(cell)}</td>)}</tr>)}</tbody></table></div>\n </div>;\n}\n\nfunction Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePack,postToLCA,reprocessPack,persistValidatedPack}){
+function SpreadsheetPreview({url,sheetIndex,setSheetIndex}){
+ const [state,setState]=useState({status:"loading",sheets:[],rows:[]});
+ useEffect(()=>{let active=true;(async()=>{
+   if(!url){setState({status:"empty",sheets:[],rows:[]});return;}
+   try{
+     setState({status:"loading",sheets:[],rows:[]});
+     const response=await fetch(url);
+     if(!response.ok)throw new Error("Could not load the spreadsheet");
+     const buffer=await response.arrayBuffer();
+     const workbook=XLSX.read(buffer,{type:"array",cellDates:true});
+     const sheets=workbook.SheetNames||[];
+     const safeIndex=Math.min(Math.max((Number(sheetIndex)||1)-1,0),Math.max(sheets.length-1,0));
+     const worksheet=sheets.length?workbook.Sheets[sheets[safeIndex]]:null;
+     const rows=worksheet?XLSX.utils.sheet_to_json(worksheet,{header:1,defval:"",blankrows:false,raw:false}):[];
+     if(active)setState({status:sheets.length?"ready":"empty",sheets,rows});
+   }catch(error){if(active)setState({status:"error",sheets:[],rows:[],error:error?.message||"Unable to preview spreadsheet"});}
+ })();return()=>{active=false;};},[url,sheetIndex]);
+ if(state.status==="loading")return <div className="spreadsheet-preview-state"><FileText size={28}/><b>Opening spreadsheet…</b><span>Loading the workbook for review.</span></div>;
+ if(state.status==="error")return <div className="spreadsheet-preview-state"><AlertCircle size={28}/><b>Spreadsheet preview unavailable</b><span>{state.error}</span></div>;
+ if(state.status==="empty")return <div className="spreadsheet-preview-state"><FileText size={28}/><b>No worksheet data found</b><span>The workbook could not be displayed in the review viewer.</span></div>;
+ return <div className="spreadsheet-preview">
+   <div className="spreadsheet-preview-sheetbar">{state.sheets.map((name,index)=><button type="button" key={name+index} className={index===((Number(sheetIndex)||1)-1)?"active":""} onClick={()=>setSheetIndex?.(index+1)}>{name}</button>)}</div>
+   <div className="spreadsheet-preview-table-wrap"><table className="spreadsheet-preview-table"><tbody>{state.rows.map((row,r)=><tr key={r}>{row.map((cell,col)=><td key={col}>{cell===null||cell===undefined?"":String(cell)}</td>)}</tr>)}</tbody></table></div>
+ </div>;
+}
+
+function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePack,postToLCA,reprocessPack,persistValidatedPack}){
  const [docUrls,setDocUrls]=useState({});
  const [chat,setChat]=useState("");
  const [messages,setMessages]=useState([]);
