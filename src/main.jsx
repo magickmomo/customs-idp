@@ -1074,7 +1074,37 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
    updatePack?.({...pack,extractedData:data,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined});
    return "I saved that correction to the pack and cleared the previous validation result. The affected data needs to be validated again.";
  };
- const serialiseMessage=m=>({type:m.type||"agent",text:m.text||"",sourceDocumentId:m.sourceDocumentId||null,sourcePage:Number.isInteger(m.sourcePage)?m.sourcePage:null,sourceLabel:m.sourceLabel||null});
+ const applySuggestedFields=(suggestions,messageIndex)=>{
+   const valid=Array.isArray(suggestions)?suggestions.filter(s=>s&&s.scope==="line"&&Number.isInteger(s.lineIndex)&&s.field&&s.value!==""):[],
+     data=JSON.parse(JSON.stringify(pack.extractedData||{}));
+   let applied=0;
+   const now=new Date().toISOString();
+   valid.forEach(suggestion=>{
+     const line=data.lines?.[suggestion.lineIndex];
+     if(!line)return;
+     const existing=line[suggestion.field];
+     if(existing!==undefined&&existing!==null&&String(existing).trim()!=="")return;
+     line[suggestion.field]=suggestion.value;
+     data.reviewOverrides=[...(data.reviewOverrides||[]),{
+       scope:"line",lineIndex:suggestion.lineIndex,field:suggestion.field,oldValue:existing??null,newValue:suggestion.value,
+       source:"email",sourceLabel:suggestion.sourceLabel||"Email body",sourceDocumentId:suggestion.sourceDocumentId||null,
+       sourcePage:suggestion.sourcePage||null,reason:suggestion.reason||"Value confirmed by the user from the email source.",createdAt:now
+     }];
+     applied++;
+   });
+   const next={...pack,extractedData:data,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
+   updatePack?.(next);
+   setMessages(current=>[...current.map((m,index)=>index===messageIndex?{...m,handled:"applied"}:m),{type:"agent",text:"Confirmed. I added "+applied+" email-sourced field"+(applied===1?"":"s")+" to the working customs data. The previous validation result was cleared; run Validate data to check the updated pack.",persist:true}]);
+   notify?.(applied?"Added "+applied+" email-sourced field"+(applied===1?"":"s")+" to the pack":"No new email-sourced fields were added");
+ };
+ const ignoreSuggestedFields=(messageIndex)=>{
+   setMessages(current=>[...current.map((m,index)=>index===messageIndex?{...m,handled:"ignored"}:m),{type:"agent",text:"Understood. I left the extracted document data unchanged and did not add the email values.",persist:true}]);
+ };
+ const serialiseMessage=m=>({
+   type:m.type||"agent",text:m.text||"",sourceDocumentId:m.sourceDocumentId||null,
+   sourcePage:Number.isInteger(m.sourcePage)?m.sourcePage:null,sourceLabel:m.sourceLabel||null,
+   suggestions:Array.isArray(m.suggestions)?m.suggestions:null,handled:m.handled||null
+ });
  const persistConversation=async conversation=>{
    const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
    data.agentMessages=conversation.filter(m=>m.persist!==false).map(serialiseMessage);
@@ -1095,6 +1125,9 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
      if(!response.ok)throw new Error(result.error||"Agent request failed");
      let reply=result.reply||"I couldn't produce an answer from the supplied pack.";
      let savedPack=pack;
+     if(result.action==="suggest_field_updates"&&Array.isArray(result.suggestions)&&result.suggestions.length){
+       reply+=(/not changed|confirm/i.test(reply)?"":" I have not changed the extracted data. Please confirm below if you want these email-sourced values added.");
+     }
      if(result.action==="approve_weight_apportionment"){
        const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
        data.weightApportionmentDecision={
@@ -1124,7 +1157,15 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
        savedPack={...pack,extractedData:data,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
        reply+=" I saved that correction to the pack and cleared the previous validation result. The affected data needs to be validated again.";
      }
-     const agentMessage={type:"agent",text:reply,sourceDocumentId:result.target?.sourceDocumentId||null,sourcePage:result.target?.sourcePage||null,persist:true};
+     const agentMessage={
+       type:result.action==="suggest_field_updates"?"fieldSuggestion":"agent",
+       text:reply,
+       sourceDocumentId:result.target?.sourceDocumentId||null,
+       sourcePage:result.target?.sourcePage||null,
+       suggestions:Array.isArray(result.suggestions)?result.suggestions:[],
+       handled:null,
+       persist:true
+     };
      const completed=[...conversationBefore,agentMessage];
      setMessages(completed);
      const data=JSON.parse(JSON.stringify(savedPack.extractedData||{}));
@@ -1208,6 +1249,28 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
  };
  const renderMessage=(m,i)=>{
    const source=m.sourceDocumentId&&m.sourcePage?sourceButton(m.sourceLabel||("Source — page "+m.sourcePage),m.sourceDocumentId,m.sourcePage):null;
+   if(m.type==="fieldSuggestion"&&Array.isArray(m.suggestions)){
+     return <div className="chat-message-row agent" key={i}>
+       <div className="chat-message-avatar"><Sparkles size={15}/></div>
+       <div className="chat-message-content">
+         <div className="chat-message-text">{m.text}</div>
+         <div className="field-suggestion-card">
+           <div className="field-suggestion-title"><b>Suggested changes</b><span>Source: email</span></div>
+           <div className="field-suggestion-list">
+             {m.suggestions.map((suggestion,index)=><div className="field-suggestion-row" key={index}>
+               <div><b>Line {Number(suggestion.lineIndex)+1}</b><span>{suggestion.reason||"Value found in the email source."}</span></div>
+               <strong>{suggestion.field==="hsCode"?"HS code: ":""}{suggestion.value}</strong>
+             </div>)}
+           </div>
+           {m.handled==="applied"
+             ? <div className="field-suggestion-result success"><CheckCircle2 size={14}/> Added to working customs data</div>
+             : m.handled==="ignored"
+               ? <div className="field-suggestion-result">No changes made</div>
+               : <div className="field-suggestion-actions"><button type="button" className="primary" onClick={()=>applySuggestedFields(m.suggestions,i)}>Add to customs data</button><button type="button" className="secondary" onClick={()=>ignoreSuggestedFields(i)}>Don't add</button></div>}
+         </div>
+       </div>
+     </div>;
+   }
    if(m.type==="weightApportionmentDecision"){
      return <div className="chat-message-row agent" key={i}><div className="chat-message-avatar"><Sparkles size={15}/></div><div className="chat-message-content"><div className="chat-message-text">{m.text}</div><div className="weight-decision-actions"><button className="secondary" onClick={decideWeightApportionment}>Apply weight apportionment</button><button className="secondary" onClick={declineWeightApportionment}>Do not apply</button><button className="secondary" onClick={()=>emailCustomerReview()}><Mail size={15}/> Email customer</button></div></div></div>;
    }
