@@ -84,7 +84,7 @@ function encrypt(value){
 }
 async function graphGet(path,headers){const r=await fetch(GRAPH+path,{headers});const d=await r.json();if(!r.ok)throw new Error(d?.error?.message||"Microsoft Graph request failed.");return d;}
 async function graphPost(path,token,body){const r=await fetch(GRAPH+path,{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d?.error?.message||"Graph subscription failed.");return d;}
-function getWebhookUrl(){return "https://"+String(process.env.VERCEL_URL||"customs-idp.vercel.app").trim()+"/api/outlook/webhook";}
+function getWebhookUrl(){return "https://customs-idp.vercel.app/api/outlook/webhook";}
 function escapeHtml(value){return String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 async function supabaseFetch(path,options={}){
   const url=process.env.SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;
