@@ -1231,7 +1231,9 @@ body.review-resizing .review-horizontal-resizer span{
 @media(max-width:520px){.customs-header-table{grid-template-columns:1fr;}}
 
 /* Full-page chat review workspace */
-.review-chat-page{width:100%;max-width:1600px;height:calc(100vh - 120px);min-height:0;margin:0 auto;display:flex;flex-direction:column;overflow:hidden}
+.main.review-mode{height:100vh;min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.main.review-mode .content{flex:1 1 auto;min-height:0;overflow:hidden}
+.review-chat-page{width:100%;max-width:1600px;height:100%;min-height:0;margin:0 auto;display:flex;flex-direction:column;overflow:hidden}
 .review-chat-page .review-head{margin-bottom:18px;flex:0 0 auto}
 .chat-review-full{width:100%;max-width:none;flex:1 1 auto;min-height:0;margin:0;border:1px solid #e3e8ef;border-radius:14px;background:#fff;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(15,23,42,.04)}
 .chat-review-full .chat-review-history{height:auto;min-height:0;max-height:none;flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain}
