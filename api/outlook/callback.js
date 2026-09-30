@@ -33,8 +33,10 @@ export default async function handler(req,res){
     const email=String(me.mail||me.userPrincipalName||"").trim().toLowerCase();
     if(!email) throw new Error("Microsoft did not return the Outlook account address.");
     const encryptedRefreshToken=encrypt(refreshToken);
+    const connectionId="outlook-"+crypto.randomUUID();
+    const clientState=crypto.randomBytes(24).toString("hex");
     await supabaseFetch("outlook_connections",{method:"POST",body:JSON.stringify({
-      id:"outlook-"+crypto.randomUUID(),
+      id:connectionId,
       email,
       display_name:me.displayName||null,
       refresh_token:encryptedRefreshToken,
@@ -42,6 +44,19 @@ export default async function handler(req,res){
       status:"connected",
       updated_at:new Date().toISOString()
     }),headers:{"Prefer":"resolution=merge-duplicates,return=minimal"}});
+    const subscription=await graphPost("/subscriptions",accessToken,{
+      changeType:"created",
+      notificationUrl:getWebhookUrl(),
+      resource:"me/mailFolders('Inbox')/messages",
+      expirationDateTime:new Date(Date.now()+2*24*60*60*1000).toISOString(),
+      clientState
+    });
+    await supabaseFetch("outlook_connections?id=eq."+encodeURIComponent(connectionId),{method:"PATCH",body:JSON.stringify({
+      subscription_id:subscription.id,
+      subscription_expires_at:subscription.expirationDateTime,
+      client_state:clientState,
+      updated_at:new Date().toISOString()
+    })});
     const html="<!doctype html><html><body style=\"font-family:Arial,sans-serif;padding:40px\"><h2>Outlook connected</h2><p><b>"+escapeHtml(email)+"</b> is now connected to Customs IDP.</p><p>You can close this window and return to Customs IDP.</p></body></html>";
     return res.status(200).setHeader("Content-Type","text/html").send(html);
   }catch(error){
@@ -68,6 +83,8 @@ function encrypt(value){
   return [iv.toString("base64url"),tag.toString("base64url"),encrypted.toString("base64url")].join(".");
 }
 async function graphGet(path,headers){const r=await fetch(GRAPH+path,{headers});const d=await r.json();if(!r.ok)throw new Error(d?.error?.message||"Microsoft Graph request failed.");return d;}
+async function graphPost(path,token,body){const r=await fetch(GRAPH+path,{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d?.error?.message||"Graph subscription failed.");return d;}
+function getWebhookUrl(){return "https://"+String(process.env.VERCEL_URL||"customs-idp.vercel.app").trim()+"/api/outlook/webhook";}
 function escapeHtml(value){return String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 async function supabaseFetch(path,options={}){
   const url=process.env.SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;
