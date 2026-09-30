@@ -108,7 +108,19 @@ function signState(payload){
 }
 async function getAttachments(messageId,token){
   const data=await graphGet("/me/messages/"+encodeURIComponent(messageId)+"/attachments?$select=id,name,contentType,size,isInline",token);
-  return (data.value||[]).filter(a=>!a.isInline&&a.contentBytes).map(a=>({filename:a.name,mimeType:a.contentType||"application/octet-stream",size:a.size||0,contentBase64:a.contentBytes}));
+  const attachments=[];
+  for(const attachment of (data.value||[])){
+    if(attachment.isInline)continue;
+    const detail=await graphGet("/me/messages/"+encodeURIComponent(messageId)+"/attachments/"+encodeURIComponent(attachment.id),token);
+    if(!detail?.contentBytes)continue;
+    attachments.push({
+      filename:detail.name||attachment.name,
+      mimeType:detail.contentType||attachment.contentType||"application/octet-stream",
+      size:detail.size||attachment.size||0,
+      contentBase64:detail.contentBytes
+    });
+  }
+  return attachments;
 }
 async function getAccessToken(connection){
   const refresh=decrypt(connection.refresh_token);
