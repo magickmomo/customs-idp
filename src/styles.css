@@ -1988,4 +1988,17 @@ body {
  .agent-directory-grid{grid-template-columns:1fr}.agent-directory-card{border-right:0;border-bottom:1px solid #eef1f5}
  .agent-task-grid{grid-template-columns:1fr}
 }
-\n/* Native Excel / CSV review preview. Keeps spreadsheets inside the Review modal instead of downloading them. */\n.review-source-modal-body.spreadsheet-document{background:#f1f4f8;overflow:hidden;display:flex;flex-direction:column}\n.spreadsheet-preview{display:flex;flex-direction:column;min-height:0;height:100%;background:#fff}\n.spreadsheet-preview-sheetbar{display:flex;gap:4px;padding:8px 10px;border-bottom:1px solid #dfe5ec;background:#f8fafc;overflow-x:auto;flex:0 0 auto}\n.spreadsheet-preview-sheetbar button{border:1px solid transparent;background:transparent;color:#526176;border-radius:7px;padding:6px 10px;font-size:10px;cursor:pointer;white-space:nowrap}\n.spreadsheet-preview-sheetbar button:hover{background:#eef2f7}\n.spreadsheet-preview-sheetbar button.active{background:#fff;border-color:#d7dee8;color:#172033;font-weight:700;box-shadow:0 1px 2px rgba(15,23,42,.05)}\n.spreadsheet-preview-table-wrap{flex:1;min-height:0;overflow:auto;background:#fff}\n.spreadsheet-preview-table{border-collapse:separate;border-spacing:0;min-width:100%;font-size:10px;color:#263147}\n.spreadsheet-preview-table td{border-right:1px solid #e5e9ef;border-bottom:1px solid #e5e9ef;padding:7px 9px;min-width:90px;max-width:360px;white-space:pre-wrap;vertical-align:top;background:#fff}\n.spreadsheet-preview-table tr:first-child td{position:sticky;top:0;z-index:1;background:#f8fafc;font-weight:700;color:#172033}\n.spreadsheet-preview-state{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:24px;box-sizing:border-box;text-align:center;color:#8a95a5;background:#f8fafc}\n.spreadsheet-preview-state b{color:#4d596c;font-size:11px}\n.spreadsheet-preview-state span{max-width:430px;font-size:9px;line-height:1.5}\n
+\n/* Native Excel / CSV review preview. Keeps spreadsheets inside the Review modal instead of downloading them. */
+.review-source-modal-body.spreadsheet-document{background:#f1f4f8;overflow:hidden;display:flex;flex-direction:column}
+.spreadsheet-preview{display:flex;flex-direction:column;min-height:0;height:100%;background:#fff}
+.spreadsheet-preview-sheetbar{display:flex;gap:4px;padding:8px 10px;border-bottom:1px solid #dfe5ec;background:#f8fafc;overflow-x:auto;flex:0 0 auto}
+.spreadsheet-preview-sheetbar button{border:1px solid transparent;background:transparent;color:#526176;border-radius:7px;padding:6px 10px;font-size:10px;cursor:pointer;white-space:nowrap}
+.spreadsheet-preview-sheetbar button:hover{background:#eef2f7}
+.spreadsheet-preview-sheetbar button.active{background:#fff;border-color:#d7dee8;color:#172033;font-weight:700;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.spreadsheet-preview-table-wrap{flex:1;min-height:0;overflow:auto;background:#fff}
+.spreadsheet-preview-table{border-collapse:separate;border-spacing:0;min-width:100%;font-size:10px;color:#263147}
+.spreadsheet-preview-table td{border-right:1px solid #e5e9ef;border-bottom:1px solid #e5e9ef;padding:7px 9px;min-width:90px;max-width:360px;white-space:pre-wrap;vertical-align:top;background:#fff}
+.spreadsheet-preview-table tr:first-child td{position:sticky;top:0;z-index:1;background:#f8fafc;font-weight:700;color:#172033}
+.spreadsheet-preview-state{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:24px;box-sizing:border-box;text-align:center;color:#8a95a5;background:#f8fafc}
+.spreadsheet-preview-state b{color:#4d596c;font-size:11px}
+.spreadsheet-preview-state span{max-width:430px;font-size:9px;line-height:1.5}
