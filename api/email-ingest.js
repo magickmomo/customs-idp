@@ -226,7 +226,10 @@ async function extractAttachment({fileData,filename,mimeType}){
   if(!url)throw new Error("VERCEL_URL or EMAIL_INGEST_EXTRACT_URL is not configured.");
   const response=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json","x-email-ingest-secret":String(process.env.EMAIL_INGEST_SECRET||"")},body:JSON.stringify({fileData,filename,mimeType})});
   const data=await response.json().catch(()=>({}));
-  if(!response.ok)throw new Error(data?.error||"Document extraction failed.");
+  if(!response.ok){
+    const detail=data?.error?.message ?? data?.error ?? data?.message ?? "Document extraction failed.";
+    throw new Error(formatExtractionError(detail));
+  }
   return data;
 }
 function formatExtractionError(error){if(error==null)return "Unknown extraction error.";if(typeof error==="string")return error;try{return JSON.stringify(error);}catch{return String(error);}}
