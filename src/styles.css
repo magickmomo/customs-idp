@@ -2047,3 +2047,18 @@ body {
 .review-email-modal-body{padding:18px 20px;overflow:auto}
 .review-email-modal-body>div{margin-top:7px;white-space:pre-wrap;font-size:11px;line-height:1.65;color:#526176}
 .review-email-modal-note{margin:0 20px 18px;padding-top:12px;border-top:1px solid #e8edf3;color:#8a95a5;font-size:9px;line-height:1.5}
+
+.field-suggestion-card{margin-top:14px;border:1px solid #dfe5ee;background:#f8fafc;border-radius:9px;padding:12px}
+.field-suggestion-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:9px;color:#27344a;font-size:10px}
+.field-suggestion-title span{font-size:8px;color:#7c8799}
+.field-suggestion-list{display:flex;flex-direction:column;border:1px solid #e7ebf2;background:#fff;border-radius:7px;overflow:hidden}
+.field-suggestion-row{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:9px 10px;border-bottom:1px solid #edf0f4}
+.field-suggestion-row:last-child{border-bottom:0}
+.field-suggestion-row>div{min-width:0}
+.field-suggestion-row b{display:block;font-size:9px;color:#334155}
+.field-suggestion-row span{display:block;margin-top:3px;font-size:8px;color:#7c8799;line-height:1.4}
+.field-suggestion-row strong{flex:0 0 auto;font-size:10px;color:#2563eb}
+.field-suggestion-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.field-suggestion-actions button{display:inline-flex;align-items:center;gap:7px}
+.field-suggestion-result{display:flex;align-items:center;gap:6px;margin-top:11px;padding:8px 9px;border-radius:6px;background:#fff;border:1px solid #e7ebf2;color:#667287;font-size:9px}
+.field-suggestion-result.success{color:#15803d;background:#f0fdf4;border-color:#bbf7d0}
