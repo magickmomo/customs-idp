@@ -153,7 +153,7 @@ export function validateStandardCustomsRecord(data={}){
     const lineNo=numberValue(line._lineNumber);
     const prefix="Line "+(index+1);
     const description=text(line.description);
-    const hsRaw=text(line.hsCode);\n    const hs=hsRaw.replace(/[.\s-]/g,"");
+    const hs=text(line.hsCode).replace(/[.\s-]/g,"");
     const origin=normalizeCountryCode(line.sourceCountryCode||line.countryOfOrigin);
     const quantity=numberValue(line.quantity);
     const amount=numberValue(line.totalValue??line.lineValue??line.unitValue);
