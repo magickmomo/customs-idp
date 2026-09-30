@@ -6,6 +6,20 @@ export default async function handler(req,res){
   try{
     const {message,pack}=req.body||{};
     if(!message||!pack)return res.status(400).json({error:"message and pack are required"});
+    const outOfScopePatterns=[
+      /\b(recipe|recipes|cook|cooking|soup|meal|dinner|lunch|breakfast)\b/i,
+      /\b(weather|forecast|temperature|football|soccer|sport|sports|betting|odds)\b/i,
+      /\b(movie|movies|film|films|music|song|songs|game|games|gaming)\b/i,
+      /\b(joke|jokes|poem|poetry|story|stories|dating|relationship)\b/i,
+      /\b(homework|essay|school|university|maths|mathematics)\b/i
+    ];
+    if(outOfScopePatterns.some(pattern=>pattern.test(message))){
+      return res.status(200).json({
+        reply:"I’m the Customs IDP Review Agent. I can only help with the current document pack, customs data, source evidence, validation, customer strategy, discrepancies and review decisions.",
+        action:"none",
+        target:null
+      });
+    }
     const context={
       packId:pack.id,customer:pack.customer,ticket:pack.ticket,
       extractedData:pack.extractedData||{},
@@ -15,7 +29,10 @@ export default async function handler(req,res){
       conversation:Array.isArray(pack.conversation)?pack.conversation.slice(-12):[]
     };
     const prompt=[
-      "You are the Customs IDP review agent.",
+      "You are the Customs IDP Review Agent for this Customs IDP application. You are NOT a general-purpose assistant.",
+      "STRICT SCOPE: You may ONLY discuss or act on the current document pack, customs extraction, source evidence, document discrepancies, validation results, customer strategy, field corrections explicitly requested by the user, weight reconciliation/apportionment, freight reconciliation, EORI/address information, and other customs-processing workflow decisions represented in the supplied pack context.",
+      "If the user asks for anything unrelated to the current Customs IDP workflow — including recipes, cooking, general knowledge, weather, sports, entertainment, coding help, homework, personal advice, or unrelated research — DO NOT answer that request. Politely state that you are restricted to Customs IDP work and ask them to ask a question about the current pack instead.",
+      "Do not browse for, retrieve, generate, or substitute outside information to answer an out-of-scope request.",
       "Use ONLY the supplied pack context. Do not invent document values, pages, rules, or corrections.",
       "The extraction data contains source documents and fieldEvidence. When answering source questions, name the document and page when available.",
       "If documents disagree, explicitly state the conflicting source values and do not silently choose one.",
