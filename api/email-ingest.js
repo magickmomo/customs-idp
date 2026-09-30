@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { createClient } from "@supabase/supabase-js";
 
 const DEFAULT_STRATEGIES = {
   "Acme Components Ltd": { emailFields: [] },
@@ -71,13 +72,22 @@ export default async function handler(req,res){
     };
 
     const attachmentResults=[];
+    const storedFiles=[];
     for(const attachment of attachments){
       const filename=String(attachment.filename||attachment.name||"attachment");
       const mimeType=String(attachment.mimeType||attachment.contentType||"application/octet-stream");
       const fileData=normaliseAttachmentData(attachment);
       if(!fileData){attachmentResults.push({filename,mimeType,error:"Attachment content was not supplied by the email connector."});continue;}
-      try{const extraction=await extractAttachment({fileData,filename,mimeType});attachmentResults.push({filename,mimeType,extraction:extraction.extraction,source:extraction.source});}
-      catch(error){attachmentResults.push({filename,mimeType,error:error.message||"Attachment extraction failed."});}
+      try{
+        const extraction=await extractAttachment({fileData,filename,mimeType});
+        attachmentResults.push({filename,mimeType,extraction:extraction.extraction,source:extraction.source});
+        try{
+          const storagePath=await storeAttachment({packId:id,filename,mimeType,fileData});
+          storedFiles.push({id:id+"-"+storedFiles.length,name:filename,size:Number(attachment.size)||0,type:mimeType,storagePath});
+        }catch(storageError){
+          storedFiles.push({id:id+"-"+storedFiles.length,name:filename,size:Number(attachment.size)||0,type:mimeType,storagePath:null,storageError:storageError.message||"Storage upload failed."});
+        }
+      }catch(error){attachmentResults.push({filename,mimeType,error:error.message||"Attachment extraction failed."});}
     }
     const successfulExtractions=attachmentResults.filter(item=>item.extraction).map(item=>item.extraction);
     const primaryExtraction=successfulExtractions.find(item=>item.documentType==="commercial_invoice")||successfulExtractions[0]||null;
@@ -85,6 +95,7 @@ export default async function handler(req,res){
     const extractedData={...(primaryExtraction||{}),documentType:primaryExtraction?.documentType||"email",email:pack.email,documents:attachmentResults,documentCount:attachmentResults.length,sourceDocuments:attachmentResults.map(item=>({name:item.filename,type:item.extraction?.documentType||item.mimeType,extraction:item.extraction||null,error:item.error||null})),emailFields:emailExtraction.fields,warnings:extractionWarnings,agentMessages:[]};
     const processingStatus="Needs review";
 
+    extractedData._manager={processingStartedAt:receivedAt,processingCompletedAt:new Date().toISOString(),uploadedFiles:storedFiles.length?storedFiles:pack.uploadedFiles};
     await supabaseFetch("document_packs",{
       method:"POST",
       body:JSON.stringify({
@@ -92,12 +103,12 @@ export default async function handler(req,res){
         customer:pack.customer,
         docs:pack.docs,
         status:processingStatus,
-        confidence:pack.confidence,
+        confidence:successfulExtractions.length?Math.round(successfulExtractions.reduce((sum,item)=>sum+Number(item.confidence||0),0)/successfulExtractions.length):0,
         received:pack.received,
         ticket:pack.ticket,
         assigned_to:pack.assignedTo,
         extracted_data:extractedData,
-        processing_error:null,
+        processing_error:extractionWarnings.length?extractionWarnings.join(" | "):null,
         updated_at:new Date().toISOString()
       }),
       headers:{"Prefer":"resolution=merge-duplicates,return=minimal"}
@@ -118,6 +129,20 @@ export default async function handler(req,res){
   }
 }
 
+async function storeAttachment({packId,filename,mimeType,fileData}){
+  const url=process.env.SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if(!url||!key)throw new Error("Supabase storage configuration is missing.");
+  const supabase=createClient(url,key,{auth:{autoRefreshToken:false,persistSession:false}});
+  const raw=String(fileData||"");
+  const base64=raw.includes(",")?raw.slice(raw.indexOf(",")+1):raw;
+  const buffer=Buffer.from(base64,"base64");
+  const safePack=String(packId).replace(/[^a-zA-Z0-9._-]+/g,"-");
+  const safeName=String(filename).replace(/[^a-zA-Z0-9._-]+/g,"-").replace(/^-+|-+$/g,"")||"document";
+  const path=safePack+"/"+Date.now()+"-"+safeName;
+  const {error}=await supabase.storage.from("CUSTOMS-DOCUMENTS").upload(path,buffer,{contentType:mimeType,upsert:false});
+  if(error)throw new Error(error.message);
+  return path;
+}
 async function extractConfiguredEmailFields({subject,text,html,emailFields}){
   if(!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured in Vercel.");
 
