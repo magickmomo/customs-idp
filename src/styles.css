@@ -1990,6 +1990,7 @@ body {
 }
 \n/* Native Excel / CSV review preview. Keeps spreadsheets inside the Review modal instead of downloading them. */
 .review-source-modal-body.spreadsheet-document{background:#f1f4f8;overflow:hidden;display:flex;flex-direction:column}
+.spreadsheet-preview-status{margin-left:auto;color:#7b8798;font-size:10px;font-weight:600;padding-right:8px}
 .spreadsheet-preview-office{position:relative;display:flex;flex-direction:column;min-height:0;height:100%;width:100%;background:#fff}
 .spreadsheet-preview-office iframe{display:block;width:100%;height:100%;min-height:0;min-width:100%;flex:1;border:0;background:#fff}
 .spreadsheet-preview-office-fallback{position:absolute;left:12px;bottom:12px;display:flex;align-items:center;gap:8px;padding:7px 9px;background:rgba(255,255,255,.96);border:1px solid #dfe5ec;border-radius:7px;box-shadow:0 2px 8px rgba(15,23,42,.08);font-size:10px;color:#526176}
