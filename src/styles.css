@@ -1231,11 +1231,11 @@ body.review-resizing .review-horizontal-resizer span{
 @media(max-width:520px){.customs-header-table{grid-template-columns:1fr;}}
 
 /* Full-page chat review workspace */
-.review-chat-page{width:100%;max-width:1600px;margin:0 auto}
-.review-chat-page .review-head{margin-bottom:18px}
-.chat-review-full{width:100%;max-width:none;margin:0;border:1px solid #e3e8ef;border-radius:14px;background:#fff;overflow:hidden;box-shadow:0 4px 20px rgba(15,23,42,.04)}
-.chat-review-full .chat-review-history{height:calc(100vh - 390px);min-height:300px;max-height:none;overflow-y:auto;overscroll-behavior:contain}
-.chat-review-full .chat-review-input{position:sticky;bottom:0;background:#fff;z-index:3}
+.review-chat-page{width:100%;max-width:1600px;height:calc(100vh - 120px);min-height:0;margin:0 auto;display:flex;flex-direction:column;overflow:hidden}
+.review-chat-page .review-head{margin-bottom:18px;flex:0 0 auto}
+.chat-review-full{width:100%;max-width:none;flex:1 1 auto;min-height:0;margin:0;border:1px solid #e3e8ef;border-radius:14px;background:#fff;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(15,23,42,.04)}
+.chat-review-full .chat-review-history{height:auto;min-height:0;max-height:none;flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain}
+.chat-review-full .chat-review-input{position:static;flex:0 0 auto;background:#fff;z-index:3}
 .review-source-modal-overlay{position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.62);display:flex;align-items:center;justify-content:center;padding:28px}
 .review-source-modal{width:min(1200px,96vw);height:min(900px,92vh);background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 24px 70px rgba(15,23,42,.3);display:flex;flex-direction:column}
 .review-source-modal-head{min-height:58px;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e7ebf2}
@@ -1254,7 +1254,8 @@ body.review-resizing .review-horizontal-resizer span{
 @media(max-width:900px){
   .review-chat-page .review-head{align-items:flex-start;flex-direction:column;gap:14px}
   .review-chat-page .review-actions{width:100%;flex-wrap:wrap}
-  .chat-review-full .chat-review-history{height:calc(100vh - 430px);min-height:260px;max-height:none;overflow-y:auto}
+  .review-chat-page{height:calc(100vh - 96px)}
+  .chat-review-full .chat-review-history{height:auto;min-height:0;max-height:none;overflow-y:auto}
   .review-source-modal-overlay{padding:12px}
   .review-source-modal{width:100%;height:94vh}
 }
