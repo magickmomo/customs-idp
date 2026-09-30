@@ -1133,9 +1133,12 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
      }];
      applied++;
    });
+   const confirmation={type:"agent",text:"Confirmed. I added "+applied+" email-sourced field"+(applied===1?"":"s")+" to the working customs data. The previous validation result was cleared; run Validate data to check the updated pack.",persist:true};
+   const updatedMessages=messages.map((m,index)=>index===messageIndex?{...m,handled:"applied"}:m).concat(confirmation);
+   data.agentMessages=updatedMessages.filter(m=>m.persist!==false).map(serialiseMessage);
    const next={...pack,extractedData:data,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
    updatePack?.(next);
-   setMessages(current=>[...current.map((m,index)=>index===messageIndex?{...m,handled:"applied"}:m),{type:"agent",text:"Confirmed. I added "+applied+" email-sourced field"+(applied===1?"":"s")+" to the working customs data. The previous validation result was cleared; run Validate data to check the updated pack.",persist:true}]);
+   setMessages(updatedMessages);
    notify?.(applied?"Added "+applied+" email-sourced field"+(applied===1?"":"s")+" to the pack":"No new email-sourced fields were added");
  };
  const ignoreSuggestedFields=(messageIndex)=>{
