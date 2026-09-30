@@ -142,7 +142,7 @@ function App(){
     (async()=>{
       try {
         // Pull any new CUSTOMS-IDP emails before loading the persistent pack list.
-        await fetch("/api/outlook/sync",{method:"POST",credentials:"include"}).catch(()=>null);
+        await fetch("/api/outlook?action=sync",{method:"POST",credentials:"include"}).catch(()=>null);
         const response=await fetch("/api/packs");
         if(!response.ok) throw new Error("Database unavailable");
         const data=await response.json();
@@ -1441,7 +1441,7 @@ function SettingsPage(){
   const [error,setError]=useState("");
   useEffect(()=>{
     let active=true;
-    fetch("/api/outlook/status",{credentials:"include"})
+    fetch("/api/outlook?action=status",{credentials:"include"})
       .then(r=>r.json())
       .then(data=>{if(active)setOutlook({loading:false,connected:Boolean(data.connected),connection:data.connection||null});})
       .catch(()=>{if(active)setOutlook({loading:false,connected:false,connection:null});});
@@ -1450,7 +1450,7 @@ function SettingsPage(){
   const connectOutlook=async()=>{
     setError("");setConnecting(true);
     try{
-      const response=await fetch("/api/outlook/connect",{credentials:"include"});
+      const response=await fetch("/api/outlook?action=connect",{credentials:"include"});
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(data.error||"Unable to start Outlook connection.");
       window.location.href=data.authorizationUrl;
