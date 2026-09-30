@@ -43,7 +43,7 @@ async function sync(req,res){
     const connection=rows[0];
     if(!connection)return res.status(200).json({ok:true,connected:false,processed:0,message:"Outlook is not connected."});
     const token=await getAccessToken(connection);
-    const data=await graphGet("/me/mailFolders('Inbox')/messages?$top=25&$orderby=receivedDateTime%20desc&$select=id,internetMessageId,subject,body,from,toRecipients,receivedDateTime,hasAttachments",token);
+    const data=await graphGet("/me/messages?$top=50&$orderby=receivedDateTime%20desc&$select=id,internetMessageId,subject,body,from,toRecipients,receivedDateTime,hasAttachments",token);
     const candidates=(data.value||[]).filter(message=>/CUSTOMS-IDP/i.test(String(message.subject||"")));
     let processed=0,duplicates=0,failed=0;
     for(const message of candidates){
