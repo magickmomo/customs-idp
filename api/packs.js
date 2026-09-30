@@ -17,6 +17,7 @@ export default async function handler(req,res){
       const validationMeta={validationStatus:pack.validationStatus||null,validationChecks:Array.isArray(pack.validationChecks)?pack.validationChecks:null,validationSummary:pack.validationSummary||null};
       if(validationMeta.validationStatus||validationMeta.validationChecks||validationMeta.validationSummary) extractedData._validation=validationMeta;
       if(pack.workingRecord) extractedData._workingRecord=pack.workingRecord;
+      if(pack.email) extractedData.email=pack.email;
       const row={id:pack.id,customer:pack.customer||"Unassigned customer",docs:Number(pack.docs)||0,status:pack.status||"Processing",confidence:Number(pack.confidence)||0,received:pack.received||new Date().toISOString(),ticket:pack.ticket||null,assigned_to:pack.assignedTo||"Unassigned",extracted_data:Object.keys(extractedData).length?extractedData:null,processing_error:pack.processingError||null,updated_at:new Date().toISOString()};
       await supabaseFetch("document_packs",{method:"POST",body:JSON.stringify(row),headers:{"Prefer":"resolution=merge-duplicates,return=minimal"}});
       return res.status(200).json({pack:normalizePack(row)});
@@ -46,7 +47,8 @@ function normalizePack(row){
   const meta=data?._manager||{};
   const validation=data?._validation||{};
   const workingRecord=data?._workingRecord;
+  const email=data?.email||null;
   let extractedData=data;
   if(data){const rest={...data};delete rest._manager;delete rest._validation;delete rest._workingRecord;extractedData=Object.keys(rest).length?rest:undefined;}
-  return {...row,assignedTo:row.assigned_to||"Unassigned",extractedData,workingRecord,validationStatus:validation.validationStatus||undefined,validationChecks:Array.isArray(validation.validationChecks)?validation.validationChecks:undefined,validationSummary:validation.validationSummary||undefined,uploadedFiles:Array.isArray(meta.uploadedFiles)?meta.uploadedFiles:undefined,processingStartedAt:meta.processingStartedAt||undefined,processingCompletedAt:meta.processingCompletedAt||undefined,processingError:row.processing_error||undefined};
+  return {...row,assignedTo:row.assigned_to||"Unassigned",extractedData,workingRecord,email,validationStatus:validation.validationStatus||undefined,validationChecks:Array.isArray(validation.validationChecks)?validation.validationChecks:undefined,validationSummary:validation.validationSummary||undefined,uploadedFiles:Array.isArray(meta.uploadedFiles)?meta.uploadedFiles:undefined,processingStartedAt:meta.processingStartedAt||undefined,processingCompletedAt:meta.processingCompletedAt||undefined,processingError:row.processing_error||undefined};
 }
