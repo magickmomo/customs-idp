@@ -79,15 +79,24 @@ export default async function handler(req,res){
       const fileData=normaliseAttachmentData(attachment);
       if(!fileData){attachmentResults.push({filename,mimeType,error:"Attachment content was not supplied by the email connector."});continue;}
       try{
-        const extraction=await extractAttachment({fileData,filename,mimeType});
-        attachmentResults.push({filename,mimeType,extraction:extraction.extraction,source:extraction.source});
+        // Persist the original source document independently of extraction.
+        // A failed extraction must never make the source document unavailable
+        // for review or a later re-process.
+        let storagePath=null;
+        let storageError=null;
         try{
-          const storagePath=await storeAttachment({packId:id,filename,mimeType,fileData});
+          storagePath=await storeAttachment({packId:id,filename,mimeType,fileData});
           storedFiles.push({id:id+"-"+storedFiles.length,name:filename,size:Number(attachment.size)||0,type:mimeType,storagePath});
-        }catch(storageError){
-          storedFiles.push({id:id+"-"+storedFiles.length,name:filename,size:Number(attachment.size)||0,type:mimeType,storagePath:null,storageError:storageError.message||"Storage upload failed."});
+        }catch(error){
+          storageError=formatExtractionError(error);
+          storedFiles.push({id:id+"-"+storedFiles.length,name:filename,size:Number(attachment.size)||0,type:mimeType,storagePath:null,storageError});
         }
-      }catch(error){attachmentResults.push({filename,mimeType,error:error.message||"Attachment extraction failed."});}
+
+        const extraction=await extractAttachment({fileData,filename,mimeType});
+        attachmentResults.push({filename,mimeType,extraction:extraction.extraction,source:extraction.source,storagePath,storageError});
+      }catch(error){
+        attachmentResults.push({filename,mimeType,error:formatExtractionError(error)});
+      }
     }
     const successfulExtractions=attachmentResults.filter(item=>item.extraction).map(item=>item.extraction);
     const primaryExtraction=successfulExtractions.find(item=>item.documentType==="commercial_invoice")||successfulExtractions[0]||null;
