@@ -34,7 +34,7 @@ async function processNotification(notification){
     to:firstAddress(message.toRecipients)||connection.email,
     from:message.from?.emailAddress?.address||"",
     subject:message.subject||"",
-    text=stripHtml(message.body?.content||""),
+    text:stripHtml(message.body?.content||""),
     html:message.body?.content||"",
     messageId:message.internetMessageId||message.id,
     receivedAt:message.receivedDateTime||new Date().toISOString(),
