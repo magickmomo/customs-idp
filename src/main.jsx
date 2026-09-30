@@ -849,6 +849,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
    return()=>cancelAnimationFrame(frame);
  },[messages]);
  const [showSummary,setShowSummary]=useState(false);
+ const [showEmailSource,setShowEmailSource]=useState(false);
 
  const [emailDraft,setEmailDraft]=useState(null);
 
@@ -1317,7 +1318,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
    <button className="back" onClick={back}>← Back to inbox</button>
    <div className="review-head"><div><div className="eyebrow">{pack.id} · {pack.ticket}</div><h1>{getPackCustomerLabel(pack)}</h1><p>{pack.docs} Documents · Received {formatReceivedDateTime(pack.received)}</p></div><div className="review-actions"><select className="owner-select review-owner" value={pack.assignedTo||"Unassigned"} onChange={e=>onAssign?.(pack.id,e.target.value)}><option>Unassigned</option><option>Liam Wingrove</option><option>Data Processor 1</option><option>Data Processor 2</option><option>Muhammad Amer</option></select><Status status={pack.status}/><button className="secondary" onClick={()=>reprocessPack?.(pack)}>Re-process</button><button className="secondary" onClick={validatePack}>Validate data</button><button className={pack.status==="Ready"?"primary":"secondary"} onClick={postToLCA}>Post to LCA</button></div></div>
    <div className="chat-review-panel chat-review-full">
-     <div className="chat-review-head"><div className="agent-title"><div className="agent-orb"><Sparkles size={18}/></div><div><b>Extraction Agent</b><span>Source-grounded document review</span></div></div><div className="chat-review-head-actions"><button type="button" className="secondary review-show-summary-btn" onClick={()=>setShowSummary(true)}><FileText size={14}/> Customs summary</button><button type="button" className="secondary review-show-document-btn" onClick={()=>{setSelectedDocumentId(selectedDocumentId||(documentRows[0]?.id||documentRows[0]?.name));setPreviewPage(1);setShowPreview(true);}}><FileText size={14}/> Show document</button></div></div>
+     <div className="chat-review-head"><div className="agent-title"><div className="agent-orb"><Sparkles size={18}/></div><div><b>Extraction Agent</b><span>Source-grounded document review</span></div></div><div className="chat-review-head-actions"><button type="button" className="secondary review-show-summary-btn" onClick={()=>setShowSummary(true)}><FileText size={14}/> Customs summary</button>{pack.email&&<button type="button" className="secondary review-show-email-btn" onClick={()=>setShowEmailSource(true)}><Mail size={14}/> Show email</button>}<button type="button" className="secondary review-show-document-btn" onClick={()=>{setSelectedDocumentId(selectedDocumentId||(documentRows[0]?.id||documentRows[0]?.name));setPreviewPage(1);setShowPreview(true);}}><FileText size={14}/> Show document</button></div></div>
      <div className="chat-review-intro">I read the complete document pack first. The conversation below is the review record: extracted values stay connected to their source, and discrepancies are surfaced rather than silently resolved.</div>
    
      {pack.processingError&&<div className="reprocess-error-banner"><div><b>Re-processing failed</b><span>{pack.processingError}</span></div><button type="button" className="secondary" onClick={()=>reprocessPack?.(pack)}>Try again</button></div>}
@@ -1325,6 +1326,18 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
      <div className="chat-input chat-review-input"><input value={chat} onChange={e=>setChat(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendChat()} placeholder="Ask where a value came from, why it was used, or tell the agent what to change..."/><button onClick={sendChat}><ArrowRight size={16}/></button></div>
    </div>
    {showSummary&&<div className="customs-summary-modal-overlay" onClick={()=>setShowSummary(false)}><div className="customs-summary-modal" onClick={e=>e.stopPropagation()}><div className="customs-summary-modal-head"><div><span className="summary-kicker">CUSTOMS ENTRY SUMMARY</span></div><button type="button" className="row-btn" onClick={()=>setShowSummary(false)}><X size={18}/></button></div><div className="customs-summary-modal-body">{buildSummary().find(m=>m.type==="customsEntrySummary") ? renderMessage(buildSummary().find(m=>m.type==="customsEntrySummary"),0) : <div className="review-document-empty"><FileText size={28}/><b>Customs summary not available</b><span>Waiting for document extraction to complete.</span></div>}</div></div></div>}
+   {showEmailSource&&pack.email&&<div className="review-source-modal-overlay" onClick={()=>setShowEmailSource(false)}>
+     <div className="review-email-modal" onClick={e=>e.stopPropagation()}>
+       <div className="review-email-modal-head"><div><span className="summary-kicker">EMAIL SOURCE</span><b>{pack.email.subject||"Customs IDP email"}</b></div><button type="button" className="row-btn" onClick={()=>setShowEmailSource(false)}><X size={18}/></button></div>
+       <div className="review-email-modal-meta">
+         {pack.email.from&&<div><span>From</span><b>{pack.email.from}</b></div>}
+         {pack.email.to&&<div><span>To</span><b>{pack.email.to}</b></div>}
+         {pack.email.receivedAt&&<div><span>Received</span><b>{new Date(pack.email.receivedAt).toLocaleString("en-GB")}</b></div>}
+       </div>
+       {(pack.email.text||pack.email.html)&&<div className="review-email-modal-body"><span>Email body</span><div>{String(pack.email.text||pack.email.html||"").replace(/<[^>]*>/g,"").trim()}</div></div>}
+       <div className="review-email-modal-note">Email content is retained as source context. Customs data is extracted from the attached documents unless the Review Agent explicitly identifies email content as supporting context.</div>
+     </div>
+   </div>}
    {showPreview&&selectedDocumentUrl&&<div className="review-source-modal-overlay" onClick={()=>setShowPreview(false)}>
      <div className="review-source-modal" onClick={e=>e.stopPropagation()}>
        <div className="review-source-modal-head">
@@ -1332,19 +1345,6 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
          <button type="button" className="row-btn" onClick={()=>setShowPreview(false)}><X size={18}/></button>
        </div>
        <div className="review-source-modal-toolbar"><div className="review-document-picker"><FileText size={14}/><select value={selectedDocumentId||""} onChange={e=>{setSelectedDocumentId(e.target.value);setPreviewPage(1);}} aria-label="Select source document">{documentRows.map(doc=><option key={doc.id||doc.name} value={doc.id||doc.name}>{doc.name}</option>)}</select></div>{selectedDocumentIsSpreadsheet&&<span className="spreadsheet-preview-status">Excel preview loading…</span>}{selectedDocumentIsPdf&&<div className="review-viewer-controls"><span>Page {previewPage}</span><button type="button" onClick={()=>setPreviewPage(p=>Math.max(1,p-1))}>−</button><button type="button" onClick={()=>setPreviewPage(p=>p+1)}>+</button></div>}</div>
-       {pack.email&&<details className="review-source-email-details">
-         <summary><span><Mail size={13}/> Email source</span><small>Subject, sender and message retained as source context</small></summary>
-         <div className="review-source-email-content">
-           <div className="review-source-email-title"><span className="summary-kicker">EMAIL SOURCE</span><b>{pack.email.subject||"Customs IDP email"}</b></div>
-           <div className="review-source-email-meta">
-             {pack.email.from&&<div><span>From</span><b>{pack.email.from}</b></div>}
-             {pack.email.receivedAt&&<div><span>Received</span><b>{new Date(pack.email.receivedAt).toLocaleString("en-GB")}</b></div>}
-             {(pack.email.to||"")&&<div><span>To</span><b>{pack.email.to}</b></div>}
-           </div>
-           {(pack.email.text||pack.email.html)&&<div className="review-source-email-body"><span>Email body</span><div>{String(pack.email.text||pack.email.html||"").replace(/<[^>]*>/g,"").trim()}</div></div>}
-           <div className="review-source-email-note">Email content is retained as source context. Customs data is extracted from the attached documents unless the Review Agent explicitly identifies email content as supporting context.</div>
-         </div>
-       </details>}
        <div className={"review-source-modal-body "+(selectedDocumentIsSpreadsheet?"spreadsheet-document":selectedDocumentIsImage?"image-document":"pdf-document")}>{selectedDocumentUrl?(selectedDocumentIsSpreadsheet?<SpreadsheetPreview url={selectedDocumentUrl} sheetIndex={previewPage} setSheetIndex={setPreviewPage}/>:selectedDocumentIsImage?<img src={selectedDocumentUrl} alt={selectedDocument?.name||"Document preview"}/>:<iframe src={selectedDocumentFrameUrl} title={selectedDocument?.name||"Document preview"}/>):<div className="review-document-empty"><FileText size={28}/><b>{selectedDocument?.name||"No document available"}</b><span>The document is not available for preview yet.</span></div>}</div>
      </div>
    </div>}
