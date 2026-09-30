@@ -941,7 +941,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
      return {
        no:index+1,
        description:value(line.description)||"Unnamed goods line",
-       hs:value(line.hsCode),
+       hs:String(line.hsCode??"").replace(/[.\s-]/g,""),
        origin:value(line.sourceCountryCode),
        quantity:value(line.quantity),
        net:value(workingNet),
