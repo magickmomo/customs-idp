@@ -146,7 +146,7 @@ function App(){
         try{
           const syncResponse=await fetch("/api/outlook?action=sync",{method:"POST",credentials:"include"});
           const syncData=await syncResponse.json().catch(()=>({}));
-          if(syncResponse.ok) setEmailSyncStatus({state:"success",checked:Number(syncData.checked)||0,processed:Number(syncData.processed)||0,duplicates:Number(syncData.duplicates)||0,failed:Number(syncData.failed)||0,error:""});
+          if(syncResponse.ok) setEmailSyncStatus({state:"success",checked:Number(syncData.checked)||0,processed:Number(syncData.processed)||0,duplicates:Number(syncData.duplicates)||0,failed:Number(syncData.failed)||0,failures:syncData.failures||[],error:""});
           else setEmailSyncStatus({state:"error",checked:0,processed:0,duplicates:0,failed:0,error:syncData.error||("HTTP "+syncResponse.status)});
         }catch(error){
           setEmailSyncStatus({state:"error",checked:0,processed:0,duplicates:0,failed:0,error:error.message||"Outlook sync failed"});
