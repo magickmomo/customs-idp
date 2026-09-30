@@ -773,9 +773,16 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
  const [chat,setChat]=useState("");
  const [messages,setMessages]=useState([]);
  const [isSending,setIsSending]=useState(false);
+ const chatHistoryRef=useRef(null);
  const [selectedDocumentId,setSelectedDocumentId]=useState(null);
  const [previewPage,setPreviewPage]=useState(1);
  const [showPreview,setShowPreview]=useState(false);
+ useEffect(()=>{
+   const el=chatHistoryRef.current;
+   if(!el)return;
+   const frame=requestAnimationFrame(()=>{el.scrollTop=el.scrollHeight;});
+   return()=>cancelAnimationFrame(frame);
+ },[messages]);
  const [showSummary,setShowSummary]=useState(false);
 
  const [emailDraft,setEmailDraft]=useState(null);
@@ -1248,7 +1255,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
      <div className="chat-review-head"><div className="agent-title"><div className="agent-orb"><Sparkles size={18}/></div><div><b>Extraction Agent</b><span>Source-grounded document review</span></div></div><div className="chat-review-head-actions"><button type="button" className="secondary review-show-summary-btn" onClick={()=>setShowSummary(true)}><FileText size={14}/> Customs summary</button><button type="button" className="secondary review-show-document-btn" onClick={()=>{setSelectedDocumentId(selectedDocumentId||(documentRows[0]?.id||documentRows[0]?.name));setPreviewPage(1);setShowPreview(true);}}><FileText size={14}/> Show document</button></div></div>
      <div className="chat-review-intro">I read the complete document pack first. The conversation below is the review record: extracted values stay connected to their source, and discrepancies are surfaced rather than silently resolved.</div>
      {pack.processingError&&<div className="reprocess-error-banner"><div><b>Re-processing failed</b><span>{pack.processingError}</span></div><button type="button" className="secondary" onClick={()=>reprocessPack?.(pack)}>Try again</button></div>}
-     <div className="chat-history chat-review-history">{messages.map(renderMessage)}</div>
+     <div ref={chatHistoryRef} className="chat-history chat-review-history">{messages.map(renderMessage)}</div>
      <div className="chat-input chat-review-input"><input value={chat} onChange={e=>setChat(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendChat()} placeholder="Ask where a value came from, why it was used, or tell the agent what to change..."/><button onClick={sendChat}><ArrowRight size={16}/></button></div>
    </div>
    {showSummary&&<div className="customs-summary-modal-overlay" onClick={()=>setShowSummary(false)}><div className="customs-summary-modal" onClick={e=>e.stopPropagation()}><div className="customs-summary-modal-head"><div><span className="summary-kicker">CUSTOMS ENTRY SUMMARY</span></div><button type="button" className="row-btn" onClick={()=>setShowSummary(false)}><X size={18}/></button></div><div className="customs-summary-modal-body">{buildSummary().find(m=>m.type==="customsEntrySummary") ? renderMessage(buildSummary().find(m=>m.type==="customsEntrySummary"),0) : <div className="review-document-empty"><FileText size={28}/><b>Customs summary not available</b><span>Waiting for document extraction to complete.</span></div>}</div></div></div>}
