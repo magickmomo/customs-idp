@@ -852,6 +852,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
  const [showEmailSource,setShowEmailSource]=useState(false);
 
  const [emailDraft,setEmailDraft]=useState(null);
+ const emailAuditStartedRef=useRef(null);
 
  useEffect(()=>{let active=true;(async()=>{const entries=await Promise.all((pack.uploadedFiles||[]).map(async f=>{try{if(f.storagePath){const response=await fetch("/api/storage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"signed-url",path:f.storagePath})});const data=await response.json();if(response.ok&&data.signedUrl)return [f.id,data.signedUrl];}const file=await getUploadedDocument(f.id);return file?[f.id,URL.createObjectURL(file)]:null;}catch{return null;}}));if(active)setDocUrls(Object.fromEntries(entries.filter(Boolean)));})();return()=>{active=false;};},[pack.id,pack.uploadedFiles]);
 
@@ -1050,6 +1051,31 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
    setMessages([...buildSummary().filter(m=>m.type!=="customsEntrySummary"),...cleanedSaved]);
  },[pack.id,pack.extractedData,pack.workingRecord,pack.validationStatus,pack.validationChecks,extractedDocuments]);
  useEffect(()=>{if(!documentRows.length){setSelectedDocumentId(null);return;}setSelectedDocumentId(current=>documentRows.some(d=>(d.id||d.name)===current)?current:(documentRows[0].id||documentRows[0].name));},[pack.id,pack.uploadedFiles?.length]);
+ useEffect(()=>{
+   if(!pack?.email||!pack?.extractedData)return;
+   if(emailAuditStartedRef.current===pack.id)return;
+   const savedMessages=Array.isArray(pack.extractedData?.agentMessages)?pack.extractedData.agentMessages:[];
+   if(savedMessages.some(m=>m?.type==="fieldSuggestion"))return;
+   emailAuditStartedRef.current=pack.id;
+   let active=true;
+   (async()=>{
+     try{
+       const response=await fetch("/api/agent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+         message:"[AUTOMATED EMAIL AUDIT] Review the associated email against the extracted document data before the user asks a question. Identify clear customs-relevant information present in the email but missing from the extracted data. Do not change the pack; return suggestions requiring human confirmation.",
+         pack:{...pack,customerStrategy:getCustomerStrategy(pack.customer),conversation:[],extractedData:{...(pack.extractedData||{}),agentMessages:undefined}}
+       })});
+       const result=await response.json();
+       if(!active||!response.ok||result.action!=="suggest_field_updates"||!Array.isArray(result.suggestions)||!result.suggestions.length)return;
+       const suggestionMessage={type:"fieldSuggestion",text:result.reply||"I found additional customs information in the email that is missing from the document extraction. Review the suggestions below and confirm whether to add them.",suggestions:result.suggestions,handled:null,persist:true};
+       setMessages(current=>current.some(m=>m.type==="fieldSuggestion")?current:[...current,suggestionMessage]);
+       const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
+       data.agentMessages=[...(Array.isArray(data.agentMessages)?data.agentMessages:[]),serialiseMessage(suggestionMessage)];
+       updatePack?.({...pack,extractedData:data});
+     }catch{}
+   })();
+   return()=>{active=false;};
+ },[pack?.id,pack?.email,pack?.extractedData?.documents]);
+
 
  const selectedDocument=documentRows.find(d=>(d.id||d.name)===selectedDocumentId)||documentRows[0];
  const selectedDocumentUrl=selectedDocument?docUrls[selectedDocument.id]:null;
@@ -1075,20 +1101,35 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
    return "I saved that correction to the pack and cleared the previous validation result. The affected data needs to be validated again.";
  };
  const applySuggestedFields=(suggestions,messageIndex)=>{
-   const valid=Array.isArray(suggestions)?suggestions.filter(s=>s&&s.scope==="line"&&Number.isInteger(s.lineIndex)&&s.field&&s.value!==""):[],
+   const valid=Array.isArray(suggestions)?suggestions.filter(s=>s&&(s.scope==="line"||s.scope==="primary")&&s.field&&s.value!==""):[],
      data=JSON.parse(JSON.stringify(pack.extractedData||{}));
    let applied=0;
    const now=new Date().toISOString();
    valid.forEach(suggestion=>{
-     const line=data.lines?.[suggestion.lineIndex];
-     if(!line)return;
-     const existing=line[suggestion.field];
-     if(existing!==undefined&&existing!==null&&String(existing).trim()!=="")return;
-     line[suggestion.field]=suggestion.value;
+     let existing=null;
+     if(suggestion.scope==="line"){
+       const line=data.lines?.[suggestion.lineIndex];
+       if(!line)return;
+       existing=line[suggestion.field];
+       if(existing!==undefined&&existing!==null&&String(existing).trim()!=="")return;
+       line[suggestion.field]=suggestion.value;
+     }else{
+       existing=data[suggestion.field];
+       if(existing!==undefined&&existing!==null&&String(existing).trim()!=="")return;
+       data[suggestion.field]=suggestion.value;
+     }
      data.reviewOverrides=[...(data.reviewOverrides||[]),{
-       scope:"line",lineIndex:suggestion.lineIndex,field:suggestion.field,oldValue:existing??null,newValue:suggestion.value,
-       source:"email",sourceLabel:suggestion.sourceLabel||"Email body",sourceDocumentId:suggestion.sourceDocumentId||null,
-       sourcePage:suggestion.sourcePage||null,reason:suggestion.reason||"Value confirmed by the user from the email source.",createdAt:now
+       scope:suggestion.scope,
+       lineIndex:suggestion.scope==="line"?suggestion.lineIndex:null,
+       field:suggestion.field,
+       oldValue:existing??null,
+       newValue:suggestion.value,
+       source:"email",
+       sourceLabel:suggestion.sourceLabel||"Email body",
+       sourceDocumentId:suggestion.sourceDocumentId||null,
+       sourcePage:suggestion.sourcePage||null,
+       reason:suggestion.reason||"Value confirmed by the user from the email source.",
+       createdAt:now
      }];
      applied++;
    });
@@ -1259,7 +1300,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
            <div className="field-suggestion-list">
              {m.suggestions.map((suggestion,index)=><div className="field-suggestion-row" key={index}>
                <div><b>Line {Number(suggestion.lineIndex)+1}</b><span>{suggestion.reason||"Value found in the email source."}</span></div>
-               <strong>{suggestion.field==="hsCode"?"HS code: ":""}{suggestion.value}</strong>
+               <strong>{suggestion.field==="hsCode"?"HS code":suggestion.field==="invoiceNumber"?"Invoice number":suggestion.field==="exporterEoriNo"?"EORI":suggestion.field}: {suggestion.value}</strong>
              </div>)}
            </div>
            {m.handled==="applied"
