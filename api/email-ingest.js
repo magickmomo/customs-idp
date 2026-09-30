@@ -25,6 +25,7 @@ export default async function handler(req,res){
     const messageId=String(body.messageId||body.message_id||"").trim()||null;
     const receivedAt=body.receivedAt||body.received_at||new Date().toISOString();
     const attachments=Array.isArray(body.attachments)?body.attachments:[];
+    const repair=Boolean(body.repair);
 
     if(!to) return res.status(400).json({error:"to is required."});
 
@@ -38,8 +39,8 @@ export default async function handler(req,res){
       ? await extractConfiguredEmailFields({subject,text,html,emailFields})
       : {fields:[],warnings:["Email field extraction is not configured for this customer. Subject and body are retained as source context only."]};
 
-    const id="PK-EMAIL-"+Date.now().toString(36).toUpperCase();
-    if(messageId){const existing=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(messageId)+"&select=id,customer,status&limit=1");if(existing[0])return res.status(200).json({ok:true,duplicate:true,packId:existing[0].id,customer:existing[0].customer,status:existing[0].status,message:"Email already ingested."});}
+    let id="PK-EMAIL-"+Date.now().toString(36).toUpperCase();
+    if(messageId){const existing=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(messageId)+"&select=id,customer,status,docs&limit=1");if(existing[0]){if(!repair)return res.status(200).json({ok:true,duplicate:true,packId:existing[0].id,customer:existing[0].customer,status:existing[0].status,message:"Email already ingested."});id=existing[0].id;}}
     const pack={
       id,
       customer,
