@@ -38,6 +38,10 @@ export default async function handler(req,res){
       "The supplied pack context may include an email object containing subject, sender, recipient, body text, received time, and configured email extraction results. You ARE allowed to answer explicit questions about the email itself. If the user asks for a value from the email (for example invoice number, gross weight, net weight, customer reference, shipment reference, dates, names, addresses, or other information), read the email subject/body and return the value exactly as supported by the email. Do not claim the value came from an attachment when it came from the email.",
       "If the user explicitly asks to extract a field from the email, do not say that email field extraction is unavailable merely because no configured emailFields exist. Configured emailFields control automatic structured intake; they do not prevent the Review Agent from answering an explicit question using the retained email source.",
       "When answering an email-source question, keep the response concise: give the requested value, identify that it came from the email subject/body, and mention if the email does not contain the requested information. Do not reproduce the entire email unless the user asks for it.",
+      "If the user asks you to check the email for HS codes (or another field) and the email contains values that are missing from the extracted document data, DO NOT silently write those values into the pack. Instead, return action suggest_field_updates with a suggestion for each unfilled matching line, showing the proposed value and that the source is the email body. The user must explicitly confirm before the platform applies the suggestions. Only suggest a value when the email-to-line match is clear from line number, description, or unambiguous order. If the extracted document already contains a value for that field, do not suggest replacing it unless the user explicitly asks to replace it.",
+      "For HS-code suggestions from email, preserve the HS code as a digits-only customs code in the suggested value, removing separators such as dots, spaces or hyphens. Use the extracted document line index (zero-based) as lineIndex and the email's line number/order to match it.",
+      "A suggestion is not a correction. Never return update_field merely because an email contains a value that is absent from the documents when the user only asked you to check the email. The correct action is suggest_field_updates so the human can confirm."
+
       "The extraction data contains source documents and fieldEvidence. When answering source questions, name the document and page when available.",
       "If documents disagree, explicitly state the conflicting source values and do not silently choose one.",
       "If the user explicitly instructs you to change a field to a specific value, treat that as a direct correction instruction. The new value does NOT need to already exist in the supplied documents. Return an update_field action targeting the existing matching field. Record the user instruction as the reason; sourceDocumentId/sourcePage may be null when the new value comes from the user rather than a document.",
@@ -53,7 +57,17 @@ export default async function handler(req,res){
       type:"object",additionalProperties:false,
       properties:{
         reply:{type:"string"},
-        action:{type:"string",enum:["none","update_field","approve_weight_apportionment"]},
+        action:{type:"string",enum:["none","update_field","approve_weight_apportionment","suggest_field_updates"]},
+        suggestions:{type:"array",items:{type:"object",additionalProperties:false,properties:{
+          scope:{type:"string",enum:["line","primary"]},
+          field:{type:"string"},
+          lineIndex:{type:"integer"},
+          value:{type:"string"},
+          sourceDocumentId:{type:["string","null"]},
+          sourcePage:{type:["integer","null"]},
+          sourceLabel:{type:"string"},
+          reason:{type:"string"}
+        },required:["scope","field","lineIndex","value","sourceDocumentId","sourcePage","sourceLabel","reason"]}},
         target:{type:["object","null"],additionalProperties:false,properties:{
           scope:{type:"string",enum:["primary","line"]},
           field:{type:"string"},
@@ -63,7 +77,7 @@ export default async function handler(req,res){
           sourcePage:{type:["integer","null"]}
         },required:["scope","field","lineIndex","value","sourceDocumentId","sourcePage"]}
       },
-      required:["reply","action","target"]
+      required:["reply","action","target","suggestions"]
     };
     const controller=new AbortController();
     const timeout=setTimeout(()=>controller.abort(),30000);
