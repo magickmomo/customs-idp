@@ -797,8 +797,13 @@ function formatReceivedDateTime(value){
 }
 
 function getPackCustomerLabel(pack){
-  if(pack?.customer!=="Unassigned customer") return pack?.customer||"Unassigned customer";
-  return pack?.uploadedFiles?.[0]?.name || "Unassigned customer";
+  if(pack?.customer && pack.customer!=="Unassigned customer") return pack.customer;
+  const data=pack?.workingRecord||pack?.extractedData||{};
+  const exporter=data?.exporter||data?.exporterName||data?.exporterCompany||data?.exporterCompanyName;
+  if(exporter) return String(exporter);
+  const primary=Array.isArray(data?.documents)?data.documents.find(d=>d?.extraction?.exporter)||data.documents[0]:null;
+  const documentExporter=primary?.extraction?.exporter||primary?.extraction?.exporterName||primary?.extraction?.exporterCompany||primary?.extraction?.exporterCompanyName;
+  return documentExporter ? String(documentExporter) : "Unassigned customer";
 }
 function PackTable({packs,onOpen,onAssign}){return <div className="table-wrap"><table><thead><tr><th>PACK</th><th>CUSTOMER</th><th>OWNER</th><th>DOCUMENTS</th><th>STATUS</th><th>CONFIDENCE</th><th>RECEIVED</th><th></th></tr></thead><tbody>{packs.map(p=>{const displayLabel=p.email?.subject||p.id;return <tr key={p.id} onClick={()=>onOpen(p)}><td><b>{displayLabel}</b></td><td>{getPackCustomerLabel(p)}</td><td><select className="owner-select" value={p.assignedTo||"Unassigned"} onClick={e=>e.stopPropagation()} onChange={e=>onAssign?.(p.id,e.target.value)}><option>Unassigned</option><option>Liam Wingrove</option><option>Data Processor 1</option><option>Data Processor 2</option><option>Muhammad Amer</option></select></td><td>{p.docs} documents</td><td><Status status={p.status}/></td><td><div className="confidence"><span>{p.confidence}%</span><div><i style={{width:p.confidence+"%"}}></i></div></div></td><td>{formatReceivedDateTime(p.received)}</td><td><button className="row-btn"><MoreHorizontal size={17}/></button></td></tr>})}</tbody></table></div>}
 function Status({status}){let c=status==="Validated"?"good":status==="Processing"?"processing":"review";return <span className={"status "+c}><span></span>{status}</span>}
