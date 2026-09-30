@@ -766,10 +766,6 @@ function SpreadsheetPreview({url}){
   const officeUrl="https://view.officeapps.live.com/op/view.aspx?src="+encodeURIComponent(url);
   return <div className="spreadsheet-preview-office">
     <iframe src={officeUrl} title="Excel document preview" />
-    <div className="spreadsheet-preview-office-fallback">
-      <span>Excel preview is loading…</span>
-      <a href={url} target="_blank" rel="noreferrer" className="primary">Open spreadsheet</a>
-    </div>
   </div>;
 }
 function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePack,postToLCA,reprocessPack,persistValidatedPack}){
@@ -1262,7 +1258,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
          <div><span>{selectedDocumentIsPdf?"DOCUMENT SOURCE · PAGE "+previewPage:selectedDocumentIsSpreadsheet?"DOCUMENT SOURCE · EXCEL PREVIEW":"DOCUMENT SOURCE · IMAGE PREVIEW"}</span><b>{selectedDocument?.name||"Source document"}</b></div>
          <button type="button" className="row-btn" onClick={()=>setShowPreview(false)}><X size={18}/></button>
        </div>
-       <div className="review-source-modal-toolbar"><div className="review-document-picker"><FileText size={14}/><select value={selectedDocumentId||""} onChange={e=>{setSelectedDocumentId(e.target.value);setPreviewPage(1);}} aria-label="Select source document">{documentRows.map(doc=><option key={doc.id||doc.name} value={doc.id||doc.name}>{doc.name}</option>)}</select></div>{selectedDocumentIsPdf&&<div className="review-viewer-controls"><span>Page {previewPage}</span><button type="button" onClick={()=>setPreviewPage(p=>Math.max(1,p-1))}>−</button><button type="button" onClick={()=>setPreviewPage(p=>p+1)}>+</button></div>}</div>
+       <div className="review-source-modal-toolbar"><div className="review-document-picker"><FileText size={14}/><select value={selectedDocumentId||""} onChange={e=>{setSelectedDocumentId(e.target.value);setPreviewPage(1);}} aria-label="Select source document">{documentRows.map(doc=><option key={doc.id||doc.name} value={doc.id||doc.name}>{doc.name}</option>)}</select></div>{selectedDocumentIsSpreadsheet&&<span className="spreadsheet-preview-status">Excel preview loading…</span>}{selectedDocumentIsPdf&&<div className="review-viewer-controls"><span>Page {previewPage}</span><button type="button" onClick={()=>setPreviewPage(p=>Math.max(1,p-1))}>−</button><button type="button" onClick={()=>setPreviewPage(p=>p+1)}>+</button></div>}</div>
        <div className={"review-source-modal-body "+(selectedDocumentIsSpreadsheet?"spreadsheet-document":selectedDocumentIsImage?"image-document":"pdf-document")}>{selectedDocumentUrl?(selectedDocumentIsSpreadsheet?<SpreadsheetPreview url={selectedDocumentUrl} sheetIndex={previewPage} setSheetIndex={setPreviewPage}/>:selectedDocumentIsImage?<img src={selectedDocumentUrl} alt={selectedDocument?.name||"Document preview"}/>:<iframe src={selectedDocumentFrameUrl} title={selectedDocument?.name||"Document preview"}/>):<div className="review-document-empty"><FileText size={28}/><b>{selectedDocument?.name||"No document available"}</b><span>The document is not available for preview yet.</span></div>}</div>
      </div>
    </div>}
