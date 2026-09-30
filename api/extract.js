@@ -301,7 +301,7 @@ The downstream workflow will use this extraction as the canonical source layer b
       }
       return null;
     };
-    ["countryOfExport","sourceCountryOfDestination","exporterCountryIso","consigneeCountryIso"].forEach(field=>{
+    if(Array.isArray(extraction.lines)){\n      extraction.lines=extraction.lines.map(line=>{\n        if(!line||line.hsCode==null)return line;\n        const raw=String(line.hsCode).trim();\n        const normalized=raw.replace(/[.\\s-]/g,"");\n        return normalized!==raw?{...line,hsCode:normalized,evidence:[...(Array.isArray(line.evidence)?line.evidence:[]),{field:"hsCode",value:normalized,sourceText:raw,page:null,confidence:Number(line.confidence)||0}]}:{...line,hsCode:normalized};\n      });\n    }\n\n    ["countryOfExport","sourceCountryOfDestination","exporterCountryIso","consigneeCountryIso"].forEach(field=>{
       if(extraction[field]) extraction[field]=normalizeCountryCode(extraction[field]);
     });
     if(Array.isArray(extraction.lines)) extraction.lines=extraction.lines.map(line=>line?.sourceCountryCode?{...line,sourceCountryCode:normalizeCountryCode(line.sourceCountryCode)}:line);
