@@ -48,8 +48,9 @@ async function sync(req,res){
     let processed=0,duplicates=0,failed=0; const failures=[];
     for(const message of candidates){
       const messageId=message.internetMessageId||message.id;
-      const existing=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(messageId)+"&select=id,docs&limit=1");
-      const repair=Boolean(existing[0]&&Number(existing[0].docs||0)===0);
+      const existing=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(messageId)+"&select=id,docs,extracted_data&limit=1");
+      const existingFiles=existing[0]?.extracted_data?._manager?.uploadedFiles;
+      const repair=Boolean(existing[0]&&(!Number(existing[0].docs||0)||!Array.isArray(existingFiles)||!existingFiles.length));
       if(existing[0]&&!repair){duplicates++;continue;}
       try{
         const attachments=message.hasAttachments?await getAttachments(message.id,token):[];
