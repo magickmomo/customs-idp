@@ -1433,7 +1433,42 @@ function AgentPage(){
    </div>
  </section>
 }
-function SettingsPage(){return <section><div className="page-head"><div><div className="eyebrow">Platform</div><h1>Settings</h1><p>Core processing, middleware and integration configuration.</p></div></div><div className="settings-grid"><div className="panel settings-card"><h2>Middleware</h2><p>Configure the output contract used by the downstream customs system.</p><label>Endpoint</label><input value="https://middleware.internal/customs/orders" readOnly/><label>Format</label><select><option>JSON</option></select><label>Destination</label><input value="ASM UK" readOnly/></div><div className="panel settings-card"><h2>Processing defaults</h2><p>Global fallbacks used when a customer has no overriding rule.</p><Toggle label="Automatic validation" on/><Toggle label="Low-confidence review queue" on/><Toggle label="Auto-send validated packs" on/></div></div></section>}
+function SettingsPage(){
+  const [outlook,setOutlook]=useState({loading:true,connected:false,connection:null});
+  const [connecting,setConnecting]=useState(false);
+  const [error,setError]=useState("");
+  useEffect(()=>{
+    let active=true;
+    fetch("/api/outlook/status",{credentials:"include"})
+      .then(r=>r.json())
+      .then(data=>{if(active)setOutlook({loading:false,connected:Boolean(data.connected),connection:data.connection||null});})
+      .catch(()=>{if(active)setOutlook({loading:false,connected:false,connection:null});});
+    return()=>{active=false;};
+  },[]);
+  const connectOutlook=async()=>{
+    setError("");setConnecting(true);
+    try{
+      const response=await fetch("/api/outlook/connect",{credentials:"include"});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||"Unable to start Outlook connection.");
+      window.location.href=data.authorizationUrl;
+    }catch(e){setError(e.message||"Unable to start Outlook connection.");setConnecting(false);}
+  };
+  return <section>
+    <div className="page-head"><div><div className="eyebrow">Platform</div><h1>Settings</h1><p>Core processing, middleware and integration configuration.</p></div></div>
+    <div className="settings-grid">
+      <div className="panel settings-card">
+        <h2>Outlook email intake</h2>
+        <p>Connect an Outlook.com mailbox so new customs emails and attachments can enter the IDP pipeline automatically.</p>
+        {outlook.loading ? <div className="setting-status">Checking connection…</div> : outlook.connected ? <div className="setting-status"><b>Connected</b><span>{outlook.connection?.email}</span></div> : <button className="primary-action" onClick={connectOutlook} disabled={connecting}>{connecting?"Opening Microsoft…":"Connect Outlook"}</button>}
+        {error&&<div className="password-login-error">{error}</div>}
+        <small>Access is limited to Microsoft Graph Mail.Read. Customs IDP does not request permission to send or modify email.</small>
+      </div>
+      <div className="panel settings-card"><h2>Middleware</h2><p>Configure the output contract used by the downstream customs system.</p><label>Endpoint</label><input value="https://middleware.internal/customs/orders" readOnly/><label>Format</label><select><option>JSON</option></select><label>Destination</label><input value="ASM UK" readOnly/></div>
+      <div className="panel settings-card"><h2>Processing defaults</h2><p>Global fallbacks used when a customer has no overriding rule.</p><Toggle label="Automatic validation" on/><Toggle label="Low-confidence review queue" on/><Toggle label="Auto-send validated packs" on/></div>
+    </div>
+  </section>
+}
 
 function Toggle({label,on}){return <div className="toggle-row"><span>{label}</span><div className={"toggle "+(on?"on":"")}><i></i></div></div>}
 
