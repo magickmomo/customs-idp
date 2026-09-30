@@ -264,8 +264,9 @@ The downstream workflow will use this extraction as the canonical source layer b
     const data = await response.json();
 
     if (!response.ok) {
+      const detail=data?.error?.message ?? data?.error ?? data?.message ?? "OpenAI extraction failed.";
       return res.status(response.status).json({
-        error: data?.error?.message || "OpenAI extraction failed."
+        error: typeof detail==="string" ? detail : JSON.stringify(detail)
       });
     }
 
