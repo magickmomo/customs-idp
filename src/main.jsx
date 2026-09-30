@@ -1319,6 +1319,19 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
    <div className="chat-review-panel chat-review-full">
      <div className="chat-review-head"><div className="agent-title"><div className="agent-orb"><Sparkles size={18}/></div><div><b>Extraction Agent</b><span>Source-grounded document review</span></div></div><div className="chat-review-head-actions"><button type="button" className="secondary review-show-summary-btn" onClick={()=>setShowSummary(true)}><FileText size={14}/> Customs summary</button><button type="button" className="secondary review-show-document-btn" onClick={()=>{setSelectedDocumentId(selectedDocumentId||(documentRows[0]?.id||documentRows[0]?.name));setPreviewPage(1);setShowPreview(true);}}><FileText size={14}/> Show document</button></div></div>
      <div className="chat-review-intro">I read the complete document pack first. The conversation below is the review record: extracted values stay connected to their source, and discrepancies are surfaced rather than silently resolved.</div>
+   {pack.email&&<div className="review-email-source">
+     <div className="review-email-source-head">
+       <div><span className="summary-kicker">EMAIL SOURCE</span><h3>{pack.email.subject||"Customs IDP email"}</h3></div>
+       <span className="review-email-source-badge">SOURCE CONTEXT</span>
+     </div>
+     <div className="review-email-source-meta">
+       {pack.email.from&&<div><span>From</span><b>{pack.email.from}</b></div>}
+       {pack.email.receivedDateTime&&<div><span>Received</span><b>{new Date(pack.email.receivedDateTime).toLocaleString("en-GB")}</b></div>}
+       {Array.isArray(pack.email.toRecipients)&&pack.email.toRecipients.length>0&&<div><span>To</span><b>{pack.email.toRecipients.join(", ")}</b></div>}
+     </div>
+     {pack.email.body&&<div className="review-email-source-body"><span>Email body</span><div>{String(pack.email.body).replace(/<[^>]*>/g,"").trim()}</div></div>}
+     <div className="review-email-source-note">This email is retained as source context. Customs data is extracted from the attached documents unless the Review Agent explicitly identifies email content as supporting context.</div>
+   </div>}
      {pack.processingError&&<div className="reprocess-error-banner"><div><b>Re-processing failed</b><span>{pack.processingError}</span></div><button type="button" className="secondary" onClick={()=>reprocessPack?.(pack)}>Try again</button></div>}
      <div ref={chatHistoryRef} className="chat-history chat-review-history">{messages.map(renderMessage)}</div>
      <div className="chat-input chat-review-input"><input value={chat} onChange={e=>setChat(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendChat()} placeholder="Ask where a value came from, why it was used, or tell the agent what to change..."/><button onClick={sendChat}><ArrowRight size={16}/></button></div>
