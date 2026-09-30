@@ -1354,7 +1354,9 @@ function AgentPage(){
    const q=textValue.trim(); if(!q) return;
    setMessages(m=>[...m,{role:"user",text:q}]); setInput("");
    const l=q.toLowerCase(); let reply;
-   if(l.includes("knowledge")) reply=selected.name+" has access to "+selected.knowledge.slice(0,5).join(", ")+". Its context is supplied by the platform for the current workflow rather than a generic answer.";
+   const outOfScope=/\b(recipe|recipes|cook|cooking|soup|meal|dinner|lunch|breakfast|weather|forecast|football|soccer|sport|sports|betting|odds|movie|movies|film|films|music|song|songs|game|games|gaming|joke|jokes|poem|poetry|dating|relationship|homework|essay|school|university|maths|mathematics)\b/i.test(q);
+   if(outOfScope) reply="I’m restricted to Customs IDP work. I can explain this agent, its supplied knowledge, the current customs workflow, validation, source evidence, customer strategy or document-review decisions.";
+   else if(l.includes("knowledge")) reply=selected.name+" has access to "+selected.knowledge.slice(0,5).join(", ")+". Its context is supplied by the platform for the current workflow rather than a generic answer.";
    else if(l.includes("gross")||l.includes("weight")) reply="The Review & Decision Agent can use the pack's document-level and line-level weight evidence, the selected source and the customer strategy. When apportionment is approved, the platform applies the configured method and keeps the resulting values in the working record.";
    else if(l.includes("extract")) reply="The Document Extraction Agent reads the complete uploaded document and returns structured customs data, line items, evidence and confidence. It does not apply customer rules or silently guess missing values.";
    else if(l.includes("validate")) reply="Validation is deliberately separate from the AI agents. The Standard Validation Engine performs deterministic checks, then the Review & Decision Agent can explain the result and help resolve any human decision.";
