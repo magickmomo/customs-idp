@@ -232,7 +232,7 @@ async function extractAttachment({fileData,filename,mimeType}){
   }
   return data;
 }
-function formatExtractionError(error){if(error==null)return "Unknown extraction error.";if(typeof error==="string")return error;try{return JSON.stringify(error);}catch{return String(error);}}
+function formatExtractionError(error){if(error==null)return "Unknown extraction error.";if(typeof error==="string")return error;if(error instanceof Error&&error.message)return error.message;if(typeof error==="object"){if(typeof error.message==="string")return error.message;if(error.error?.message)return String(error.error.message);try{return JSON.stringify(error);}catch{return String(error);}}try{return String(error);}catch{return "Unknown extraction error.";}}
 function readJson(value,fallback){
   if(!value)return fallback;
   try{return JSON.parse(value);}catch{return fallback;}
