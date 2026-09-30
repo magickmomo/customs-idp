@@ -91,7 +91,7 @@ export default async function handler(req,res){
     }
     const successfulExtractions=attachmentResults.filter(item=>item.extraction).map(item=>item.extraction);
     const primaryExtraction=successfulExtractions.find(item=>item.documentType==="commercial_invoice")||successfulExtractions[0]||null;
-    const extractionWarnings=[...(emailExtraction.warnings||[]),...attachmentResults.filter(item=>item.error).map(item=>item.filename+": "+item.error)];
+    const extractionWarnings=[...(emailExtraction.warnings||[]),...attachmentResults.filter(item=>item.error).map(item=>item.filename+": "+formatExtractionError(item.error))];
     const extractedData={...(primaryExtraction||{}),documentType:primaryExtraction?.documentType||"email",email:pack.email,documents:attachmentResults,documentCount:attachmentResults.length,sourceDocuments:attachmentResults.map(item=>({name:item.filename,type:item.extraction?.documentType||item.mimeType,extraction:item.extraction||null,error:item.error||null})),emailFields:emailExtraction.fields,warnings:extractionWarnings,agentMessages:[]};
     const processingStatus="Needs review";
 
@@ -220,6 +220,7 @@ async function extractAttachment({fileData,filename,mimeType}){
   if(!response.ok)throw new Error(data?.error||"Document extraction failed.");
   return data;
 }
+function formatExtractionError(error){if(error==null)return "Unknown extraction error.";if(typeof error==="string")return error;try{return JSON.stringify(error);}catch{return String(error);}}
 function readJson(value,fallback){
   if(!value)return fallback;
   try{return JSON.parse(value);}catch{return fallback;}
