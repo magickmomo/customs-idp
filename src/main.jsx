@@ -1338,10 +1338,10 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
            <div className="review-source-email-title"><span className="summary-kicker">EMAIL SOURCE</span><b>{pack.email.subject||"Customs IDP email"}</b></div>
            <div className="review-source-email-meta">
              {pack.email.from&&<div><span>From</span><b>{pack.email.from}</b></div>}
-             {pack.email.receivedDateTime&&<div><span>Received</span><b>{new Date(pack.email.receivedDateTime).toLocaleString("en-GB")}</b></div>}
-             {Array.isArray(pack.email.toRecipients)&&pack.email.toRecipients.length>0&&<div><span>To</span><b>{pack.email.toRecipients.join(", ")}</b></div>}
+             {pack.email.receivedAt&&<div><span>Received</span><b>{new Date(pack.email.receivedAt).toLocaleString("en-GB")}</b></div>}
+             {(pack.email.to||"")&&<div><span>To</span><b>{pack.email.to}</b></div>}
            </div>
-           {pack.email.body&&<div className="review-source-email-body"><span>Email body</span><div>{String(pack.email.body).replace(/<[^>]*>/g,"").trim()}</div></div>}
+           {(pack.email.text||pack.email.html)&&<div className="review-source-email-body"><span>Email body</span><div>{String(pack.email.text||pack.email.html||"").replace(/<[^>]*>/g,"").trim()}</div></div>}
            <div className="review-source-email-note">Email content is retained as source context. Customs data is extracted from the attached documents unless the Review Agent explicitly identifies email content as supporting context.</div>
          </div>
        </details>}
