@@ -29,7 +29,7 @@ async function processNotification(notification){
   const messageId=String(notification.resourceData?.id||"").trim();
   if(!messageId)return;
   const message=await graphGet("/me/messages/"+encodeURIComponent(messageId)+"?$select=id,internetMessageId,subject,body,from,toRecipients,receivedDateTime,hasAttachments",accessToken);
-  const attachments=message.hasAttachments?await getAttachments(message.id,accessToken):[];
+  // Only process emails explicitly marked for Customs IDP in the subject.\n  // Unmarked emails are ignored and never enter the IDP pipeline.\n  if(!/CUSTOMS-IDP/i.test(String(message.subject||"")))return;\n  const attachments=message.hasAttachments?await getAttachments(message.id,accessToken):[];
   const payload={
     to:firstAddress(message.toRecipients)||connection.email,
     from:message.from?.emailAddress?.address||"",
