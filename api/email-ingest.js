@@ -38,8 +38,8 @@ export default async function handler(req,res){
       ? await extractConfiguredEmailFields({subject,text,html,emailFields})
       : {fields:[],warnings:["Email field extraction is not configured for this customer. Subject and body are retained as source context only."]};
 
-    const highest=Number(body.packNumber)||0;
     const id="PK-EMAIL-"+Date.now().toString(36).toUpperCase();
+    if(messageId){const existing=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(messageId)+"&select=id,customer,status&limit=1");if(existing[0])return res.status(200).json({ok:true,duplicate:true,packId:existing[0].id,customer:existing[0].customer,status:existing[0].status,message:"Email already ingested."});}
     const pack={
       id,
       customer,
@@ -69,16 +69,20 @@ export default async function handler(req,res){
       }
     };
 
-    const extractedData={
-      documentType:"email",
-      email:pack.email,
-      documents:[],
-      documentCount:0,
-      sourceDocuments:[],
-      emailFields:emailExtraction.fields,
-      warnings:emailExtraction.warnings||[],
-      agentMessages:[]
-    };
+    const attachmentResults=[];
+    for(const attachment of attachments){
+      const filename=String(attachment.filename||attachment.name||"attachment");
+      const mimeType=String(attachment.mimeType||attachment.contentType||"application/octet-stream");
+      const fileData=normaliseAttachmentData(attachment);
+      if(!fileData){attachmentResults.push({filename,mimeType,error:"Attachment content was not supplied by the email connector."});continue;}
+      try{const extraction=await extractAttachment({fileData,filename,mimeType});attachmentResults.push({filename,mimeType,extraction:extraction.extraction,source:extraction.source});}
+      catch(error){attachmentResults.push({filename,mimeType,error:error.message||"Attachment extraction failed."});}
+    }
+    const successfulExtractions=attachmentResults.filter(item=>item.extraction).map(item=>item.extraction);
+    const primaryExtraction=successfulExtractions.find(item=>item.documentType==="commercial_invoice")||successfulExtractions[0]||null;
+    const extractionWarnings=[...(emailExtraction.warnings||[]),...attachmentResults.filter(item=>item.error).map(item=>item.filename+": "+item.error)];
+    const extractedData={...(primaryExtraction||{}),documentType:primaryExtraction?.documentType||"email",email:pack.email,documents:attachmentResults,documentCount:attachmentResults.length,sourceDocuments:attachmentResults.map(item=>({name:item.filename,type:item.extraction?.documentType||item.mimeType,extraction:item.extraction||null,error:item.error||null})),emailFields:emailExtraction.fields,warnings:extractionWarnings,agentMessages:[]};
+    const processingStatus="Needs review";
 
     await supabaseFetch("document_packs",{
       method:"POST",
@@ -86,7 +90,7 @@ export default async function handler(req,res){
         id:pack.id,
         customer:pack.customer,
         docs:pack.docs,
-        status:pack.status,
+        status:processingStatus,
         confidence:pack.confidence,
         received:pack.received,
         ticket:pack.ticket,
@@ -102,7 +106,9 @@ export default async function handler(req,res){
       ok:true,
       packId:id,
       customer,
-      status:"Processing",
+      status:processingStatus,
+      attachmentCount:attachmentResults.length,
+      extractedAttachmentCount:successfulExtractions.length,
       emailExtraction,
       message:"Email accepted into the Customs IDP ingestion pipeline."
     });
@@ -170,6 +176,24 @@ async function extractConfiguredEmailFields({subject,text,html,emailFields}){
   return JSON.parse(output);
 }
 
+function normaliseAttachmentData(attachment){
+  const raw=attachment.dataUrl||attachment.fileData||attachment.contentBase64||attachment.base64||attachment.content;
+  if(!raw)return null;
+  const value=String(raw);
+  if(value.startsWith("data:"))return value;
+  if(attachment.encoding==="base64"||attachment.contentBase64||attachment.base64||attachment.fileData)return "data:"+String(attachment.mimeType||attachment.contentType||"application/octet-stream")+";base64,"+value;
+  return value.startsWith("http")?value:null;
+}
+
+async function extractAttachment({fileData,filename,mimeType}){
+  const base=String(process.env.VERCEL_URL||"").trim();
+  const url=process.env.EMAIL_INGEST_EXTRACT_URL||(base?"https://"+base+"/api/extract":"");
+  if(!url)throw new Error("VERCEL_URL or EMAIL_INGEST_EXTRACT_URL is not configured.");
+  const response=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json","x-email-ingest-secret":String(process.env.EMAIL_INGEST_SECRET||"")},body:JSON.stringify({fileData,filename,mimeType})});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(data?.error||"Document extraction failed.");
+  return data;
+}
 function readJson(value,fallback){
   if(!value)return fallback;
   try{return JSON.parse(value);}catch{return fallback;}
