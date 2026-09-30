@@ -45,7 +45,7 @@ async function sync(req,res){
     const token=await getAccessToken(connection);
     const data=await graphGet("/me/messages?$top=50&$orderby=receivedDateTime%20desc&$select=id,internetMessageId,subject,body,from,toRecipients,receivedDateTime,hasAttachments",token);
     const candidates=(data.value||[]).filter(message=>/CUSTOMS-IDP/i.test(String(message.subject||"")));
-    let processed=0,duplicates=0,failed=0;
+    let processed=0,duplicates=0,failed=0; const failures=[];
     for(const message of candidates){
       const messageId=message.internetMessageId||message.id;
       const existing=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(messageId)+"&select=id&limit=1");
@@ -63,9 +63,9 @@ async function sync(req,res){
           attachments
         });
         processed++;
-      }catch(error){failed++;console.error("Outlook sync message failed",messageId,error);}
+      }catch(error){failed++;failures.push(error.message||"Unknown failure");console.error("Outlook sync message failed",messageId,error);}
     }
-    return res.status(200).json({ok:true,connected:true,checked:candidates.length,processed,duplicates,failed});
+    return res.status(200).json({ok:true,connected:true,checked:candidates.length,processed,duplicates,failed,failures});
   }catch(error){
     console.error("Outlook sync error",error);
     return res.status(500).json({ok:false,error:error.message||"Outlook sync failed."});
