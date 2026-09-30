@@ -1989,7 +1989,11 @@ body {
  .agent-task-grid{grid-template-columns:1fr}
 }
 \n/* Native Excel / CSV review preview. Keeps spreadsheets inside the Review modal instead of downloading them. */
-.review-source-modal-body.spreadsheet-document{background:#f1f4f8;overflow:hidden;display:flex;flex-direction:column}\n.spreadsheet-preview-office{position:relative;display:flex;flex-direction:column;min-height:0;height:100%;background:#fff}\n.spreadsheet-preview-office iframe{display:block;width:100%;height:100%;min-height:0;flex:1;border:0;background:#fff}\n.spreadsheet-preview-office-fallback{position:absolute;left:12px;bottom:12px;display:flex;align-items:center;gap:8px;padding:7px 9px;background:rgba(255,255,255,.96);border:1px solid #dfe5ec;border-radius:7px;box-shadow:0 2px 8px rgba(15,23,42,.08);font-size:10px;color:#526176}\n.spreadsheet-preview-office-fallback a{font-size:10px;padding:5px 8px}
+.review-source-modal-body.spreadsheet-document{background:#f1f4f8;overflow:hidden;display:flex;flex-direction:column}
+.spreadsheet-preview-office{position:relative;display:flex;flex-direction:column;min-height:0;height:100%;width:100%;background:#fff}
+.spreadsheet-preview-office iframe{display:block;width:100%;height:100%;min-height:0;min-width:100%;flex:1;border:0;background:#fff}
+.spreadsheet-preview-office-fallback{position:absolute;left:12px;bottom:12px;display:flex;align-items:center;gap:8px;padding:7px 9px;background:rgba(255,255,255,.96);border:1px solid #dfe5ec;border-radius:7px;box-shadow:0 2px 8px rgba(15,23,42,.08);font-size:10px;color:#526176}
+.spreadsheet-preview-office-fallback a{font-size:10px;padding:5px 8px}
 .spreadsheet-preview{display:flex;flex-direction:column;min-height:0;height:100%;background:#fff}
 .spreadsheet-preview-sheetbar{display:flex;gap:4px;padding:8px 10px;border-bottom:1px solid #dfe5ec;background:#f8fafc;overflow-x:auto;flex:0 0 auto}
 .spreadsheet-preview-sheetbar button{border:1px solid transparent;background:transparent;color:#526176;border-radius:7px;padding:6px 10px;font-size:10px;cursor:pointer;white-space:nowrap}
