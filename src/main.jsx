@@ -197,9 +197,58 @@ function App(){
   const uploadRef=useRef(null);
   const reprocessPack=async(pack)=>{
     if(!pack)return;
-    const files=pack.uploadedFiles||[];
+    let files=Array.isArray(pack.uploadedFiles)?[...pack.uploadedFiles]:[];
+    if(!files.length){
+      try{
+        const listResponse=await fetch("/api/storage",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({action:"list-pack",packId:pack.id})
+        });
+        const listData=await listResponse.json().catch(()=>({}));
+        if(listResponse.ok&&Array.isArray(listData.files)&&listData.files.length){
+          files=listData.files.map(file=>({
+            id:file.id,
+            name:file.name,
+            size:file.size||0,
+            type:file.type||"application/octet-stream",
+            storagePath:file.storagePath
+          }));
+          pack={...pack,uploadedFiles:files,docs:Math.max(Number(pack.docs)||0,files.length)};
+          setSelectedPack(pack);
+          setLivePacks(prev=>prev.map(p=>p.id===pack.id?pack:p));
+          await persistPack(pack);
+        }
+      }catch{}
+    }else{
+      // Older email-created packs may have document metadata but no storagePath.
+      // Recover the persisted source files from the pack folder before falling
+      // back to browser IndexedDB, which is not available for email intake.
+      const missingStorage=files.some(file=>!file.storagePath);
+      if(missingStorage){
+        try{
+          const listResponse=await fetch("/api/storage",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({action:"list-pack",packId:pack.id})
+          });
+          const listData=await listResponse.json().catch(()=>({}));
+          if(listResponse.ok&&Array.isArray(listData.files)&&listData.files.length){
+            files=files.map(file=>{
+              if(file.storagePath)return file;
+              const match=listData.files.find(stored=>stored.name===file.name||stored.name===file.name.replace(/^\\d+-/,""));
+              return match?{...file,storagePath:match.storagePath,size:file.size||match.size||0,type:file.type||match.type}:file;
+            });
+            pack={...pack,uploadedFiles:files};
+            setSelectedPack(pack);
+            setLivePacks(prev=>prev.map(p=>p.id===pack.id?pack:p));
+            await persistPack(pack);
+          }
+        }catch{}
+      }
+    }
     if(!files.length){notify("No uploaded documents are available to reprocess");return;}
-    const processing={...pack,status:"Processing",processingError:undefined,validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
+    const processing={...pack,uploadedFiles:files,status:"Processing",processingError:undefined,validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
     setSelectedPack(processing);setLivePacks(prev=>prev.map(p=>p.id===pack.id?processing:p));persistPack(processing);notify("Re-processing all documents — AI extraction started");
     try{
       const extractedDocuments=[];
