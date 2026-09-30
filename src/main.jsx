@@ -770,7 +770,7 @@ function SpreadsheetPreview({url}){
     <a href={url} target="_blank" rel="noreferrer" className="primary">Open spreadsheet</a>
   </div>;
 }
-\nfunction Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePack,postToLCA,reprocessPack,persistValidatedPack}){
+function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePack,postToLCA,reprocessPack,persistValidatedPack}){
  const [docUrls,setDocUrls]=useState({});
  const [chat,setChat]=useState("");
  const [messages,setMessages]=useState([]);
@@ -807,7 +807,13 @@ function SpreadsheetPreview({url}){
  const getWeightConflicts=()=>{
    const docs=extractedDocuments;
    const invoiceDoc=docs.find(d=>d.extraction?.documentType==="commercial_invoice")||docs[0];
-   // The customs summary is the human-facing working record. Start from the original invoice extraction, then overlay all user/agent corrections from the working pack data.\n   const workingData={...(pack.workingRecord||pack.extractedData||{})};\n   const primaryAliases={exporterEori:"exporterEoriNo",eori:"exporterEoriNo",exporterEORI:"exporterEoriNo",invoiceTotal:"totalInvoiceValue",invoiceValue:"totalInvoiceValue",countryOfExportCode:"countryOfExport",destinationCountry:"sourceCountryOfDestination"};\n   Object.entries(primaryAliases).forEach(([from,to])=>{if((workingData[to]===undefined||workingData[to]===null||workingData[to]==="")&&workingData[from]!==undefined&&workingData[from]!==null&&workingData[from]!=="")workingData[to]=workingData[from];});\n   const reviewOverrides=Array.isArray(workingData.reviewOverrides)?workingData.reviewOverrides:[];\n   reviewOverrides.filter(o=>o?.scope==="primary"&&o?.field).forEach(o=>{if(o.newValue!==undefined)workingData[o.field]=o.newValue;});\n   const invoice={...(invoiceDoc?.extraction||{}),...workingData};
+   // The customs summary is the human-facing working record. Start from the original invoice extraction, then overlay all user/agent corrections from the working pack data.
+   const workingData={...(pack.workingRecord||pack.extractedData||{})};
+   const primaryAliases={exporterEori:"exporterEoriNo",eori:"exporterEoriNo",exporterEORI:"exporterEoriNo",invoiceTotal:"totalInvoiceValue",invoiceValue:"totalInvoiceValue",countryOfExportCode:"countryOfExport",destinationCountry:"sourceCountryOfDestination"};
+   Object.entries(primaryAliases).forEach(([from,to])=>{if((workingData[to]===undefined||workingData[to]===null||workingData[to]==="")&&workingData[from]!==undefined&&workingData[from]!==null&&workingData[from]!=="")workingData[to]=workingData[from];});
+   const reviewOverrides=Array.isArray(workingData.reviewOverrides)?workingData.reviewOverrides:[];
+   reviewOverrides.filter(o=>o?.scope==="primary"&&o?.field).forEach(o=>{if(o.newValue!==undefined)workingData[o.field]=o.newValue;});
+   const invoice={...(invoiceDoc?.extraction||{}),...workingData};
    const packingDoc=docs.find(d=>/packing/i.test(d.filename||""))||docs.find(d=>d.extraction?.documentType==="packing_list");
    if(!invoiceDoc||!packingDoc)return [];
    const invoiceLines=Array.isArray(invoice.lines)?invoice.lines:[];
