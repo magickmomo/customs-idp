@@ -169,7 +169,7 @@ export function validateStandardCustomsRecord(data={}){
     else pass(prefix+" description","description","pass",description,"non-empty description","Goods description is present.",{lineNumber:index+1});
 
     if(!hs) fail(prefix+" HS code","hsCode","fail",hs,"HS/commodity code","HS code is missing.",{lineNumber:index+1});
-    else if(!HS.test(hs)) fail(prefix+" HS code","hsCode","fail",hs,"4-10 numeric digits","HS code contains invalid characters or length.",{lineNumber:index+1});
+    else if(!HS.test(hs)) fail(prefix+" HS code","hsCode","fail",hs,"6-11 numeric digits","HS code must contain 6-11 digits after removing visual separators.",{lineNumber:index+1});
     else pass(prefix+" HS code","hsCode","pass",hs,"4-10 numeric digits","HS code format is valid.",{lineNumber:index+1});
 
     if(!origin) fail(prefix+" country of origin","sourceCountryCode","fail",origin,"two-letter ISO code","Country of origin is missing.",{lineNumber:index+1});
