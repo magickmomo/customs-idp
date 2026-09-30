@@ -16,13 +16,13 @@ const packs = [
 ];
 
 const customerStrategies = {
-  "Acme Components Ltd": { autoApplyWeightApportionment: false },
-  "Northstar Manufacturing": { autoApplyWeightApportionment: false },
-  "Bancale Trading": { autoApplyWeightApportionment: false },
-  "Raven Industrial": { autoApplyWeightApportionment: false }
+  "Acme Components Ltd": { autoApplyWeightApportionment: false, emailFields: [] },
+  "Northstar Manufacturing": { autoApplyWeightApportionment: false, emailFields: [] },
+  "Bancale Trading": { autoApplyWeightApportionment: false, emailFields: [] },
+  "Raven Industrial": { autoApplyWeightApportionment: false, emailFields: [] }
 };
 
-const getCustomerStrategy = customer => customerStrategies[customer] || { autoApplyWeightApportionment: false };
+const getCustomerStrategy = customer => customerStrategies[customer] || { autoApplyWeightApportionment: false, emailFields: [] };
 
 const customers = [
   {name:"Acme Components Ltd", code:"ACME-001", mailbox:"customs.acme@inbox.example", rules:12, processed:"2,481"},
