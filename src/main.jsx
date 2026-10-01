@@ -7,12 +7,13 @@ import {
 } from "lucide-react";
 import "./styles.css";
 import { validateStandardCustomsRecord } from "./validation/standardEngine.js";
+import { DEFAULT_ORGANISATION } from "./tenant.js";
 
 const packs = [
-  { id:"PK-10482", customer:"Acme Components Ltd", docs:4, status:"Needs review", confidence:91, received:"16 Sep 2026, 15:42", ticket:"TK-88421" },
-  { id:"PK-10481", customer:"Northstar Manufacturing", docs:7, status:"Processing", confidence:96, received:"16 Sep 2026, 15:38", ticket:"TK-88420" },
-  { id:"PK-10480", customer:"Bancale Trading", docs:3, status:"Validated", confidence:98, received:"16 Sep 2026, 15:31", ticket:"TK-88419" },
-  { id:"PK-10479", customer:"Raven Industrial", docs:5, status:"Needs review", confidence:88, received:"16 Sep 2026, 15:12", ticket:"TK-88418" }
+  { organisationId:DEFAULT_ORGANISATION.id, organisationName:DEFAULT_ORGANISATION.name, id:"PK-10482", customer:"Acme Components Ltd", docs:4, status:"Needs review", confidence:91, received:"16 Sep 2026, 15:42", ticket:"TK-88421" },
+  { organisationId:DEFAULT_ORGANISATION.id, organisationName:DEFAULT_ORGANISATION.name, id:"PK-10481", customer:"Northstar Manufacturing", docs:7, status:"Processing", confidence:96, received:"16 Sep 2026, 15:38", ticket:"TK-88420" },
+  { organisationId:DEFAULT_ORGANISATION.id, organisationName:DEFAULT_ORGANISATION.name, id:"PK-10480", customer:"Bancale Trading", docs:3, status:"Validated", confidence:98, received:"16 Sep 2026, 15:31", ticket:"TK-88419" },
+  { organisationId:DEFAULT_ORGANISATION.id, organisationName:DEFAULT_ORGANISATION.name, id:"PK-10479", customer:"Raven Industrial", docs:5, status:"Needs review", confidence:88, received:"16 Sep 2026, 15:12", ticket:"TK-88418" }
 ];
 
 const customerStrategies = {
@@ -322,7 +323,7 @@ function App(){
       notify(`Document storage upload failed: ${error.message}`);
       return;
     }
-    const newPack={id,customer:"Unassigned customer",docs:selected.length,status:"Processing",confidence:0,received:processingStartedAt,processingStartedAt,ticket:`UPLOAD-${Date.now().toString().slice(-5)}`,assignedTo:"Unassigned",uploadedFiles};
+    const newPack={organisationId:DEFAULT_ORGANISATION.id,organisationName:DEFAULT_ORGANISATION.name,id,customer:"Unassigned customer",docs:selected.length,status:"Processing",confidence:0,received:processingStartedAt,processingStartedAt,ticket:`UPLOAD-${Date.now().toString().slice(-5)}`,assignedTo:"Unassigned",uploadedFiles};
     setLivePacks(prev=>[newPack,...prev]);
     persistPack(newPack);
     setSelectedPack(newPack);
@@ -610,7 +611,7 @@ const postToLCA=()=>{
   return <div className={"app-shell "+(sidebarCollapsed?"sidebar-collapsed":"")}>
     <aside className="sidebar">
       <div className="sidebar-head"><div className="brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><button className="sidebar-collapse-btn" aria-label={sidebarCollapsed?"Expand navigation":"Collapse navigation"} title={sidebarCollapsed?"Expand navigation":"Collapse navigation"} onClick={()=>setSidebarCollapsed(v=>!v)}>{sidebarCollapsed?<ChevronRight size={16}/>:<ChevronLeft size={16}/>}</button></div>
-      <div className="workspace"><div className="avatar">{currentUserInitials}</div><div><b>{currentUserName}</b><span>{currentUserRole==="manager"?"Manager":"Data Processor"} · {dataSource==="database"?"Database connected":"Prototype storage"}</span></div></div>
+      <div className="workspace"><div className="avatar">{currentUserInitials}</div><div><b>{currentUserName}</b><span>{currentUserRole==="manager"?"Manager":"Data Processor"} · {dataSource==="database"?"Database connected":"Prototype storage"}</span><small className="workspace-organisation">{DEFAULT_ORGANISATION.name}</small></div></div>
       <nav>
         <NavItem icon={Inbox} label="Inbox" badge={livePacks.length} active={page==="inbox"} onClick={()=>navigate("inbox")}/>
         {canViewManager && <NavItem icon={Activity} label="Manager" active={page==="manager"} onClick={()=>navigate("manager")}/>}
@@ -630,7 +631,7 @@ const postToLCA=()=>{
       <header className="topbar">
         {page==="review" && <button className="back-to-inbox-btn" aria-label="Back to inbox" title="Back to inbox" onClick={()=>navigate("inbox")}><ChevronLeft size={16}/><span>Back to inbox</span></button>}
         <button className="mobile-menu-btn" aria-label="Open navigation" onClick={()=>setMobileMenuOpen(true)}><Menu size={20}/></button><div className="mobile-brand"><strong>Customs IDP</strong></div>
-        <div className="crumb">Operations <span>/</span> {page[0].toUpperCase()+page.slice(1)}</div>
+        <div className="crumb"><span className="organisation-crumb">{DEFAULT_ORGANISATION.name}</span> <span>/</span> Operations <span>/</span> {page[0].toUpperCase()+page.slice(1)}</div>
         <div className="top-actions"><button className="icon-btn" aria-label="Open inbox" onClick={()=>navigate("inbox")}><Mail size={18}/></button><div className="top-avatar" title={currentUserName}>{currentUserInitials}</div></div>
       </header>
 
