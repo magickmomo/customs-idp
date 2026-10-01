@@ -47,8 +47,21 @@ export default async function handler(req,res){
       : [];
     const existing=existingByTicket[0]||existingByMessage[0];
     if(existing){
-      if(!repair)return res.status(200).json({ok:true,duplicate:true,packId:existing.id,customer:existing.customer,status:existing.status,message:"Email already ingested."});
+      if(!repair){
+        // Backfill the atomic claim for older packs so webhook and polling
+        // cannot create another pack for this message.
+        if(messageId||ticket) await claimEmailIngest(messageId ? "MESSAGE:"+messageId : "TICKET:"+ticket, String(existing.id));
+        return res.status(200).json({ok:true,duplicate:true,packId:existing.id,customer:existing.customer,status:existing.status,message:"Email already ingested."});
+      }
       id=existing.id;
+    }else if(!repair){
+      // The webhook and fallback poller can reach this route concurrently.
+      // Claim the email before any OpenAI/document processing starts.
+      const emailKey=messageId ? "MESSAGE:"+messageId : "TICKET:"+ticket;
+      const claim=await claimEmailIngest(emailKey,id);
+      if(!claim.claimed){
+        return res.status(200).json({ok:true,duplicate:true,packId:claim.packId,customer,status:"Processing",message:"Email already claimed by another intake worker."});
+      }
     }
     let emailExtraction={fields:[],warnings:[]};
     if(emailFields.length){
