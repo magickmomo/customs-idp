@@ -661,7 +661,7 @@ const postToLCA=()=>{
       </nav>
       <div className="side-bottom">
         <NavItem icon={Settings} label="Settings" active={page==="settings"} onClick={()=>navigate("settings")}/>
-        <button className="switch-user-btn" onClick={()=>{setCurrentUser(null);try{localStorage.removeItem("customs-idp-user");}catch{};setPage("inbox")}}><Users size={16}/><span>Switch user</span></button>
+        <button className="switch-user-btn" onClick={async()=>{await supabase.auth.signOut().catch(()=>{});await fetch("/api/auth",{method:"DELETE",credentials:"include"}).catch(()=>{});setCurrentUser(null);setAuthenticated(false);setPage("inbox")}}><Users size={16}/><span>Sign out</span></button>
         <div className="system-status"><span className="dot"></span><div><b>All systems operational</b><span>Last sync 16:02</span></div></div>
       </div>
     </aside>
