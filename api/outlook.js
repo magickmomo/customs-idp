@@ -29,7 +29,7 @@ async function status(req,res){
   if(req.method!=="GET")return res.status(405).json({error:"Method not allowed"});
   if(!requireAuth(req,res))return;
   try{
-    const rows=await supabaseFetch("outlook_connections?select=email,display_name,status,updated_at&status=eq.connected&order=updated_at.desc&limit=1");
+    const rows=await supabaseFetch("outlook_connections?select=email,display_name,status,subscription_id,subscription_expires_at,updated_at&status=eq.connected&order=updated_at.desc&limit=1");
     const row=rows[0]||null;
     return res.status(200).json({connected:Boolean(row),connection:row});
   }catch(error){return res.status(503).json({error:error.message});}
@@ -39,6 +39,7 @@ async function sync(req,res){
   if(!requireAuth(req,res))return;
   if(req.method!=="POST"&&req.method!=="GET")return res.status(405).json({error:"Method not allowed"});
   try{
+    console.info("Outlook subscription renewal started");
     const rows=await supabaseFetch("outlook_connections?select=*&status=eq.connected&limit=1");
     const connection=rows[0];
     if(!connection)return res.status(200).json({ok:true,connected:false,processed:0,message:"Outlook is not connected."});
@@ -98,8 +99,12 @@ async function renew(req,res){
       clientState
     });
     await supabaseFetch("outlook_connections?id=eq."+encodeURIComponent(connection.id),{method:"PATCH",body:JSON.stringify({subscription_id:subscription.id,subscription_expires_at:subscription.expirationDateTime,client_state:clientState,updated_at:new Date().toISOString()})});
+    console.info("Outlook subscription renewed", {subscriptionId:subscription.id,expiresAt:subscription.expirationDateTime});
     return res.status(200).json({ok:true,subscriptionId:subscription.id,expiresAt:subscription.expirationDateTime});
-  }catch(error){return res.status(500).json({ok:false,error:error.message||"Unable to renew Outlook subscription."});}
+  }catch(error){
+    console.error("Outlook subscription renewal failed",error);
+    return res.status(500).json({ok:false,error:error.message||"Unable to renew Outlook subscription."});
+  }
 }
 
 function getRedirectUri(){
