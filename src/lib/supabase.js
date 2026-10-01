@@ -5,7 +5,7 @@ const key=import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY||"sb_publishable_i-IHnlw
 
 export const authRedirectUrl=()=>{
   const configured=String(import.meta.env.VITE_APP_URL||"").trim();
-  if(configured)return configured.replace(/\\/+$/,"")+"/";
+  if(configured)return configured.replace(/\/+$/,"")+"/";
   if(typeof window!=="undefined")return window.location.origin+"/";
   return "https://customs-idp.vercel.app/";
 };
