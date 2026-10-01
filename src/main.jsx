@@ -1154,7 +1154,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
    const saved=Array.isArray(pack.extractedData?.agentMessages)?pack.extractedData.agentMessages:[];
    const weightResolved=Boolean(pack.extractedData?.weightSourceDecision?.source);
    const cleanedSaved=saved.filter(m=>!(weightResolved&&((m.type==="weightDecision")||/weight discrepancy detected/i.test(String(m.text||"")))));
-   setMessages([...buildSummary(),...cleanedSaved.filter(saved=>saved.type!=="customsEntrySummary")]);
+   setMessages([...buildSummary().filter(message=>message.type!=="customsEntrySummary"),...cleanedSaved.filter(saved=>saved.type!=="customsEntrySummary")]);
  },[pack.id,pack.extractedData,pack.workingRecord,pack.validationStatus,pack.validationChecks,extractedDocuments]);
  useEffect(()=>{if(!documentRows.length){setSelectedDocumentId(null);return;}setSelectedDocumentId(current=>documentRows.some(d=>(d.id||d.name)===current)?current:(documentRows[0].id||documentRows[0].name));},[pack.id,pack.uploadedFiles?.length]);
  useEffect(()=>{
