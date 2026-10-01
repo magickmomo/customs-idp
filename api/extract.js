@@ -1,5 +1,5 @@
 import { requireAuth } from "./authGuard.js";
-import { extractDocument } from "./document-extraction.js";
+import { extractDocument } from "../src/document-extraction.js";
 export default async function handler(req,res){
   if(!requireAuth(req,res))return;
   if(req.method!=="POST")return res.status(405).json({error:"Method not allowed"});
