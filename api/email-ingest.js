@@ -387,6 +387,16 @@ function safeEqual(a,b){
   return aa.length===bb.length && crypto.timingSafeEqual(aa,bb);
 }
 
+async function claimEmailIngest(emailKey,packId){
+  const rows=await supabaseFetch("rpc/claim_email_ingest",{
+    method:"POST",
+    body:JSON.stringify({p_email_key:emailKey,p_pack_id:packId})
+  });
+  const row=Array.isArray(rows)?rows[0]:null;
+  if(!row)throw new Error("Email idempotency claim returned no result.");
+  return {claimed:Boolean(row.claimed),packId:String(row.pack_id||packId)};
+}
+
 async function supabaseFetch(path,options={}){
   const url=process.env.SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;
   if(!url||!key) throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not configured in Vercel.");
