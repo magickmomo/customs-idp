@@ -2065,3 +2065,17 @@ body {
 
 
 .workspace-organisation{display:block;font-size:10px;color:#7b8794;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px}.organisation-crumb{font-weight:600;color:#344054}
+
+/* Processing packs remain visible in Inbox but cannot be opened until extraction completes. */
+.pack-processing-row{cursor:wait;background:#fbfcfe}
+.pack-processing-row:hover{background:#f7f9fc}
+.pack-processing-row td{color:#7b8798}
+.pack-processing-row td b{color:#526176}
+.pack-processing-note{display:block;margin-top:4px;font-size:8px;color:#8a95a5;font-weight:400}
+.pack-processing-status{min-width:190px;display:flex;flex-direction:column;gap:5px;align-items:flex-start}
+.pack-processing-status>span:last-child{font-size:8px;color:#7b8798;white-space:nowrap}
+.pack-processing-bar{width:190px;height:5px;border-radius:999px;background:#e7edf5;overflow:hidden}
+.pack-processing-bar i{display:block;width:45%;height:100%;border-radius:999px;background:#3b82f6;animation:packProcessingSlide 1.25s ease-in-out infinite}
+.pack-processing-row .row-btn:disabled{opacity:.35;cursor:not-allowed}
+@keyframes packProcessingSlide{0%{transform:translateX(-110%)}50%{transform:translateX(115%)}100%{transform:translateX(220%)}}
+@media(max-width:650px){.pack-processing-status{min-width:150px}.pack-processing-bar{width:150px}.pack-processing-note{white-space:normal}}
