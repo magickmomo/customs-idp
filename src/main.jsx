@@ -49,6 +49,35 @@ const sampleLines = [
 ];
 
 
+function normaliseDatabasePack(row){
+  const data=row?.extracted_data||null;
+  const meta=data?._manager||{};
+  const validation=data?._validation||{};
+  const rest=data?{...data}:null;
+  if(rest){
+    delete rest._manager;
+    delete rest._validation;
+    delete rest._workingRecord;
+    delete rest._tenant;
+  }
+  return {
+    ...row,
+    organisationId:row?.organisation_id||data?._tenant?.organisationId||DEFAULT_ORGANISATION.id,
+    organisationName:data?._tenant?.organisationName||DEFAULT_ORGANISATION.name,
+    assignedTo:row?.assigned_to||"Unassigned",
+    extractedData:rest&&Object.keys(rest).length?rest:undefined,
+    workingRecord:data?._workingRecord,
+    email:data?.email||null,
+    validationStatus:validation.validationStatus||undefined,
+    validationChecks:Array.isArray(validation.validationChecks)?validation.validationChecks:undefined,
+    validationSummary:validation.validationSummary||undefined,
+    uploadedFiles:Array.isArray(meta.uploadedFiles)?meta.uploadedFiles:undefined,
+    processingStartedAt:meta.processingStartedAt||undefined,
+    processingCompletedAt:meta.processingCompletedAt||undefined,
+    processingError:row?.processing_error||undefined
+  };
+}
+
 const normalizeCountryCode=value=>{
   const raw=String(value??"").trim();
   const upper=raw.toUpperCase();
@@ -118,6 +147,31 @@ function App(){
     if(authenticated!==true)return;
     let active=true;
     let syncTimer=null;
+    const loadDatabasePacks=async()=>{
+      const packsResponse=await fetch("/api/packs",{credentials:"include"});
+      const packsData=await packsResponse.json().catch(()=>({}));
+      if(packsResponse.ok&&Array.isArray(packsData.packs)){
+        setLivePacks(packsData.packs);
+        setPackLoadError("");
+        setDataSource("database");
+        return packsData.packs;
+      }
+
+      // The browser already has an authenticated Supabase session. Fall back to
+      // the RLS-protected table directly so a stale/missing server auth cookie
+      // cannot leave the Inbox showing prototype data while the database has live packs.
+      const {data:{session}}=await supabase.auth.getSession();
+      if(!session?.access_token) throw new Error(packsData.error||("Pack database returned HTTP "+packsResponse.status));
+      supabase.realtime.setAuth(session.access_token);
+      const {data,error}=await supabase.from("document_packs").select("*").order("created_at",{ascending:false});
+      if(error) throw new Error(error.message);
+      const normalized=(data||[]).map(normaliseDatabasePack);
+      setLivePacks(normalized);
+      setPackLoadError("");
+      setDataSource("database");
+      return normalized;
+    };
+
     const runMailboxFallback=async()=>{
       try{
         setEmailSyncStatus(state=>({...state,state:"syncing",error:""}));
@@ -126,9 +180,7 @@ function App(){
         if(!response.ok)throw new Error(data.error||("Outlook sync returned HTTP "+response.status));
         if(active){
           setEmailSyncStatus({state:"ready",checked:Number(data.checked||0),processed:Number(data.processed||0),duplicates:Number(data.duplicates||0),failed:Number(data.failed||0),error:""});
-          const packsResponse=await fetch("/api/packs",{credentials:"include"});
-          const packsData=await packsResponse.json().catch(()=>({}));
-          if(packsResponse.ok&&Array.isArray(packsData.packs))setLivePacks(packsData.packs);
+          await loadDatabasePacks();
         }
       }catch(error){
         if(active)setEmailSyncStatus(state=>({...state,state:"error",error:error?.message||"Outlook sync failed."}));
@@ -137,15 +189,7 @@ function App(){
     void runMailboxFallback();
     syncTimer=window.setInterval(runMailboxFallback,60000);
     const inboxRefreshTimer=window.setInterval(async()=>{
-      try{
-        const packsResponse=await fetch("/api/packs",{credentials:"include"});
-        const packsData=await packsResponse.json().catch(()=>({}));
-        if(active&&packsResponse.ok&&Array.isArray(packsData.packs)){
-          setLivePacks(packsData.packs);
-          setPackLoadError("");
-          setDataSource("database");
-        }
-      }catch{}
+      try{ if(active) await loadDatabasePacks(); }catch(error){ if(active) setPackLoadError(error?.message||"Unable to refresh organisation packs."); }
     },5000);
     (async()=>{
       try {
@@ -167,37 +211,17 @@ function App(){
 
         // Load persisted packs immediately. Outlook intake is webhook-driven; mailbox
         // scanning is intentionally not part of application startup.
-        const response=await fetch("/api/packs",{credentials:"include"});
-        const data=await response.json().catch(()=>({}));
-        if(!response.ok) throw new Error(data.error||("Pack database returned HTTP "+response.status));
-        if(active && Array.isArray(data.packs)){
-          setPackLoadError("");
-  if(data.packs.length){
-    // Keep browser-stored document metadata when older database rows pre-date
-    // persistent uploadedFiles support, and prefer database metadata once present.
-    const localPackMap=new Map((livePacks||[]).map(pack=>[pack.id,pack]));
-    let nextPacks=data.packs.map(pack=>{
-      const local=localPackMap.get(pack.id);
-      return pack.uploadedFiles?.length ? pack : (local?.uploadedFiles?.length ? {...pack,uploadedFiles:local.uploadedFiles} : pack);
-    });
-    setLivePacks(nextPacks);
-    // Backfill document metadata to Supabase for packs restored from local browser storage.
-    const restoredWithDocuments=nextPacks.filter(pack=>{
-      const local=localPackMap.get(pack.id);
-      return !data.packs.find(dbPack=>dbPack.id===pack.id)?.uploadedFiles?.length && local?.uploadedFiles?.length;
-    });
-    if(restoredWithDocuments.length){
-      await Promise.all(restoredWithDocuments.map(pack=>fetch("/api/packs",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify(pack)
-      })));
-    }
-  } else if(livePacks.length){
-    await Promise.all(livePacks.map(pack=>fetch("/api/packs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pack)})));
-  }
-  setDataSource("database");
-}
+        const data=await loadDatabasePacks();
+        if(active && Array.isArray(data) && data.length){
+          // Keep browser-stored document metadata when older database rows pre-date
+          // persistent uploadedFiles support, and prefer database metadata once present.
+          const localPackMap=new Map((livePacks||[]).map(pack=>[pack.id,pack]));
+          const nextPacks=data.map(pack=>{
+            const local=localPackMap.get(pack.id);
+            return pack.uploadedFiles?.length ? pack : (local?.uploadedFiles?.length ? {...pack,uploadedFiles:local.uploadedFiles} : pack);
+          });
+          setLivePacks(nextPacks);
+        }
       } catch(error) {
         // Do not silently display the four prototype packs when the live
         // organisation database cannot be loaded. That masks production
