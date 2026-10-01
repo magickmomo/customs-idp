@@ -277,12 +277,28 @@ function App(){
 
   useEffect(()=>{ try { localStorage.setItem("customs-idp-packs",JSON.stringify(livePacks)); } catch {} },[livePacks]);
   const persistPack=async(pack)=>{
-    try{
-      const response=await fetch("/api/packs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pack)});
-      if(!response.ok) throw new Error("Database save failed");
+    const save=async()=>{
+      const response=await fetch("/api/packs",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify(pack)});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error(data.error||("Database save failed (HTTP "+response.status+")"));
       setDataSource("database");
       return true;
-    }catch{return false;}
+    };
+    try{
+      return await save();
+    }catch(firstError){
+      // Refresh the server-side session bridge if the browser Supabase session
+      // is valid but the Customs IDP auth cookie has expired.
+      try{
+        const {data:{session}}=await supabase.auth.getSession();
+        if(session?.access_token){
+          const authResponse=await fetch("/api/auth",{method:"POST",headers:{Authorization:"Bearer "+session.access_token},credentials:"include"});
+          if(authResponse.ok)return await save();
+        }
+      }catch{}
+      setPackLoadError(firstError?.message||"Database save failed");
+      return false;
+    }
   };
   const uploadRef=useRef(null);
   const reprocessPack=async(pack)=>{
@@ -1393,7 +1409,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
            <div className="field-suggestion-title"><b>Suggested changes</b><span>Source: email</span></div>
            <div className="field-suggestion-list">
              {m.suggestions.map((suggestion,index)=><div className="field-suggestion-row" key={index}>
-               <div><b>Line {Number(suggestion.lineIndex)+1}</b><span>{suggestion.reason||"Value found in the email source."}</span></div>
+               <div><b>{suggestion.scope==="primary"?"Shipment":"Line "+(Number(suggestion.lineIndex)+1)}</b><span>{suggestion.reason||"Value found in the email source."}</span></div>
                <strong>{suggestion.field==="hsCode"?"HS code":suggestion.field==="invoiceNumber"?"Invoice number":suggestion.field==="exporterEoriNo"?"EORI":suggestion.field}: {suggestion.value}</strong>
              </div>)}
            </div>
