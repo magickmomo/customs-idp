@@ -85,7 +85,7 @@ export default async function handler(req,res){
 
   if(req.method==="DELETE"){
     try{
-      const role=String(req.headers?.["x-user-role"]||"").toLowerCase();
+      const role=String(auth.role||"").toLowerCase();
       if(!["manager","admin"].includes(role)) return res.status(403).json({error:"Only managers can delete packs"});
 
       const id=String(req.query?.id||"").trim();
