@@ -1701,6 +1701,10 @@ function SettingsPage(){
   const [outlook,setOutlook]=useState({loading:true,connected:false,connection:null});
   const [connecting,setConnecting]=useState(false);
   const [error,setError]=useState("");
+  const [invite,setInvite]=useState({name:"",email:"",role:"member"});
+  const [inviting,setInviting]=useState(false);
+  const [inviteMessage,setInviteMessage]=useState("");
+
   useEffect(()=>{
     let active=true;
     fetch("/api/outlook?action=status",{credentials:"include"})
@@ -1709,6 +1713,7 @@ function SettingsPage(){
       .catch(()=>{if(active)setOutlook({loading:false,connected:false,connection:null});});
     return()=>{active=false;};
   },[]);
+
   const connectOutlook=async()=>{
     setError("");setConnecting(true);
     try{
@@ -1718,9 +1723,41 @@ function SettingsPage(){
       window.location.href=data.authorizationUrl;
     }catch(e){setError(e.message||"Unable to start Outlook connection.");setConnecting(false);}
   };
+
+  const sendInvite=async(e)=>{
+    e.preventDefault();
+    setError("");setInviteMessage("");setInviting(true);
+    try{
+      const response=await fetch("/api/team",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        credentials:"include",
+        body:JSON.stringify(invite)
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||"Unable to send invitation.");
+      setInviteMessage("Invitation sent to "+invite.email+". They will set their password from the invitation link.");
+      setInvite({name:"",email:"",role:"member"});
+    }catch(e){setError(e.message||"Unable to send invitation.");}
+    finally{setInviting(false);}
+  };
+
   return <section>
     <div className="page-head"><div><div className="eyebrow">Platform</div><h1>Settings</h1><p>Core processing, middleware and integration configuration.</p></div></div>
     <div className="settings-grid">
+      <div className="panel settings-card">
+        <h2>Team access</h2>
+        <p>Invite a user to this organisation. The invitation creates their Supabase account and organisation membership together.</p>
+        <form onSubmit={sendInvite} className="password-login-form">
+          <label>Name<input value={invite.name} onChange={e=>setInvite(v=>({...v,name:e.target.value}))} placeholder="Full name"/></label>
+          <label>Email<input type="email" value={invite.email} onChange={e=>setInvite(v=>({...v,email:e.target.value}))} placeholder="name@company.com"/></label>
+          <label>Role<select value={invite.role} onChange={e=>setInvite(v=>({...v,role:e.target.value}))}><option value="member">Data Processor</option><option value="manager">Manager</option><option value="admin">Admin</option></select></label>
+          {inviteMessage&&<div className="password-login-message">{inviteMessage}</div>}
+          {error&&<div className="password-login-error">{error}</div>}
+          <button className="primary-action" type="submit" disabled={inviting||!invite.email.trim()}>{inviting?"Sending invitation…":"Invite user"}</button>
+        </form>
+      </div>
+
       <div className="panel settings-card">
         <h2>Outlook email intake</h2>
         <p>Connect an Outlook.com mailbox so new customs emails and attachments can enter the IDP pipeline automatically.</p>
@@ -1728,12 +1765,12 @@ function SettingsPage(){
         {error&&<div className="password-login-error">{error}</div>}
         <small>Access is limited to Microsoft Graph Mail.Read. Customs IDP does not request permission to send or modify email.</small>
       </div>
+
       <div className="panel settings-card"><h2>Middleware</h2><p>Configure the output contract used by the downstream customs system.</p><label>Endpoint</label><input value="https://middleware.internal/customs/orders" readOnly/><label>Format</label><select><option>JSON</option></select><label>Destination</label><input value="ASM UK" readOnly/></div>
       <div className="panel settings-card"><h2>Processing defaults</h2><p>Global fallbacks used when a customer has no overriding rule.</p><Toggle label="Automatic validation" on/><Toggle label="Low-confidence review queue" on/><Toggle label="Auto-send validated packs" on/></div>
     </div>
   </section>
 }
-
 function Toggle({label,on}){return <div className="toggle-row"><span>{label}</span><div className={"toggle "+(on?"on":"")}><i></i></div></div>}
 
 createRoot(document.getElementById("root")).render(<App/>);
