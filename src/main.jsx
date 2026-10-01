@@ -375,9 +375,10 @@ function App(){
       const confidences=extractedDocuments.map(d=>Number(d.extraction?.confidence)||0).filter(Boolean);
       const primaryDoc=extractedDocuments.find(d=>d.extraction?.documentType==="commercial_invoice")||extractedDocuments[0];
       const processed={...processing,status:"Needs review",confidence:confidences.length?Math.round(confidences.reduce((a,b)=>a+b,0)/confidences.length*100):0,extractedData:{...(primaryDoc?.extraction||{}),documents:extractedDocuments,documentCount:extractedDocuments.length,sourceDocuments:extractedDocuments.map(d=>({id:d.id,filename:d.filename,mimeType:d.mimeType,documentType:d.extraction?.documentType||"unknown",confidence:d.extraction?.confidence||0})),agentMessages:[],extractionRunId:new Date().toISOString()}};
-      const validated=buildValidatedPack(processed);
-      setSelectedPack(validated);setLivePacks(prev=>prev.map(p=>p.id===validated.id?validated:p));
-      const saved=await persistPack(validated);
+      let completedPack=buildValidatedPack(processed);
+      completedPack=await runAutomatedEmailAudit(completedPack);
+      setSelectedPack(completedPack);setLivePacks(prev=>prev.map(p=>p.id===completedPack.id?completedPack:p));
+      const saved=await persistPack(completedPack);
       if(!saved)throw new Error("Database save failed after re-processing completed");
       notify("Re-processing complete — "+extractedDocuments.length+" documents extracted and validation completed");
     }catch(error){
@@ -468,10 +469,11 @@ function App(){
           sourceDocuments:extractedDocuments.map(d=>({id:d.id,filename:d.filename,mimeType:d.mimeType,documentType:d.extraction?.documentType||"unknown",confidence:d.extraction?.confidence||0}))
         }
       };
-      const validated=buildValidatedPack(processed);
-      setSelectedPack(validated);
-      setLivePacks(prev=>prev.map(p=>p.id===id?validated:p));
-      persistPack(validated);
+      let completedPack=buildValidatedPack(processed);
+      completedPack=await runAutomatedEmailAudit(completedPack);
+      setSelectedPack(completedPack);
+      setLivePacks(prev=>prev.map(p=>p.id===id?completedPack:p));
+      await persistPack(completedPack);
       notify(extractedDocuments.length+" document"+(extractedDocuments.length===1?"":"s")+" extracted and validation completed");
     } catch(error) {
       const failed={...newPack,status:"Needs review",processingError:error.message};
