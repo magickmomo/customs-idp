@@ -41,7 +41,9 @@ const DOC_DB_NAME="customs-idp-documents";
 const DOC_STORE="files";
 function openDocDb(){return new Promise((resolve,reject)=>{const req=indexedDB.open(DOC_DB_NAME,1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains(DOC_STORE))req.result.createObjectStore(DOC_STORE)};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 async function saveUploadedDocument(id,file){const db=await openDocDb();return new Promise((resolve,reject)=>{const tx=db.transaction(DOC_STORE,"readwrite");tx.objectStore(DOC_STORE).put(file,id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});}
+async function deleteUploadedDocument(id){if(!id)return;try{const db=await openDocDb();await new Promise((resolve,reject)=>{const tx=db.transaction(DOC_STORE,"readwrite");tx.objectStore(DOC_STORE).delete(id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});}catch{}}
 async function getUploadedDocument(id){const db=await openDocDb();return new Promise((resolve,reject)=>{const tx=db.transaction(DOC_STORE,"readonly");const req=tx.objectStore(DOC_STORE).get(id);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error);});}
+const DEFAULT_INBOX_COLUMNS=[{key:"pack",label:"Pack",required:true},{key:"customer",label:"Customer",required:true},{key:"owner",label:"Owner",required:true},{key:"documents",label:"Documents",required:true},{key:"status",label:"Status",required:true},{key:"invoiceNumber",label:"Invoice number"},{key:"export",label:"Export"},{key:"destination",label:"Destination"},{key:"invoiceValue",label:"Invoice value"},{key:"currency",label:"Currency"},{key:"deliveryTerm",label:"Delivery term"},{key:"received",label:"Received"},{key:"validation",label:"Validation"}];
 
 const sampleLines = [
   {line:1,description:"Oak wooden packaging boxes",hs:"4415 10 00",origin:"HU",qty:24,net:"10.080",gross:"11.420",value:"384.00",confidence:97},
@@ -161,6 +163,7 @@ function App(){
   const [dataSource,setDataSource]=useState("local");
   const [packLoadError,setPackLoadError]=useState("");
   const [emailSyncStatus,setEmailSyncStatus]=useState({state:"idle",checked:0,processed:0,duplicates:0,failed:0,error:""});
+  const [pendingUploadFiles,setPendingUploadFiles]=useState([]),[uploadCustomer,setUploadCustomer]=useState("Unassigned customer"),[showUploadConfirm,setShowUploadConfirm]=useState(false);
   useEffect(()=>{
     if(authenticated!==true)return;
     let active=true;
@@ -391,12 +394,13 @@ function App(){
       }
       const confidences=extractedDocuments.map(d=>Number(d.extraction?.confidence)||0).filter(Boolean);
       const primaryDoc=extractedDocuments.find(d=>d.extraction?.documentType==="commercial_invoice")||extractedDocuments[0];
-      const processed={...processing,status:"Needs review",confidence:confidences.length?Math.round(confidences.reduce((a,b)=>a+b,0)/confidences.length*100):0,extractedData:{...(primaryDoc?.extraction||{}),documents:extractedDocuments,documentCount:extractedDocuments.length,sourceDocuments:extractedDocuments.map(d=>({id:d.id,filename:d.filename,mimeType:d.mimeType,documentType:d.extraction?.documentType||"unknown",confidence:d.extraction?.confidence||0})),agentMessages:[],extractionRunId:new Date().toISOString()}};
+      const processed={...processing,status:"Needs review",extractedData:{...(primaryDoc?.extraction||{}),documents:extractedDocuments,documentCount:extractedDocuments.length,sourceDocuments:extractedDocuments.map(d=>({id:d.id,filename:d.filename,mimeType:d.mimeType,documentType:d.extraction?.documentType||"unknown",confidence:d.extraction?.confidence||0})),agentMessages:[],extractionRunId:new Date().toISOString()}};
       let completedPack=buildValidatedPack(processed);
       completedPack=await runAutomatedEmailAudit(completedPack);
       setSelectedPack(completedPack);setLivePacks(prev=>prev.map(p=>p.id===completedPack.id?completedPack:p));
       const saved=await persistPack(completedPack);
       if(!saved)throw new Error("Database save failed after re-processing completed");
+      await recordHistory(completedPack,"reprocessed","Pack reprocessed and extraction completed",null,{documentCount:extractedDocuments.length});
       notify("Re-processing complete — "+extractedDocuments.length+" documents extracted and validation completed");
     }catch(error){
       const message=error?.message||"Unknown re-processing error";
@@ -407,113 +411,18 @@ function App(){
     }
   };
 
-  const handleUpload=async(files)=>{
-    const selected=Array.from(files||[]);
-    if(!selected.length) return;
-    const file=selected[0];
-    const highest=livePacks.reduce((max,p)=>Math.max(max,Number(String(p.id||"").replace("PK-",""))||0),10482);
-    const id=`PK-${highest+1}`;
-    const processingStartedAt=new Date().toISOString();
-    let uploadedFiles;
-    try{
-      uploadedFiles=await Promise.all(selected.map(async(f,index)=>{
-        const localId=`${id}-${index}`;
-        await saveUploadedDocument(localId,f);
-        const storageResponse=await fetch("/api/storage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"upload-url",packId:id,filename:f.name,contentType:f.type})});
-        const storageData=await storageResponse.json();
-        if(!storageResponse.ok) throw new Error(storageData.error||"Could not create storage upload URL");
-        const uploadResponse=await fetch(storageData.signedUrl,{method:"PUT",headers:{"Content-Type":f.type||"application/octet-stream"},body:f});
-        if(!uploadResponse.ok) throw new Error(`Could not upload ${f.name} to document storage`);
-        return {id:localId,name:f.name,size:f.size,type:f.type,storagePath:storageData.path};
-      }));
-    }catch(error){
-      notify(`Document storage upload failed: ${error.message}`);
-      return;
-    }
-    const newPack={organisationId:DEFAULT_ORGANISATION.id,organisationName:DEFAULT_ORGANISATION.name,id,customer:"Unassigned customer",docs:selected.length,status:"Processing",confidence:0,received:processingStartedAt,processingStartedAt,ticket:`UPLOAD-${Date.now().toString().slice(-5)}`,assignedTo:"Unassigned",uploadedFiles};
-    setLivePacks(prev=>[newPack,...prev]);
-    persistPack(newPack);
-    setSelectedPack(null);
-    navigate("inbox");
-    notify("Document uploaded — AI extraction started");
-    try {
-      const extractedDocuments=[];
-      for(const uploaded of uploadedFiles){
-        let source=null;
-        const original=selected.find(f=>f.name===uploaded.name && f.size===uploaded.size) || selected.find(f=>f.name===uploaded.name);
-        if(original){
-          source=original;
-        }else if(uploaded.storagePath){
-          const storageResponse=await fetch("/api/storage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"signed-url",path:uploaded.storagePath})});
-          const storageData=await storageResponse.json();
-          if(!storageResponse.ok) throw new Error(storageData.error||`Could not open ${uploaded.name}`);
-          const fileResponse=await fetch(storageData.signedUrl);
-          if(!fileResponse.ok) throw new Error(`Could not download ${uploaded.name}`);
-          source=await fileResponse.blob();
-        }
-        if(!source) throw new Error(`Document ${uploaded.name} is unavailable`);
-        const buffer=await source.arrayBuffer();
-        const bytes=new Uint8Array(buffer);
-        let binary="";
-        const chunk=0x8000;
-        for(let i=0;i<bytes.length;i+=chunk) binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+chunk,bytes.length)));
-        const dataUrl=`data:${source.type || uploaded.type || "application/octet-stream"};base64,${btoa(binary)}`;
-        const response=await fetch("/api/extract",{
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({fileData:dataUrl,filename:uploaded.name,mimeType:source.type || uploaded.type})
-        });
-        const result=await response.json();
-        if(!response.ok) throw new Error(result.error || `Extraction failed for ${uploaded.name}`);
-        extractedDocuments.push({
-          id:uploaded.id,
-          filename:uploaded.name,
-          mimeType:source.type || uploaded.type,
-          extraction:result.extraction
-        });
-      }
-      const confidences=extractedDocuments.map(d=>Number(d.extraction?.confidence)||0).filter(v=>v>0);
-      const firstInvoice=extractedDocuments.find(d=>d.extraction?.documentType==="commercial_invoice") || extractedDocuments[0];
-      const primary=firstInvoice?.extraction||{};
-      const processed={
-        ...newPack,
-        status:"Needs review",
-        confidence:confidences.length?Math.round((confidences.reduce((a,b)=>a+b,0)/confidences.length)*100):0,
-        extractedData:{
-          ...primary,
-          documents:extractedDocuments,
-          documentCount:extractedDocuments.length,
-          sourceDocuments:extractedDocuments.map(d=>({id:d.id,filename:d.filename,mimeType:d.mimeType,documentType:d.extraction?.documentType||"unknown",confidence:d.extraction?.confidence||0}))
-        }
-      };
-      let completedPack=buildValidatedPack(processed);
-      completedPack=await runAutomatedEmailAudit(completedPack);
-      setSelectedPack(completedPack);
-      setLivePacks(prev=>prev.map(p=>p.id===id?completedPack:p));
-      await persistPack(completedPack);
-      notify(extractedDocuments.length+" document"+(extractedDocuments.length===1?"":"s")+" extracted and validation completed");
-    } catch(error) {
-      const failed={...newPack,status:"Needs review",processingError:error.message};
-      setSelectedPack(failed);
-      setLivePacks(prev=>prev.map(p=>p.id===id?failed:p));
-      persistPack(failed);
-      notify("Extraction failed — check the pack for details");
-    }
-  };
-
+  const handleUpload=async(files)=>{const selected=Array.from(files||[]);if(!selected.length)return;setPendingUploadFiles(prev=>{const seen=new Set(prev.map(f=>f.name+"|"+f.size+"|"+f.lastModified));return [...prev,...selected.filter(f=>!seen.has(f.name+"|"+f.size+"|"+f.lastModified))]});setShowUploadConfirm(true);};
+  const confirmUpload=async()=>{const selected=[...pendingUploadFiles];if(!selected.length)return;const highest=livePacks.reduce((max,p)=>Math.max(max,Number(String(p.id||"").replace("PK-",""))||0),10482),id=`PK-${highest+1}`,started=new Date().toISOString();let uploadedFiles;try{uploadedFiles=await Promise.all(selected.map(async(f,i)=>{const localId=`${id}-${i}`;await saveUploadedDocument(localId,f);const sr=await fetch("/api/storage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"upload-url",packId:id,filename:f.name,contentType:f.type})}),sd=await sr.json();if(!sr.ok)throw new Error(sd.error||"Could not create storage upload URL");const ur=await fetch(sd.signedUrl,{method:"PUT",headers:{"Content-Type":f.type||"application/octet-stream"},body:f});if(!ur.ok)throw new Error(`Could not upload ${f.name}`);return{id:localId,name:f.name,size:f.size,type:f.type,storagePath:sd.path};}));}catch(e){notify("Document storage upload failed: "+e.message);return;}const strategy=getCustomerStrategy(uploadCustomer),strategyApplied=uploadCustomer!=="Unassigned customer"&&Object.keys(strategy||{}).length>0,newPack={organisationId:DEFAULT_ORGANISATION.id,organisationName:DEFAULT_ORGANISATION.name,id,customer:uploadCustomer,docs:selected.length,status:"Processing",confidence:0,received:started,processingStartedAt:started,ticket:`UPLOAD-${Date.now().toString().slice(-5)}`,assignedTo:"Unassigned",uploadedFiles,email:null,title:selected[0]?.name||id,customerStrategyApplied:strategyApplied};setLivePacks(prev=>[newPack,...prev]);await persistPack(newPack);await recordHistory(newPack,"uploaded",`Uploaded ${selected.length} document${selected.length===1?"":"s"} and confirmed the document pack.`,null,{documents:selected.map(f=>f.name),customer:uploadCustomer,strategyApplied});setPendingUploadFiles([]);setShowUploadConfirm(false);setUploadCustomer("Unassigned customer");navigate("inbox");notify("Document pack confirmed — AI extraction started");try{const extractedDocuments=[];for(const u of uploadedFiles){let source=selected.find(f=>f.name===u.name&&f.size===u.size)||selected.find(f=>f.name===u.name);if(!source&&u.storagePath){const sr=await fetch("/api/storage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"signed-url",path:u.storagePath})}),sd=await sr.json();if(!sr.ok)throw new Error(sd.error||"Could not open "+u.name);source=await (await fetch(sd.signedUrl)).blob();}if(!source)throw new Error("Document "+u.name+" is unavailable");const bytes=new Uint8Array(await source.arrayBuffer());let binary="";for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+0x8000,bytes.length)));const r=await fetch("/api/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({fileData:`data:${source.type||u.type||"application/octet-stream"};base64,${btoa(binary)}`,filename:u.name,mimeType:source.type||u.type})}),d=await r.json();if(!r.ok)throw new Error(d.error||"Extraction failed for "+u.name);extractedDocuments.push({id:u.id,filename:u.name,mimeType:source.type||u.type,extraction:d.extraction});}const invoice=extractedDocuments.find(d=>d.extraction?.documentType==="commercial_invoice")||extractedDocuments[0],processed={...newPack,status:"Needs review",extractedData:{...(invoice?.extraction||{}),documents:extractedDocuments,documentCount:extractedDocuments.length,sourceDocuments:extractedDocuments.map(d=>({id:d.id,filename:d.filename,mimeType:d.mimeType,documentType:d.extraction?.documentType||"unknown",confidence:d.extraction?.confidence||0}))}};let completed=buildValidatedPack(processed);completed=await runAutomatedEmailAudit(completed);setLivePacks(prev=>prev.map(p=>p.id===id?completed:p));setSelectedPack(completed);await persistPack(completed);await recordHistory(completed,"extracted","Document Extraction Agent completed extraction",null,{documentCount:extractedDocuments.length},null,"agent","Document Extraction Agent");if(strategyApplied)await recordHistory(completed,"strategy_applied",`Applied customer strategy for ${uploadCustomer}`,null,{customer:uploadCustomer},null,"system","Customs IDP System");notify(extractedDocuments.length+" document"+(extractedDocuments.length===1?"":"s")+" extracted and validation completed");}catch(e){const failed={...newPack,status:"Needs review",processingError:e.message};setLivePacks(prev=>prev.map(p=>p.id===id?failed:p));setSelectedPack(failed);await persistPack(failed);await recordHistory(failed,"processing_error","Document processing failed",null,{error:e.message},null,"system","Customs IDP System");notify("Extraction failed — check the pack for details");}};
   const filteredPacks=useMemo(()=>livePacks.filter(p=>
     [p.id,p.customer,p.status,p.ticket].join(" ").toLowerCase().includes(query.toLowerCase())
   ),[livePacks,query]);
 
   const navigate=(p)=>{setPage(p);setMobileMenuOpen(false);};
   const notify=(msg)=>{setToast(msg);setTimeout(()=>setToast(""),2500)};
-  const assignPack=(packId,assignedTo)=>{const updated={...livePacks.find(p=>p.id===packId),assignedTo};setLivePacks(prev=>prev.map(p=>p.id===packId?updated:p));if(selectedPack?.id===packId)setSelectedPack(prev=>({...prev,assignedTo}));persistPack(updated);notify(`Pack ${packId} assigned to ${assignedTo}`)};
-  const updatePack=(pack)=>{
-    if(!pack)return;
-    setSelectedPack(pack);
-    setLivePacks(prev=>prev.map(p=>p.id===pack.id?pack:p));
-    persistPack(pack);
-  };
+  const recordHistory=async(pack,action,description,beforeData=null,afterData=null,metadata=null,actorType="user",actorName=null)=>{if(!pack?.id)return;try{await fetch("/api/history",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({packId:pack.id,action,description,beforeData,afterData,metadata,actorType,actorName})});}catch{}};
+  const deletePack=async pack=>{if(!pack?.id||!window.confirm("Delete this pack? This will permanently remove the pack and its extracted customs data."))return;try{const r=await fetch("/api/packs?id="+encodeURIComponent(pack.id),{method:"DELETE",credentials:"include"}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Unable to delete pack");for(const f of pack.uploadedFiles||[])await deleteUploadedDocument(f.id);setLivePacks(prev=>prev.filter(p=>p.id!==pack.id));if(selectedPack?.id===pack.id){setSelectedPack(null);navigate("inbox");}notify("Pack deleted");}catch(e){notify(e.message||"Unable to delete pack");}};
+  const assignPack=(packId,assignedTo)=>{const previous=livePacks.find(p=>p.id===packId),updated={...previous,assignedTo};setLivePacks(prev=>prev.map(p=>p.id===packId?updated:p));if(selectedPack?.id===packId)setSelectedPack(prev=>({...prev,assignedTo}));persistPack(updated);recordHistory(updated,"assigned",`Pack assigned to ${assignedTo}`,{assignedTo:previous?.assignedTo||"Unassigned"},{assignedTo});notify(`Pack ${packId} assigned to ${assignedTo}`)};
+  const updatePack=(pack)=>{if(!pack)return;const next=pack.extractedData?.documents?{...pack,workingRecord:buildWorkingCustomsRecord(pack)}:pack;setSelectedPack(next);setLivePacks(prev=>prev.map(p=>p.id===next.id?next:p));persistPack(next);};
   const buildWorkingCustomsRecord=(pack)=>{
     const primary={...(pack?.extractedData||{})};
     const docs=Array.isArray(primary.documents)?primary.documents:[];
@@ -557,8 +466,8 @@ function App(){
       totalPackages:["totalPackages","packages"],
       totalNetWeight:["totalNetWeight","totalNetMass","netWeight"],
       totalGrossWeight:["totalGrossWeight","totalGrossMass","grossWeight"],
-      countryOfExport:["countryOfExport","countryOfOrigin","sourceCountryCode"],
-      sourceCountryOfDestination:["sourceCountryOfDestination","countryOfDestination"],
+      countryOfExport:["countryOfExport","countryOfOrigin","exportCountry","exporterCountryIso","sourceCountryCode"],
+      sourceCountryOfDestination:["sourceCountryOfDestination","countryOfImport","countryOfDestination","consigneeCountryIso"],
       deliveryTerm:["deliveryTerm","terms"]
     };
     Object.entries(aliases).forEach(([target,keys])=>{
@@ -568,6 +477,9 @@ function App(){
         if(!isMissing(value)){merged[target]=value;break;}
       }
     });
+    const strategy=getCustomerStrategy(pack?.customer),eo=strategy?.customsSummaryExportField||strategy?.customsSummary?.exportField,di=strategy?.customsSummaryDestinationField||strategy?.customsSummary?.destinationField;
+    if(eo&&!isMissing(merged[eo]))merged.countryOfExport=normalizeCountryCode(merged[eo]);else if(isMissing(merged.countryOfExport)&&!isMissing(merged.exporterCountryIso))merged.countryOfExport=normalizeCountryCode(merged.exporterCountryIso);
+    if(di&&!isMissing(merged[di]))merged.sourceCountryOfDestination=normalizeCountryCode(merged[di]);else if(isMissing(merged.sourceCountryOfDestination)&&!isMissing(merged.consigneeCountryIso))merged.sourceCountryOfDestination=normalizeCountryCode(merged.consigneeCountryIso);
 
     const invoiceLines=Array.isArray(invoice.lines)?invoice.lines:[];
     const supportingLineSets=supportingDocs
@@ -683,7 +595,7 @@ function App(){
     const validated=buildValidatedPack(pack);
     setSelectedPack(validated);
     setLivePacks(prev=>prev.map(p=>p.id===validated.id?validated:p));
-    await persistPack(validated);
+    await persistPack(validated);await recordHistory(validated,"validated",validated.validationStatus==="Validated"?"Pack validated successfully":"Pack validation completed with issues",null,{status:validated.status,validationStatus:validated.validationStatus,checks:validated.validationChecks});
     if(showToast){
       const failed=validated.validationChecks.filter(x=>x.status==="fail");
       const review=validated.validationChecks.filter(x=>x.status==="review");
@@ -703,7 +615,7 @@ const postToLCA=()=>{
   const posted={...selectedPack,status:"Posted to LCA",assignedTo,processingCompletedAt:selectedPack.processingCompletedAt||now,postedToLCAAt:now};
   setSelectedPack(posted);
   setLivePacks(prev=>prev.map(p=>p.id===posted.id?posted:p));
-  persistPack(posted);
+  persistPack(posted);recordHistory(posted,"posted_to_lca","Pack posted to LCA",null,{postedToLCAAt:now});
   notify("Pack posted to LCA");
   navigate("inbox");
 };
@@ -734,19 +646,19 @@ const postToLCA=()=>{
 
     <main className={"main "+(page==="review"?"review-mode":"")}>
       <header className="topbar">
-        {page==="review" && <button className="back-to-inbox-btn" aria-label="Back to inbox" title="Back to inbox" onClick={()=>navigate("inbox")}><ChevronLeft size={16}/><span>Back to inbox</span></button>}
+        {page==="review"&&<button className="back-to-inbox-btn" aria-label="Back to inbox" title="Back to inbox" onClick={()=>navigate("inbox")}><ChevronLeft size={16}/><span>Back to inbox</span></button>}
         <button className="mobile-menu-btn" aria-label="Open navigation" onClick={()=>setMobileMenuOpen(true)}><Menu size={20}/></button><div className="mobile-brand"><strong>Customs IDP</strong></div>
-        <div className="crumb"><span className="organisation-crumb">{DEFAULT_ORGANISATION.name}</span> <span>/</span> Operations <span>/</span> {page[0].toUpperCase()+page.slice(1)}</div>
-        <div className="top-actions"><button className="icon-btn" aria-label="Open inbox" onClick={()=>navigate("inbox")}><Mail size={18}/></button><div className="top-avatar" title={currentUserName}>{currentUserInitials}</div></div>
+        {page!=="review"&&<div className="crumb"><span className="organisation-crumb">{DEFAULT_ORGANISATION.name}</span> <span>/</span> Operations <span>/</span> {page[0].toUpperCase()+page.slice(1)}</div>}
+        <div className="top-actions"><button className="icon-btn" aria-label="Open inbox" onClick={()=>navigate("inbox")}><Mail size={18}/></button>{page==="review"&&selectedPack&&<div className="review-top-actions"><select className="owner-select review-owner" value={selectedPack.assignedTo||"Unassigned"} onChange={e=>assignPack(selectedPack.id,e.target.value)}><option>Unassigned</option><option>Liam Wingrove</option><option>Data Processor 1</option><option>Data Processor 2</option><option>Muhammad Amer</option></select><Status status={selectedPack.status}/><button className="secondary" onClick={()=>reprocessPack?.(selectedPack)}>Re-process</button><button className="secondary" onClick={validatePack}>Validate data</button><button className={selectedPack.status==="Ready"?"primary":"secondary"} onClick={postToLCA}>Post to LCA</button></div>}<div className="top-avatar" title={currentUserName}>{currentUserInitials}</div></div>
       </header>
 
       <input ref={uploadRef} className="hidden-upload" type="file" multiple accept=".pdf,.xlsx,.xls,.doc,.docx,.csv,.png,.jpg,.jpeg,.eml,.msg" onChange={e=>handleUpload(e.target.files)}/>
       <div className="content">
         {page==="manager" && canViewManager && <ManagerPage livePacks={livePacks} dataSource={dataSource}/>} 
         {page==="dashboard" && <Dashboard navigate={navigate} notify={notify} livePacks={livePacks}/>}
-        {page==="inbox" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{if(p?.status==="Processing"){notify("This pack is still processing. It will become available when extraction completes.");return;}setSelectedPack(p);navigate("review")}} onUpload={handleUpload} onAssign={assignPack} emailSyncStatus={emailSyncStatus}/>}
+        {page==="inbox" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{if(p?.status==="Processing"){notify("This pack is still processing. It will become available when extraction completes.");return;}setSelectedPack(p);navigate("review")}} onUpload={handleUpload} onAssign={assignPack} onDelete={deletePack} emailSyncStatus={emailSyncStatus} currentUserKey={currentUser?.id||currentUserName}/>}
         
-        {page==="review" && (selectedPack?.status==="Processing" ? <ProcessingReviewGuard onBack={()=>navigate("inbox")}/> : <Review pack={selectedPack ? {...selectedPack, workingRecord:selectedPack.workingRecord||buildWorkingCustomsRecord(selectedPack)} : selectedPack} back={()=>navigate("inbox")} notify={notify} onAssign={assignPack} updatePack={updatePack} validatePack={validatePack} postToLCA={postToLCA} reprocessPack={reprocessPack} persistValidatedPack={persistValidatedPack}/>)}
+        {page==="review" && (selectedPack?.status==="Processing" ? <ProcessingReviewGuard onBack={()=>navigate("inbox")}/> : <Review pack={selectedPack ? {...selectedPack, workingRecord:selectedPack.workingRecord||buildWorkingCustomsRecord(selectedPack)} : selectedPack} currentUserName={currentUserName} back={()=>navigate("inbox")} notify={notify} onAssign={assignPack} updatePack={updatePack} validatePack={validatePack} postToLCA={postToLCA} reprocessPack={reprocessPack} persistValidatedPack={persistValidatedPack} recordHistory={recordHistory}/>)}
         {page==="customers" && <Customers notify={notify}/>}
         {page==="agent" && <AgentPage/>}
         {page==="settings" && <SettingsPage/>}
@@ -754,7 +666,7 @@ const postToLCA=()=>{
     </main>
 
     {agentOpen && page!=="agent" && page!=="review" && <button className="agent-fab" onClick={()=>navigate("agent")}><Sparkles size={18}/> AI Agent</button>}
-    {toast && <div className="toast"><CheckCircle2 size={17}/>{toast}</div>}
+    {showUploadConfirm&&<UploadConfirmModal files={pendingUploadFiles} setFiles={setPendingUploadFiles} customer={uploadCustomer} setCustomer={setUploadCustomer} customers={Object.keys(customerStrategyStore)} getStrategy={getCustomerStrategy} onAddFiles={handleUpload} onCancel={()=>{setPendingUploadFiles([]);setShowUploadConfirm(false)}} onConfirm={confirmUpload}/>}\n    {toast && <div className="toast"><CheckCircle2 size={17}/>{toast}</div>}
   </div>
 }
 
@@ -814,7 +726,6 @@ function ManagerPage({livePacks,dataSource}){
  const review=filtered.filter(p=>p.status==="Needs review").length;
  const processing=filtered.filter(p=>p.status==="Processing").length;
  const failed=filtered.filter(p=>p.status==="Failed"||p.status==="failed").length;
- const avgConfidence=totalPacks?Math.round(filtered.reduce((n,p)=>n+(Number(p.confidence)||0),0)/totalPacks):0;
  const validationRate=totalPacks?((validated/totalPacks)*100).toFixed(1):"0.0";
  const reviewRate=totalPacks?((review/totalPacks)*100).toFixed(1):"0.0";
  const failureRate=totalPacks?((failed/totalPacks)*100).toFixed(1):"0.0";
@@ -827,8 +738,7 @@ function ManagerPage({livePacks,dataSource}){
    const validatedBy=rows.filter(p=>p.status==="Ready"||p.status==="Validated"||p.status==="Posted to LCA").length;
    const timed=rows.filter(p=>p.processingStartedAt&&p.processingCompletedAt).map(p=>new Date(p.processingCompletedAt).getTime()-new Date(p.processingStartedAt).getTime()).filter(ms=>Number.isFinite(ms)&&ms>=0);
    const avgProcessingTime=timed.length?formatDuration(timed.reduce((a,b)=>a+b,0)/timed.length):"—";
-   const confidence=rows.length?Math.round(rows.reduce((n,p)=>n+(Number(p.confidence)||0),0)/rows.length)+"%":"—";
-   return {name,role:name==="Liam Wingrove"||name==="Muhammad Amer"?"Manager":"Data Processor",packs:rows.length,docs,reviews,validated:validatedBy,confidence,avgProcessingTime};
+   return {name,role:name==="Liam Wingrove"||name==="Muhammad Amer"?"Manager":"Data Processor",packs:rows.length,docs,reviews,validated:validatedBy,avgProcessingTime};
   });
  const unassigned=filtered.filter(p=>!p.assignedTo||p.assignedTo==="Unassigned").length;
  const customersLive=[...new Set(filtered.map(p=>p.customer).filter(Boolean))];
@@ -858,7 +768,7 @@ function ManagerPage({livePacks,dataSource}){
   <div className="manager-grid">
    <div className="panel">
     <div className="panel-head"><div><h2>Team performance</h2><p>{periodLabel} · based on pack ownership</p></div></div>
-    <div className="manager-table-wrap"><table><thead><tr><th>TEAM MEMBER</th><th>ROLE</th><th>PACKS</th><th>DOCUMENTS</th><th>VALIDATED</th><th>REVIEWS</th><th>AVG CONF.</th><th>AVG PROCESSING</th></tr></thead><tbody>{team.map(m=><tr key={m.name}><td><b>{m.name}</b></td><td>{m.role}</td><td>{m.packs}</td><td>{m.docs}</td><td>{m.validated}</td><td>{m.reviews}</td><td>{m.confidence}</td><td>{m.avgProcessingTime}</td></tr>)}</tbody></table></div>
+    <div className="manager-table-wrap"><table><thead><tr><th>TEAM MEMBER</th><th>ROLE</th><th>PACKS</th><th>DOCUMENTS</th><th>VALIDATED</th><th>REVIEWS</th><th>AVG PROCESSING</th></tr></thead><tbody>{team.map(m=><tr key={m.name}><td><b>{m.name}</b></td><td>{m.role}</td><td>{m.packs}</td><td>{m.docs}</td><td>{m.validated}</td><td>{m.reviews}</td><td>{m.avgProcessingTime}</td></tr>)}</tbody></table></div>
     <div className="manager-note"><ShieldCheck size={15}/><span>{unassigned?unassigned+" pack"+(unassigned===1?" is":"s are")+" currently unassigned in this period.":"All packs in this period have an owner."} Assign ownership from Inbox to populate team performance.</span></div>
    </div>
    <div className="panel"><div className="panel-head"><div><h2>Platform health</h2><p>{periodLabel} workload across the operation</p></div></div><div className="queue-list"><Queue label="Validated" value={validated} pct={totalPacks?((validated/totalPacks)*100).toFixed(1):"0.0"} cls="good"/><Queue label="Processing" value={processing} pct={totalPacks?((processing/totalPacks)*100).toFixed(1):"0.0"} cls="blue"/><Queue label="Needs review" value={review} pct={totalPacks?((review/totalPacks)*100).toFixed(1):"0.0"} cls="warn"/></div></div>
@@ -912,8 +822,9 @@ function getPackCustomerLabel(pack){
   const documentExporter=primary?.extraction?.exporter||primary?.extraction?.exporterName||primary?.extraction?.exporterCompany||primary?.extraction?.exporterCompanyName;
   return documentExporter ? String(documentExporter) : "Unassigned customer";
 }
-function PackTable({packs,onOpen,onAssign}){return <div className="table-wrap"><table><thead><tr><th>PACK</th><th>CUSTOMER</th><th>OWNER</th><th>DOCUMENTS</th><th>STATUS</th><th>CONFIDENCE</th><th>RECEIVED</th><th></th></tr></thead><tbody>{packs.map(p=>{const displayLabel=p.email?.subject||p.uploadedFiles?.[0]?.name||p.id;const processing=p.status==="Processing";return <tr key={p.id} className={processing?"pack-processing-row":""} aria-busy={processing} onClick={()=>{if(!processing)onOpen(p);}}><td><b>{displayLabel}</b>{processing&&<span className="pack-processing-note">Documents received · processing before review</span>}</td><td>{getPackCustomerLabel(p)}</td><td><select className="owner-select" value={p.assignedTo||"Unassigned"} onClick={e=>e.stopPropagation()} onChange={e=>onAssign?.(p.id,e.target.value)}><option>Unassigned</option><option>Liam Wingrove</option><option>Data Processor 1</option><option>Data Processor 2</option><option>Muhammad Amer</option></select></td><td>{p.docs} documents</td><td>{processing?<div className="pack-processing-status"><Status status={p.status}/><div className="pack-processing-bar" aria-label="Pack is processing"><i></i></div><span>Preparing documents and extraction…</span></div>:<Status status={p.status}/>}</td><td><div className="confidence"><span>{processing?"—":p.confidence+"%"}</span><div><i style={{width:(processing?0:p.confidence)+"%"}}></i></div></div></td><td>{formatReceivedDateTime(p.received)}</td><td><button className="row-btn" type="button" disabled={processing} aria-label={processing?"Pack is still processing":"Open pack"} onClick={e=>{e.stopPropagation();if(!processing)onOpen(p);}}><MoreHorizontal size={17}/></button></td></tr>})}</tbody></table></div>}
-function Status({status}){let c=status==="Validated"?"good":status==="Processing"?"processing":"review";return <span className={"status "+c}><span></span>{status}</span>}
+function getPackColumnValue(pack,key){const data=pack?.workingRecord||pack?.extractedData||{},docs=Array.isArray(data.documents)?data.documents:[],invoice=docs.find(d=>d?.extraction?.documentType==="commercial_invoice")?.extraction||data;if(key==="pack")return pack.email?.subject||pack.title||pack.uploadedFiles?.[0]?.name||pack.id;if(key==="customer")return getPackCustomerLabel(pack);if(key==="owner")return pack.assignedTo||"Unassigned";if(key==="documents")return (Number(pack.docs)||0)+" document"+(Number(pack.docs)===1?"":"s");if(key==="status")return pack.status||"—";if(key==="invoiceNumber")return invoice.invoiceNumber||"—";if(key==="export")return invoice.countryOfExport||invoice.exporterCountryIso||"—";if(key==="destination")return invoice.sourceCountryOfDestination||invoice.consigneeCountryIso||"—";if(key==="invoiceValue")return invoice.totalInvoiceValue||"—";if(key==="currency")return invoice.currency||"—";if(key==="deliveryTerm")return invoice.deliveryTerm||"—";if(key==="received")return formatReceivedDateTime(pack.received);if(key==="validation")return pack.validationStatus==="Validated"?"Passed":pack.validationStatus||"—";return "—"}
+function PackTable({packs,onOpen,onAssign,onDelete,columns}){const visible=columns?.length?columns:DEFAULT_INBOX_COLUMNS.map(c=>c.key);return <div className="table-wrap"><table><thead><tr>{visible.map(k=><th key={k}>{DEFAULT_INBOX_COLUMNS.find(c=>c.key===k)?.label?.toUpperCase()||k.toUpperCase()}</th>)}<th></th></tr></thead><tbody>{packs.map(p=>{const processing=p.status==="Processing";return <tr key={p.id} className={processing?"pack-processing-row":""} onClick={()=>{if(!processing)onOpen(p)}}>{visible.map(k=><td key={k}>{k==="owner"?<select className="owner-select" value={p.assignedTo||"Unassigned"} onClick={e=>e.stopPropagation()} onChange={e=>onAssign?.(p.id,e.target.value)}><option>Unassigned</option><option>Liam Wingrove</option><option>Data Processor 1</option><option>Data Processor 2</option><option>Muhammad Amer</option></select>:k==="status"?<Status status={p.status}/>:k==="pack"?<><b>{getPackColumnValue(p,"pack")}</b>{processing&&<span className="pack-processing-note">Documents received · processing before review</span>}</>:getPackColumnValue(p,k)}</td>)}<td><button className="row-btn" disabled={processing} onClick={e=>{e.stopPropagation();if(!processing)onOpen(p)}}><MoreHorizontal size={17}/></button><button className="row-btn danger" disabled={processing} onClick={e=>{e.stopPropagation();onDelete?.(p)}}><X size={17}/></button></td></tr>})}</tbody></table></div>}
+function Status({status}){const c=status==="Ready"||status==="Validated"||status==="Posted to LCA"?"good":status==="Processing"?"processing":"review";return <span className={"status "+c}><span></span>{status}</span>}
 
 function reconcilePackDocuments(pack){
   const docs=Array.isArray(pack?.extractedData?.documents)?pack.extractedData.documents:[];
@@ -940,7 +851,7 @@ function SpreadsheetPreview({url}){
     <iframe src={officeUrl} title="Excel document preview" />
   </div>;
 }
-function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePack,postToLCA,reprocessPack,persistValidatedPack}){
+function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePack,postToLCA,reprocessPack,persistValidatedPack,recordHistory}){
  const [docUrls,setDocUrls]=useState({});
  const [chat,setChat]=useState("");
  const [messages,setMessages]=useState([]);
@@ -957,6 +868,8 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
  },[messages]);
  const [showSummary,setShowSummary]=useState(false);
  const [showEmailSource,setShowEmailSource]=useState(false);
+ const [history,setHistory]=useState([]);
+ useEffect(()=>{let active=true;(async()=>{try{const r=await fetch("/api/history?packId="+encodeURIComponent(pack.id),{credentials:"include"}),d=await r.json();if(active&&r.ok)setHistory(Array.isArray(d.history)?d.history:[])}catch{}})();return()=>{active=false}},[pack.id,pack.status,pack.assignedTo,pack.validationStatus,pack.postedToLCAAt,pack.extractedData?.reviewOverrides?.length]);
 
  const [emailDraft,setEmailDraft]=useState(null);
  const emailAuditStartedRef=useRef(null);
@@ -1245,7 +1158,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
    const updatedMessages=messages.map((m,index)=>index===messageIndex?{...m,handled:"applied"}:m).concat(confirmation);
    data.agentMessages=updatedMessages.filter(m=>m.persist!==false).map(serialiseMessage);
    const next={...pack,extractedData:data,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
-   updatePack?.(next);
+   updatePack?.(next);recordHistory?.(next,"amended","Added user-confirmed email-sourced customs data",null,{suggestions:valid.map(s=>({scope:s.scope,lineIndex:s.lineIndex??null,field:s.field,value:s.value}))},{source:"email"});
    setMessages(updatedMessages);
    notify?.(applied?"Added "+applied+" email-sourced field"+(applied===1?"":"s")+" to the pack":"No new email-sourced fields were added");
  };
@@ -1342,7 +1255,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
      method:"line-value net allocation, then net-ratio gross allocation"
    };
    const next={...pack,extractedData:data,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
-   updatePack?.(next);
+   updatePack?.(next);recordHistory?.(next,"weight_apportionment","Approved weight apportionment",null,{method:"line-value net allocation, then net-ratio gross allocation"});
    notify?.("Weight apportionment approved — validating the derived line weights");
    if(typeof persistValidatedPack==="function") setTimeout(()=>persistValidatedPack(next,true),0);
    else notify?.("Weight apportionment saved — press Validate data to run the checks");
@@ -1375,7 +1288,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
    data.weightSourceDecision={source,sourceLabel,selectedAt:new Date().toISOString(),linesChanged:changed};
    data.weightSelectionStatus="resolved";
    const next={...pack,extractedData:data,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
-   updatePack?.(next);
+   updatePack?.(next);recordHistory?.(next,"weight_source_selected",sourceLabel+" weights selected",null,{source,linesChanged:changed});
    notify?.(sourceLabel+" weights selected — "+changed+" line"+(changed===1?"":"s")+" updated");
  };
  const emailCustomerReview=checks=>{
@@ -1530,8 +1443,8 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
  const summaryInvoiceNumber=summaryHeaderData.invoiceNumber||summaryHeaderData.invoiceNo||summaryHeaderData.invoice||summaryFallbackData.invoiceNumber||summaryFallbackData.invoiceNo||summaryFallbackData.invoice||"—";
 
  return <section className="review-chat-page">
-   <button className="back" onClick={back}>← Back to inbox</button>
-   <div className="review-head"><div><div className="eyebrow">{pack.id} · {pack.ticket}</div><h1>{getPackCustomerLabel(pack)}</h1><p>{pack.docs} Documents · Received {formatReceivedDateTime(pack.received)}</p></div><div className="review-actions"><select className="owner-select review-owner" value={pack.assignedTo||"Unassigned"} onChange={e=>onAssign?.(pack.id,e.target.value)}><option>Unassigned</option><option>Liam Wingrove</option><option>Data Processor 1</option><option>Data Processor 2</option><option>Muhammad Amer</option></select><Status status={pack.status}/><button className="secondary" onClick={()=>reprocessPack?.(pack)}>Re-process</button><button className="secondary" onClick={validatePack}>Validate data</button><button className={pack.status==="Ready"?"primary":"secondary"} onClick={postToLCA}>Post to LCA</button></div></div>
+
+   <div className="review-head"><div><div className="eyebrow">{pack.customer||"Customs pack"}</div><h1>{pack.email?.subject||pack.title||pack.uploadedFiles?.[0]?.name||pack.id}</h1><p>{pack.docs} document{Number(pack.docs)===1?"":"s"} · Received {formatReceivedDateTime(pack.received)}</p></div></div>
    <div className="chat-review-panel chat-review-full">
      <div className="chat-review-head"><div className="agent-title"><div className="agent-orb"><Sparkles size={18}/></div><div><b>Extraction Agent</b><span>Source-grounded document review</span></div></div><div className="chat-review-head-actions"><button type="button" className="secondary review-show-summary-btn" onClick={()=>setShowSummary(true)}><FileText size={14}/> Customs summary</button>{pack.email&&<button type="button" className="secondary review-show-email-btn" onClick={()=>setShowEmailSource(true)}><Mail size={14}/> Show email</button>}<button type="button" className="secondary review-show-document-btn" onClick={()=>{setSelectedDocumentId(selectedDocumentId||(documentRows[0]?.id||documentRows[0]?.name));setPreviewPage(1);setShowPreview(true);}}><FileText size={14}/> Show document</button></div></div>
      <div className="chat-review-intro">I read the complete document pack first. The conversation below is the review record: extracted values stay connected to their source, and discrepancies are surfaced rather than silently resolved.</div>
@@ -1540,6 +1453,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
      <div ref={chatHistoryRef} className="chat-history chat-review-history">{messages.map(renderMessage)}</div>
      <div className="chat-input chat-review-input"><input value={chat} onChange={e=>setChat(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendChat()} placeholder="Ask where a value came from, why it was used, or tell the agent what to change..."/><button onClick={sendChat}><ArrowRight size={16}/></button></div>
    </div>
+   <div className="panel pack-history-panel"><div className="panel-head"><div><span className="summary-kicker">AUDIT TRAIL</span><h2>Pack history</h2><p>Who uploaded, amended, validated, reprocessed or posted this pack.</p></div></div><div className="pack-history-list">{history.length?history.map(x=><div className="pack-history-item" key={x.id}><div className="pack-history-dot"></div><div><b>{x.description}</b><span>{x.actor_name} · {x.actor_type} · {new Date(x.created_at).toLocaleString("en-GB")}</span></div></div>):<div className="pack-history-empty">No history recorded yet.</div>}</div></div>
    {showSummary&&<div className="customs-summary-modal-overlay" onClick={()=>setShowSummary(false)}><div className="customs-summary-modal" onClick={e=>e.stopPropagation()}><div className="customs-summary-modal-head"><div><span className="summary-kicker">CUSTOMS ENTRY SUMMARY</span></div><button type="button" className="row-btn" onClick={()=>setShowSummary(false)}><X size={18}/></button></div><div className="customs-summary-modal-body">{buildSummary().find(m=>m.type==="customsEntrySummary") ? renderMessage(buildSummary().find(m=>m.type==="customsEntrySummary"),0) : <div className="review-document-empty"><FileText size={28}/><b>Customs summary not available</b><span>Waiting for document extraction to complete.</span></div>}</div></div></div>}
    {showEmailSource&&pack.email&&<div className="review-source-modal-overlay" onClick={()=>setShowEmailSource(false)}>
      <div className="review-email-modal" onClick={e=>e.stopPropagation()}>
