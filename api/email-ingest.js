@@ -39,7 +39,7 @@ export default async function handler(req,res){
 
     const emailExtraction=emailFields.length
       ? await extractConfiguredEmailFields({subject,text,html,emailFields})
-      : {fields:[],warnings:["Email field extraction is not configured for this customer. Subject and body are retained as source context only."]};
+      : {fields:[],warnings:[]};
 
     let id="PK-EMAIL-"+Date.now().toString(36).toUpperCase();
     if(messageId){const existing=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(messageId)+"&select=id,customer,status,docs&limit=1");if(existing[0]){if(!repair)return res.status(200).json({ok:true,duplicate:true,packId:existing[0].id,customer:existing[0].customer,status:existing[0].status,message:"Email already ingested."});id=existing[0].id;}}
