@@ -6,7 +6,8 @@ const AUTHORITY="https://login.microsoftonline.com/consumers/oauth2/v2.0/authori
 const TOKEN_URL="https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
 
 export default async function handler(req,res){
-  const action=String(req.query?.action||"status").toLowerCase();
+  const pathname=String(req.url||"").split("?")[0].replace(/\/+$/,"").toLowerCase();
+  const action=pathname.endsWith("/webhook")?"webhook":String(req.query?.action||"status").toLowerCase();
   if(action==="connect")return connect(req,res);
   if(action==="status")return status(req,res);
   if(action==="sync")return sync(req,res);
