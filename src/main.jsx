@@ -80,7 +80,7 @@ function App(){
         const response=await fetch("/api/auth",{method:"POST",headers:{Authorization:"Bearer "+session.access_token},credentials:"include"});
         const data=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(data.error||"Authentication failed.");
-        if(active){if(requiresInvitedUserSetup(session))setPasswordSetup(true);setCurrentUser(data.user||null);setAuthenticated(true);}
+        if(active){if(data.requiresPasswordSetup)setPasswordSetup(true);setCurrentUser(data.user||null);setAuthenticated(true);}
       }catch(error){
         await supabase.auth.signOut().catch(()=>{});
         if(active){setCurrentUser(null);setAuthenticated(false);}
