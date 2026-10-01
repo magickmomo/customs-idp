@@ -383,10 +383,11 @@ function App(){
       notify("Re-processing complete — "+extractedDocuments.length+" documents extracted and validation completed");
     }catch(error){
       const message=error?.message||"Unknown re-processing error";
-      const failed={...processing,status:"Needs review",processingError:message};
-      setSelectedPack(failed);setLivePacks(prev=>prev.map(p=>p.id===failed.id?failed:p));
+      const failed={...processing,status:"Processing",processingError:message};
+      setSelectedPack(null);setLivePacks(prev=>prev.map(p=>p.id===failed.id?failed:p));
       await persistPack(failed);
-      notify("Re-processing failed: "+message);
+      navigate("inbox");
+      notify("Processing did not complete — the pack remains locked: "+message);
     }
   };
 
@@ -476,11 +477,12 @@ function App(){
       await persistPack(completedPack);
       notify(extractedDocuments.length+" document"+(extractedDocuments.length===1?"":"s")+" extracted and validation completed");
     } catch(error) {
-      const failed={...newPack,status:"Needs review",processingError:error.message};
-      setSelectedPack(failed);
+      const failed={...newPack,status:"Processing",processingError:error.message};
+      setSelectedPack(null);
       setLivePacks(prev=>prev.map(p=>p.id===id?failed:p));
       persistPack(failed);
-      notify("Extraction failed — check the pack for details");
+      navigate("inbox");
+      notify("Processing did not complete — the pack remains locked: "+error.message);
     }
   };
 
@@ -727,9 +729,13 @@ const postToLCA=()=>{
       <div className="content">
         {page==="manager" && canViewManager && <ManagerPage livePacks={livePacks} dataSource={dataSource}/>} 
         {page==="dashboard" && <Dashboard navigate={navigate} notify={notify} livePacks={livePacks}/>}
-        {page==="inbox" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{if(p?.status==="Processing"){notify("This pack is still processing. It will become available when extraction completes.");return;}setSelectedPack(p);navigate("review")}} onUpload={handleUpload} onAssign={assignPack} emailSyncStatus={emailSyncStatus}/>}
+        {page==="inbox" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{
+          const locked=p?.status==="Processing" || Boolean(p?.email&&p?.extractedData?.agentAuditCompleted!==true);
+          if(locked){notify("This pack is still being completed. It will become available only after document combination and the automated agent review finish.");return;}
+          setSelectedPack(p);navigate("review");
+        }} onUpload={handleUpload} onAssign={onAssign} emailSyncStatus={emailSyncStatus}/>}
         
-        {page==="review" && (selectedPack?.status==="Processing" ? <ProcessingReviewGuard onBack={()=>navigate("inbox")}/> : <Review pack={selectedPack ? {...selectedPack, workingRecord:selectedPack.workingRecord||buildWorkingCustomsRecord(selectedPack)} : selectedPack} back={()=>navigate("inbox")} notify={notify} onAssign={assignPack} updatePack={updatePack} validatePack={validatePack} postToLCA={postToLCA} reprocessPack={reprocessPack} persistValidatedPack={persistValidatedPack}/>)}
+        {page==="review" && ((selectedPack?.status==="Processing" || Boolean(selectedPack?.email&&selectedPack?.extractedData?.agentAuditCompleted!==true)) ? <ProcessingReviewGuard onBack={()=>navigate("inbox")}/> : <Review pack={selectedPack ? {...selectedPack, workingRecord:selectedPack.workingRecord||buildWorkingCustomsRecord(selectedPack)} : selectedPack} back={()=>navigate("inbox")} notify={notify} onAssign={assignPack} updatePack={updatePack} validatePack={validatePack} postToLCA={postToLCA} reprocessPack={reprocessPack} persistValidatedPack={persistValidatedPack}/>)}
         {page==="customers" && <Customers notify={notify}/>}
         {page==="agent" && <AgentPage/>}
         {page==="settings" && <SettingsPage/>}
@@ -895,8 +901,7 @@ function getPackCustomerLabel(pack){
   const documentExporter=primary?.extraction?.exporter||primary?.extraction?.exporterName||primary?.extraction?.exporterCompany||primary?.extraction?.exporterCompanyName;
   return documentExporter ? String(documentExporter) : "Unassigned customer";
 }
-function PackTable({packs,onOpen,onAssign}){return <div className="table-wrap"><table><thead><tr><th>PACK</th><th>CUSTOMER</th><th>OWNER</th><th>DOCUMENTS</th><th>STATUS</th><th>CONFIDENCE</th><th>RECEIVED</th><th></th></tr></thead><tbody>{packs.map(p=>{const displayLabel=p.email?.subject||p.uploadedFiles?.[0]?.name||p.id;const processing=p.status==="Processing";return <tr key={p.id} className={processing?"pack-processing-row":""} aria-busy={processing} onClick={()=>{if(!processing)onOpen(p);}}><td><b>{displayLabel}</b>{processing&&<span className="pack-processing-note">Documents received · processing before review</span>}</td><td>{getPackCustomerLabel(p)}</td><td><select className="owner-select" value={p.assignedTo||"Unassigned"} onClick={e=>e.stopPropagation()} onChange={e=>onAssign?.(p.id,e.target.value)}><option>Unassigned</option><option>Liam Wingrove</option><option>Data Processor 1</option><option>Data Processor 2</option><option>Muhammad Amer</option></select></td><td>{p.docs} documents</td><td>{processing?<div className="pack-processing-status"><Status status={p.status}/><div className="pack-processing-bar" aria-label="Pack is processing"><i></i></div><span>Preparing documents and extraction…</span></div>:<Status status={p.status}/>}</td><td><div className="confidence"><span>{processing?"—":p.confidence+"%"}</span><div><i style={{width:(processing?0:p.confidence)+"%"}}></i></div></div></td><td>{formatReceivedDateTime(p.received)}</td><td><button className="row-btn" type="button" disabled={processing} aria-label={processing?"Pack is still processing":"Open pack"} onClick={e=>{e.stopPropagation();if(!processing)onOpen(p);}}><MoreHorizontal size={17}/></button></td></tr>})}</tbody></table></div>}
-function Status({status}){let c=status==="Validated"?"good":status==="Processing"?"processing":"review";return <span className={"status "+c}><span></span>{status}</span>}
+function PackTable({packs,onOpen,onAssign}){return <div className="table-wrap"><table><thead><tr><th>PACK</th><th>CUSTOMER</th><th>OWNER</th><th>DOCUMENTS</th><th>STATUS</th><th>CONFIDENCE</th><th>RECEIVED</th><th></th></tr></thead><tbody>{packs.map(p=>{const displayLabel=p.email?.subject||p.uploadedFiles?.[0]?.name||p.id;const processing=p.status==="Processing" || Boolean(p.email&&p.extractedData?.agentAuditCompleted!==true);return <tr key={p.id} className={processing?"pack-processing-row":""} aria-busy={processing} onClick={()=>{if(!processing)onOpen(p);}}><td><b>{displayLabel}</b>{processing&&<span className="pack-processing-note">Automated processing and agent review must finish before human review</span>}</td><td>{getPackCustomerLabel(p)}</td><td><select className="owner-select" value={p.assignedTo||"Unassigned"} onClick={e=>e.stopPropagation()} onChange={e=>onAssign?.(p.id,e.target.value)}><option>Unassigned</option><option>Liam Wingrove</option><option>Data Processor 1</option><option>Data Processor 2</option><option>Muhammad Amer</option></select></td><td>{p.docs} documents</td><td>{processing?<div className="pack-processing-status"><Status status="Processing"/><div className="pack-processing-bar" aria-label="Pack is processing"><i></i></div><span>Combining documents and completing automated agent review…</span></div>:<Status status={p.status}/>}</td><td><div className="confidence"><span>{processing?"—":p.confidence+"%"}</span><div><i style={{width:(processing?0:p.confidence)+"%"}}></i></div></td><td>{formatReceivedDateTime(p.received)}</td><td><button className="row-btn" type="button" disabled={processing} aria-label={processing?"Pack is still processing":"Open pack"} onClick={e=>{e.stopPropagation();if(!processing)onOpen(p);}}><MoreHorizontal size={17}/></button></td></tr>})}</tbody></table></div>}function Status({status}){let c=status==="Validated"?"good":status==="Processing"?"processing":"review";return <span className={"status "+c}><span></span>{status}</span>}
 
 function reconcilePackDocuments(pack){
   const docs=Array.isArray(pack?.extractedData?.documents)?pack.extractedData.documents:[];
@@ -1143,6 +1148,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
  useEffect(()=>{if(!documentRows.length){setSelectedDocumentId(null);return;}setSelectedDocumentId(current=>documentRows.some(d=>(d.id||d.name)===current)?current:(documentRows[0].id||documentRows[0].name));},[pack.id,pack.uploadedFiles?.length]);
  useEffect(()=>{
    if(!pack?.email||!pack?.extractedData)return;
+   if(pack.extractedData?.agentAuditCompleted===true)return;
    if(emailAuditStartedRef.current===pack.id)return;
    const savedMessages=Array.isArray(pack.extractedData?.agentMessages)?pack.extractedData.agentMessages:[];
    if(savedMessages.some(m=>m?.type==="fieldSuggestion"))return;
