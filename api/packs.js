@@ -4,9 +4,7 @@ const DEFAULT_ORGANISATION_ID="demo-organisation";
 const DEFAULT_ORGANISATION_NAME="Customs IDP Demo Organisation";
 
 export default async function handler(req,res){
-  if(!requireAuth(req,res))return;
-
-  const organisationId=getOrganisationId(req);
+  const auth= requireAuth(req,res);\n  if(!auth)return;\n\n  const organisationId=auth.organisationId;
 
   if(req.method==="GET"){
     try{
@@ -100,11 +98,6 @@ export default async function handler(req,res){
   }
 
   return res.status(405).json({error:"Method not allowed"});
-}
-
-function getOrganisationId(req){
-  const supplied=String(req.headers?.["x-organisation-id"]||"").trim();
-  return supplied||DEFAULT_ORGANISATION_ID;
 }
 
 async function getOrganisation(id){
