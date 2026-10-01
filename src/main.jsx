@@ -733,7 +733,7 @@ const postToLCA=()=>{
           const locked=p?.status==="Processing" || Boolean(p?.email&&p?.extractedData?.agentAuditCompleted!==true);
           if(locked){notify("This pack is still being completed. It will become available only after document combination and the automated agent review finish.");return;}
           setSelectedPack(p);navigate("review");
-        }} onUpload={handleUpload} onAssign={onAssign} emailSyncStatus={emailSyncStatus}/>}
+        }} onUpload={handleUpload} onAssign={assignPack} emailSyncStatus={emailSyncStatus}/>}
         
         {page==="review" && ((selectedPack?.status==="Processing" || Boolean(selectedPack?.email&&selectedPack?.extractedData?.agentAuditCompleted!==true)) ? <ProcessingReviewGuard onBack={()=>navigate("inbox")}/> : <Review pack={selectedPack ? {...selectedPack, workingRecord:selectedPack.workingRecord||buildWorkingCustomsRecord(selectedPack)} : selectedPack} back={()=>navigate("inbox")} notify={notify} onAssign={assignPack} updatePack={updatePack} validatePack={validatePack} postToLCA={postToLCA} reprocessPack={reprocessPack} persistValidatedPack={persistValidatedPack}/>)}
         {page==="customers" && <Customers notify={notify}/>}
