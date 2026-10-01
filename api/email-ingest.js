@@ -123,6 +123,7 @@ export default async function handler(req,res){
       method:"POST",
       body:JSON.stringify({
         id:pack.id,
+        organisation_id:DEFAULT_ORGANISATION.id,
         customer:pack.customer,
         docs:pack.docs,
         status:processingStatus,
