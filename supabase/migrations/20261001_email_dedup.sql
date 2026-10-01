@@ -1,5 +1,16 @@
 -- Harden email ingestion against duplicate Outlook syncs.
--- Keep the most useful copy of each email-backed pack, then enforce uniqueness on ticket.
+-- Backfill email packs into the demo organisation, keep the most useful
+-- copy of each email-backed pack, then enforce uniqueness on ticket.
+
+update public.document_packs
+set organisation_id='demo-organisation'
+where organisation_id is null
+  and extracted_data->'_tenant'->>'organisationId'='demo-organisation';
+
+update public.document_packs
+set organisation_id='demo-organisation'
+where organisation_id is null
+  and extracted_data->'email'->>'messageId' is not null;
 
 with ranked as (
   select
