@@ -47,8 +47,10 @@ async function sync(req,res){
     const candidates=(data.value||[]).filter(message=>/CUSTOMS-IDP/i.test(String(message.subject||"")));
     let processed=0,duplicates=0,failed=0; const failures=[];
     for(const message of candidates){
-      const messageId=message.internetMessageId||message.id;
-      const existing=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(messageId)+"&select=id,docs,extracted_data&limit=1");
+      const graphMessageId=String(message.id||"").trim();
+      const messageId=String(message.internetMessageId||"").trim()||null;
+      const ticket=graphMessageId ? "GRAPH:"+graphMessageId : (messageId || "");
+      const existing=await findExistingEmailPack({ticket,messageId,subject:message.subject||"",receivedAt:message.receivedDateTime||"",from:message.from?.emailAddress?.address||""});
       const existingFiles=existing[0]?.extracted_data?._manager?.uploadedFiles;
       const repair=Boolean(existing[0]&&(!Number(existing[0].docs||0)||!Array.isArray(existingFiles)||!existingFiles.length));
       if(existing[0]&&!repair){duplicates++;continue;}
@@ -61,6 +63,7 @@ async function sync(req,res){
           text:stripHtml(message.body?.content||""),
           html:message.body?.content||"",
           messageId,
+          ticket,
           receivedAt:message.receivedDateTime||new Date().toISOString(),
           attachments,
           repair
@@ -139,6 +142,36 @@ async function getAccessToken(connection){
   if(data.refresh_token)await supabaseFetch("outlook_connections?id=eq."+encodeURIComponent(connection.id),{method:"PATCH",body:JSON.stringify({refresh_token:encrypt(data.refresh_token),updated_at:new Date().toISOString()})});
   return data.access_token;
 }
+async function findExistingEmailPack({ticket,messageId,subject,receivedAt,from}){
+  if(ticket){
+    const byTicket=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(ticket)+"&select=id,docs,extracted_data&limit=1");
+    if(byTicket[0])return byTicket[0];
+  }
+  if(messageId){
+    const byMessage=await supabaseFetch("document_packs?extracted_data->email->>messageId=eq."+encodeURIComponent(messageId)+"&select=id,docs,extracted_data&limit=1").catch(()=>[]);
+    if(byMessage[0])return byMessage[0];
+  }
+  // Older packs were keyed only by internetMessageId. As a final guard,
+  // treat the same sender/subject/received timestamp as the same email.
+  if(subject&&receivedAt&&from){
+    const byFingerprint=await supabaseFetch(
+      "document_packs?customer=not.is.null&select=id,docs,extracted_data,ticket&order=created_at.desc&limit=100"
+    ).catch(()=>[]);
+    const targetSubject=String(subject).trim().toLowerCase();
+    const targetFrom=String(from).trim().toLowerCase();
+    const targetReceived=String(receivedAt);
+    const match=byFingerprint.find(row=>{
+      const email=row?.extracted_data?.email;
+      return email
+        && String(email.subject||"").trim().toLowerCase()===targetSubject
+        && String(email.from||"").trim().toLowerCase()===targetFrom
+        && String(email.receivedAt||"")===targetReceived;
+    });
+    if(match)return match;
+  }
+  return null;
+}
+
 async function postToIngest(payload){
   const response=await fetch("https://customs-idp.vercel.app/api/email-ingest",{method:"POST",headers:{"Content-Type":"application/json","x-email-ingest-secret":String(process.env.EMAIL_INGEST_SECRET||"")},body:JSON.stringify(payload)});
   if(!response.ok)throw new Error("Email ingestion returned HTTP "+response.status+": "+await response.text());
