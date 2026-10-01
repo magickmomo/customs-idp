@@ -303,5 +303,11 @@ async function supabaseFetch(path,options={}){
   const response=await fetch(url+"/rest/v1/"+path,{...options,headers:{apikey:key,Authorization:"Bearer "+key,"Content-Type":"application/json",...(options.headers||{})}});
   if(!response.ok)throw new Error(await response.text());
   const text=await response.text();
-  return text?JSON.parse(text):[];
+  if(!text)return [];
+  const parsed=JSON.parse(text);
+  // PostgREST normally returns arrays for collection reads, but keep the
+  // intake path defensive so an unexpected null response cannot break the
+  // mailbox sync before the Inbox is refreshed.
+  if(parsed===null)return [];
+  return parsed;
 }
