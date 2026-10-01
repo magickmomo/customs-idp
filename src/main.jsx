@@ -126,11 +126,9 @@ function App(){
         if(!response.ok)throw new Error(data.error||("Outlook sync returned HTTP "+response.status));
         if(active){
           setEmailSyncStatus({state:"ready",checked:Number(data.checked||0),processed:Number(data.processed||0),duplicates:Number(data.duplicates||0),failed:Number(data.failed||0),error:""});
-          if(Number(data.processed||0)>0){
-            const packsResponse=await fetch("/api/packs",{credentials:"include"});
-            const packsData=await packsResponse.json().catch(()=>({}));
-            if(packsResponse.ok&&Array.isArray(packsData.packs))setLivePacks(packsData.packs);
-          }
+          const packsResponse=await fetch("/api/packs",{credentials:"include"});
+          const packsData=await packsResponse.json().catch(()=>({}));
+          if(packsResponse.ok&&Array.isArray(packsData.packs))setLivePacks(packsData.packs);
         }
       }catch(error){
         if(active)setEmailSyncStatus(state=>({...state,state:"error",error:error?.message||"Outlook sync failed."}));
