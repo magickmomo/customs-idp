@@ -23,6 +23,7 @@ export default async function handler(req,res){
     const context={
       packId:pack.id,customer:pack.customer,ticket:pack.ticket,
       extractedData:pack.extractedData||{},
+      workingRecord:pack.workingRecord||pack.extractedData?._workingRecord||null,
       uploadedFiles:pack.uploadedFiles||[],
       email:pack.email||null,
       assignedTo:pack.assignedTo||"Unassigned",
