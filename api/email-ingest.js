@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
+import { extractDocument } from "./document-extraction.js";
 
 const DEFAULT_STRATEGIES = {
   "Acme Components Ltd": { emailFields: [] },
@@ -221,16 +222,10 @@ function normaliseAttachmentData(attachment){
 }
 
 async function extractAttachment({fileData,filename,mimeType}){
-  const base=String(process.env.VERCEL_URL||"").trim();
-  const url=process.env.EMAIL_INGEST_EXTRACT_URL||(base?"https://"+base+"/api/extract":"");
-  if(!url)throw new Error("VERCEL_URL or EMAIL_INGEST_EXTRACT_URL is not configured.");
-  const response=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json","x-email-ingest-secret":String(process.env.EMAIL_INGEST_SECRET||"")},body:JSON.stringify({fileData,filename,mimeType})});
-  const data=await response.json().catch(()=>({}));
-  if(!response.ok){
-    const detail=data?.error?.message ?? data?.error ?? data?.message ?? "Document extraction failed.";
-    throw new Error(formatExtractionError(detail));
-  }
-  return data;
+  // Email ingestion uses the same extraction engine as browser uploads,
+  // but invokes it directly so Outlook intake does not depend on a second
+  // Vercel HTTP hop or authentication layer.
+  return await extractDocument({fileData,filename,mimeType});
 }
 function formatExtractionError(error){if(error==null)return "Unknown extraction error.";if(typeof error==="string")return error;if(error instanceof Error&&error.message)return error.message;if(typeof error==="object"){if(typeof error.message==="string")return error.message;if(error.error?.message)return String(error.error.message);try{return JSON.stringify(error);}catch{return String(error);}}try{return String(error);}catch{return "Unknown extraction error.";}}
 function readJson(value,fallback){
