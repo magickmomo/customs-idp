@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
-import { extractDocument } from "./document-extraction.js";
+import { extractDocument } from "../src/document-extraction.js";
 
 const DEFAULT_STRATEGIES = {
   "Acme Components Ltd": { emailFields: [] },
