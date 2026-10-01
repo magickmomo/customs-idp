@@ -81,7 +81,7 @@ async function sync(req,res){
   }
 }
 
-async function webhook(req,res){
+export async function webhook(req,res){
   // Microsoft Graph validates a notification endpoint with a validationToken
   // query parameter before it starts delivering change notifications.
   if(req.method==="GET"){
