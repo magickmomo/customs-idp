@@ -63,7 +63,7 @@ function SupabaseLogin({onSuccess}){const [email,setEmail]=useState("");const [p
 function App(){
   const [authenticated,setAuthenticated]=useState(null);
   const [currentUser,setCurrentUser]=useState(null);
-  const [passwordSetup,setPasswordSetup]=useState(()=>typeof window!=="undefined" && /(?:^|[#&])type=invite(?:&|$)/.test(window.location.hash));
+  const [passwordSetup,setPasswordSetup]=useState(()=>typeof window!=="undefined" && /(?:^|[#&])type=(?:invite|recovery)(?:&|$)/.test(window.location.hash));
 
   useEffect(()=>{
     let active=true;
@@ -88,7 +88,7 @@ function App(){
     const {data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
       if(event==="SIGNED_OUT"){if(active){setCurrentUser(null);setAuthenticated(false);}}
       else if(event==="PASSWORD_RECOVERY" && session){setPasswordSetup(true);syncSession(session);}
-      else if(event==="SIGNED_IN" && session && /(?:^|[#&])type=invite(?:&|$)/.test(window.location.hash)){setPasswordSetup(true);syncSession(session);}
+      else if(event==="SIGNED_IN" && session && /(?:^|[#&])type=(?:invite|recovery)(?:&|$)/.test(window.location.hash)){setPasswordSetup(true);syncSession(session);}
       else if(session)syncSession(session);
     });
     return()=>{active=false;subscription.unsubscribe();};
@@ -615,6 +615,7 @@ const postToLCA=()=>{
   navigate("inbox");
 };
 
+  if(passwordSetup)return <SupabasePasswordSetup onComplete={user=>{setPasswordSetup(false);setCurrentUser(user);setAuthenticated(true);setPage("inbox");}}/>;
   if(authenticated===null)return <div className="test-login"><div className="test-login-card"><div className="test-login-brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><div className="test-login-copy"><div className="eyebrow">Secure access</div><h1>Checking access…</h1><p>Please wait.</p></div></div></div>;
   if(!authenticated)return passwordSetup ? <SupabasePasswordSetup onComplete={user=>{setPasswordSetup(false);setCurrentUser(user);setAuthenticated(true);setPage("inbox");}}/> : <SupabaseLogin onSuccess={user=>{setCurrentUser(user);setAuthenticated(true);setPage("inbox");}}/>;
   if(!currentUser)return <div className="test-login"><div className="test-login-card"><div className="test-login-copy"><div className="eyebrow">Account</div><h1>Loading profile…</h1><p>Loading your Customs IDP organisation access.</p></div></div></div>;
