@@ -111,7 +111,7 @@ function getRedirectUri(){
   const configured=String(process.env.OUTLOOK_REDIRECT_URI||"").trim();
   if(configured)return configured;
   const appUrl=String(process.env.APP_URL||"").trim();
-  if(appUrl)return appUrl.replace(/\\/+$/,"")+"/api/outlook/callback";
+  if(appUrl)return appUrl.replace(/\/+$/,"")+"/api/outlook/callback";
   if(process.env.VERCEL_ENV==="production")return "https://customs-idp.vercel.app/api/outlook/callback";
   return "http://localhost:5173/api/outlook/callback";
 }
