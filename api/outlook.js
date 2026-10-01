@@ -54,9 +54,10 @@ async function sync(req,res){
       const messageId=String(message.internetMessageId||"").trim()||null;
       const ticket=graphMessageId ? "GRAPH:"+graphMessageId : (messageId || "");
       const existing=await findExistingEmailPack({ticket,messageId,subject:message.subject||"",receivedAt:message.receivedDateTime||"",from:message.from?.emailAddress?.address||""});
-      const existingFiles=existing?.extracted_data?._manager?.uploadedFiles;
-      const repair=Boolean(existing&&(!Number(existing.docs||0)||!Array.isArray(existingFiles)||!existingFiles.length));
-      if(existing&&!repair){duplicates++;continue;}
+      // Never auto-repair an already-ingested email from the mailbox worker.
+      // Reprocessing must be an explicit user action; otherwise webhook + polling
+      // can repeatedly re-run extraction and the AI audit.
+      if(existing){duplicates++;continue;}
       try{
         const attachments=message.hasAttachments?await getAttachments(message.id,token):[];
         await postToIngest({
@@ -69,7 +70,6 @@ async function sync(req,res){
           ticket,
           receivedAt:message.receivedDateTime||new Date().toISOString(),
           attachments,
-          repair
         });
         processed++;
       }catch(error){failed++;failures.push(error.message||"Unknown failure");console.error("Outlook sync message failed",messageId,error);}
@@ -130,9 +130,10 @@ export async function webhook(req,res){
         receivedAt:message.receivedDateTime||"",
         from:message.from?.emailAddress?.address||""
       });
-      const existingFiles=existing?.extracted_data?._manager?.uploadedFiles;
-      const repair=Boolean(existing&&(!Number(existing.docs||0)||!Array.isArray(existingFiles)||!existingFiles.length));
-      if(existing&&!repair){duplicates++;continue;}
+      // Never auto-repair an already-ingested email from the mailbox worker.
+      // Reprocessing must be an explicit user action; otherwise webhook + polling
+      // can repeatedly re-run extraction and the AI audit.
+      if(existing){duplicates++;continue;}
 
       const attachments=message.hasAttachments?await getAttachments(message.id,token):[];
       await postToIngest({
