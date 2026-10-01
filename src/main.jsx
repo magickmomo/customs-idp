@@ -163,15 +163,8 @@ function App(){
           }
         }catch{}
 
-        // Pull any new CUSTOMS-IDP emails before loading the persistent pack list.
-        try{
-          const syncResponse=await fetch("/api/outlook?action=sync",{method:"POST",credentials:"include"});
-          const syncData=await syncResponse.json().catch(()=>({}));
-          if(syncResponse.ok) setEmailSyncStatus({state:"success",checked:Number(syncData.checked)||0,processed:Number(syncData.processed)||0,duplicates:Number(syncData.duplicates)||0,failed:Number(syncData.failed)||0,failures:syncData.failures||[],error:""});
-          else setEmailSyncStatus({state:"error",checked:0,processed:0,duplicates:0,failed:0,error:syncData.error||("HTTP "+syncResponse.status)});
-        }catch(error){
-          setEmailSyncStatus({state:"error",checked:0,processed:0,duplicates:0,failed:0,error:error.message||"Outlook sync failed"});
-        }
+        // Load persisted packs immediately. Outlook intake is webhook-driven; mailbox
+        // scanning is intentionally not part of application startup.
         const response=await fetch("/api/packs",{credentials:"include"});
         const data=await response.json().catch(()=>({}));
         if(!response.ok) throw new Error(data.error||("Pack database returned HTTP "+response.status));
@@ -215,6 +208,26 @@ function App(){
     })();
     return()=>{active=false;};
   },[authenticated]);
+  // Keep an already-open inbox current without coupling page load to Outlook scanning.
+  // This polling fallback is deliberately server-mediated because the current app uses
+  // custom authentication rather than Supabase Auth/JWT, so exposing a browser Supabase
+  // Realtime subscription would bypass the existing tenant RLS boundary.
+  useEffect(()=>{
+    if(authenticated!==true)return;
+    let active=true;
+    let timer=null;
+    const refreshPacks=async()=>{
+      try{
+        const response=await fetch("/api/packs",{credentials:"include"});
+        const data=await response.json().catch(()=>({}));
+        if(active&&response.ok&&Array.isArray(data.packs)) setLivePacks(data.packs);
+      }catch{}
+      finally{if(active)timer=setTimeout(refreshPacks,5000);}
+    };
+    timer=setTimeout(refreshPacks,5000);
+    return()=>{active=false;if(timer)clearTimeout(timer);};
+  },[authenticated]);
+
   useEffect(()=>{ try { localStorage.setItem("customs-idp-packs",JSON.stringify(livePacks)); } catch {} },[livePacks]);
   const persistPack=async(pack)=>{
     try{
