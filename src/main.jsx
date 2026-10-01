@@ -322,7 +322,7 @@ function App(){
     }
     if(!files.length){notify("No uploaded documents are available to reprocess");return;}
     const processing={...pack,uploadedFiles:files,status:"Processing",processingError:undefined,validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
-    setSelectedPack(processing);setLivePacks(prev=>prev.map(p=>p.id===pack.id?processing:p));persistPack(processing);notify("Re-processing all documents — AI extraction started");
+    setSelectedPack(null);setLivePacks(prev=>prev.map(p=>p.id===pack.id?processing:p));persistPack(processing);navigate("inbox");notify("Re-processing all documents — AI extraction started");
     try{
       const extractedDocuments=[];
       for(const uploaded of files){
@@ -398,8 +398,8 @@ function App(){
     const newPack={organisationId:DEFAULT_ORGANISATION.id,organisationName:DEFAULT_ORGANISATION.name,id,customer:"Unassigned customer",docs:selected.length,status:"Processing",confidence:0,received:processingStartedAt,processingStartedAt,ticket:`UPLOAD-${Date.now().toString().slice(-5)}`,assignedTo:"Unassigned",uploadedFiles};
     setLivePacks(prev=>[newPack,...prev]);
     persistPack(newPack);
-    setSelectedPack(newPack);
-    navigate("review");
+    setSelectedPack(null);
+    navigate("inbox");
     notify("Document uploaded — AI extraction started");
     try {
       const extractedDocuments=[];
@@ -708,9 +708,9 @@ const postToLCA=()=>{
       <div className="content">
         {page==="manager" && canViewManager && <ManagerPage livePacks={livePacks} dataSource={dataSource}/>} 
         {page==="dashboard" && <Dashboard navigate={navigate} notify={notify} livePacks={livePacks}/>}
-        {page==="inbox" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{setSelectedPack(p);navigate("review")}} onUpload={handleUpload} onAssign={assignPack} emailSyncStatus={emailSyncStatus}/>}
+        {page==="inbox" && <InboxPage packs={filteredPacks} query={query} setQuery={setQuery} openPack={(p)=>{if(p?.status==="Processing"){notify("This pack is still processing. It will become available when extraction completes.");return;}setSelectedPack(p);navigate("review")}} onUpload={handleUpload} onAssign={assignPack} emailSyncStatus={emailSyncStatus}/>}
         
-        {page==="review" && <Review pack={selectedPack} back={()=>navigate("inbox")} notify={notify} onAssign={assignPack} updatePack={updatePack} validatePack={validatePack} postToLCA={postToLCA} reprocessPack={reprocessPack} persistValidatedPack={persistValidatedPack}/>}
+        {page==="review" && (selectedPack?.status==="Processing" ? <ProcessingReviewGuard onBack={()=>navigate("inbox")}/> : <Review pack={selectedPack} back={()=>navigate("inbox")} notify={notify} onAssign={assignPack} updatePack={updatePack} validatePack={validatePack} postToLCA={postToLCA} reprocessPack={reprocessPack} persistValidatedPack={persistValidatedPack}/>)}
         {page==="customers" && <Customers notify={notify}/>}
         {page==="agent" && <AgentPage/>}
         {page==="settings" && <SettingsPage/>}
