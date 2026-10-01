@@ -1,6 +1,6 @@
 import { clearAuthCookie, createAuthCookie, getAuthContext } from "./authGuard.js";
 export default async function handler(req,res){
-  if(req.method==="GET"){const context=getAuthContext(req);if(!context)return res.status(200).json({authenticated:false});return res.status(200).json({authenticated:true,user:{id:context.userId,email:context.email,name:context.name,role:context.role},organisation:{id:context.organisationId}});}
+  if(req.method==="GET"){const context=getAuthContext(req);if(!context)return res.status(200).json({authenticated:false});return res.status(200).json({authenticated:true,requiresPasswordSetup:Boolean(user.invited_at&&!user.user_metadata?.customs_idp_password_set),user:{id:context.userId,email:context.email,name:context.name,role:context.role},organisation:{id:context.organisationId}});}
   if(req.method==="POST"){
     const token=String(req.headers?.authorization||"").replace(/^Bearer\s+/i,"").trim();
     if(!token)return res.status(401).json({error:"Supabase access token is required."});
