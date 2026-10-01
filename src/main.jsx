@@ -8,6 +8,7 @@ import {
 import "./styles.css";
 import { validateStandardCustomsRecord } from "./validation/standardEngine.js";
 import { DEFAULT_ORGANISATION } from "./tenant.js";
+import { supabase } from "./lib/supabase.js";
 
 const packs = [
   { organisationId:DEFAULT_ORGANISATION.id, organisationName:DEFAULT_ORGANISATION.name, id:"PK-10482", customer:"Acme Components Ltd", docs:4, status:"Needs review", confidence:91, received:"16 Sep 2026, 15:42", ticket:"TK-88421" },
@@ -55,14 +56,8 @@ const normalizeCountryCode=value=>{
   return map[upper]||upper;
 };
 
-const TEST_USERS=[
-  {id:"liam",name:"Liam Wingrove",role:"manager",initials:"LW"},
-  {id:"muhammad",name:"Muhammad Amer",role:"manager",initials:"MA"},
-  {id:"processor1",name:"Data Processor 1",role:"user",initials:"P1"},
-  {id:"processor2",name:"Data Processor 2",role:"user",initials:"P2"}
-];
-
-function PasswordLogin({onSuccess}){
+function SupabaseLogin({onSuccess}){
+  const [email,setEmail]=useState("");
   const [password,setPassword]=useState("");
   const [error,setError]=useState("");
   const [busy,setBusy]=useState(false);
@@ -71,59 +66,63 @@ function PasswordLogin({onSuccess}){
     setError("");
     setBusy(true);
     try{
-      const response=await fetch("/api/auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password})});
-      const data=await response.json().catch(()=>({}));
-      if(!response.ok)throw new Error(data.error||"Unable to sign in");
-      onSuccess();
+      const {data,error:signInError}=await supabase.auth.signInWithPassword({email:email.trim(),password});
+      if(signInError)throw signInError;
+      if(!data.session?.access_token)throw new Error("Supabase did not return an active session.");
+      const response=await fetch("/api/auth",{method:"POST",headers:{Authorization:"Bearer "+data.session.access_token},credentials:"include"});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok){
+        await supabase.auth.signOut();
+        throw new Error(result.error||"Your account is not authorised for Customs IDP.");
+      }
+      onSuccess(result.user);
     }catch(error){setError(error.message||"Unable to sign in");}
     finally{setBusy(false);}
   };
   return <div className="test-login">
     <div className="test-login-card">
       <div className="test-login-brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div>
-      <div className="test-login-copy"><div className="eyebrow">Secure access</div><h1>Enter password</h1><p>This system is restricted. Enter the access password to continue.</p></div>
+      <div className="test-login-copy"><div className="eyebrow">Secure access</div><h1>Sign in</h1><p>Use your Customs IDP account. Authentication is managed by Supabase.</p></div>
       <form onSubmit={submit} className="password-login-form">
-        <label>Password</label>
-        <input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoFocus autoComplete="current-password" placeholder="Enter access password"/>
+        <label>Email<input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoFocus autoComplete="username" placeholder="name@company.com"/></label>
+        <label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" placeholder="Enter password"/></label>
         {error&&<div className="password-login-error">{error}</div>}
-        <button className="primary-action password-login-submit" type="submit" disabled={busy||!password}>{busy?"Signing in…":"Sign in"}</button>
+        <button className="primary-action password-login-submit" type="submit" disabled={busy||!email.trim()||!password}>{busy?"Signing in…":"Sign in"}</button>
       </form>
-    </div>
-  </div>;
-}
-
-function TestUserLogin({onSelect}){
-  return <div className="test-login">
-    <div className="test-login-card">
-      <div className="test-login-brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div>
-      <div className="test-login-copy"><div className="eyebrow">Test environment</div><h1>Select user</h1><p>No email or password is required. Choose the test user you want to work as.</p></div>
-      <div className="test-user-list">
-        {TEST_USERS.map(user=><button className="test-user-button" key={user.id} onClick={()=>onSelect(user)}>
-          <span className="test-user-avatar">{user.initials}</span>
-          <span><b>{user.name}</b><small>{user.role==="manager"?"Manager":"Data Processor"}</small></span>
-          <ArrowRight size={16}/>
-        </button>)}
-      </div>
     </div>
   </div>;
 }
 
 function App(){
   const [authenticated,setAuthenticated]=useState(null);
+  const [currentUser,setCurrentUser]=useState(null);
+
   useEffect(()=>{
     let active=true;
-    fetch("/api/auth",{credentials:"include"})
-      .then(response=>response.json())
-      .then(data=>{if(active)setAuthenticated(Boolean(data.authenticated));})
-      .catch(()=>{if(active)setAuthenticated(false);});
-    return()=>{active=false;};
+    const syncSession=async(session)=>{
+      if(!session?.access_token){
+        try{await fetch("/api/auth",{method:"DELETE",credentials:"include"});}catch{}
+        if(active){setCurrentUser(null);setAuthenticated(false);}
+        return;
+      }
+      try{
+        supabase.realtime.setAuth(session.access_token);
+        const response=await fetch("/api/auth",{method:"POST",headers:{Authorization:"Bearer "+session.access_token},credentials:"include"});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data.error||"Authentication failed.");
+        if(active){setCurrentUser(data.user||null);setAuthenticated(true);}
+      }catch(error){
+        await supabase.auth.signOut().catch(()=>{});
+        if(active){setCurrentUser(null);setAuthenticated(false);}
+      }
+    };
+    supabase.auth.getSession().then(({data:{session}})=>{if(active)syncSession(session);});
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
+      if(event==="SIGNED_OUT"){if(active){setCurrentUser(null);setAuthenticated(false);}}
+      else if(session)syncSession(session);
+    });
+    return()=>{active=false;subscription.unsubscribe();};
   },[]);
-  const [currentUser,setCurrentUser]=useState(()=>{
-    try{
-      const saved=localStorage.getItem("customs-idp-user");
-      return TEST_USERS.find(u=>u.id===saved)||null;
-    }catch{return null;}
-  });
   const [page,setPage]=useState("inbox");
   const [selectedPack,setSelectedPack]=useState(packs[0]);
   const [agentOpen,setAgentOpen]=useState(true);
@@ -208,24 +207,28 @@ function App(){
     })();
     return()=>{active=false;};
   },[authenticated]);
-  // Keep an already-open inbox current without coupling page load to Outlook scanning.
-  // This polling fallback is deliberately server-mediated because the current app uses
-  // custom authentication rather than Supabase Auth/JWT, so exposing a browser Supabase
-  // Realtime subscription would bypass the existing tenant RLS boundary.
+  // Supabase Realtime keeps an open inbox current as soon as the database changes.
+  // RLS on document_packs limits each authenticated user to their organisation.
   useEffect(()=>{
     if(authenticated!==true)return;
     let active=true;
-    let timer=null;
+    let channel=null;
     const refreshPacks=async()=>{
       try{
         const response=await fetch("/api/packs",{credentials:"include"});
         const data=await response.json().catch(()=>({}));
         if(active&&response.ok&&Array.isArray(data.packs)) setLivePacks(data.packs);
       }catch{}
-      finally{if(active)timer=setTimeout(refreshPacks,5000);}
     };
-    timer=setTimeout(refreshPacks,5000);
-    return()=>{active=false;if(timer)clearTimeout(timer);};
+    (async()=>{
+      const {data:{session}}=await supabase.auth.getSession();
+      if(!session?.access_token)return;
+      supabase.realtime.setAuth(session.access_token);
+      channel=supabase.channel("document-packs-live")
+        .on("postgres_changes",{event:"*",schema:"public",table:"document_packs"},()=>{void refreshPacks();})
+        .subscribe();
+    })();
+    return()=>{active=false;if(channel)supabase.removeChannel(channel);};
   },[authenticated]);
 
   useEffect(()=>{ try { localStorage.setItem("customs-idp-packs",JSON.stringify(livePacks)); } catch {} },[livePacks]);
@@ -643,12 +646,8 @@ const postToLCA=()=>{
 };
 
   if(authenticated===null)return <div className="test-login"><div className="test-login-card"><div className="test-login-brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><div className="test-login-copy"><div className="eyebrow">Secure access</div><h1>Checking access…</h1><p>Please wait.</p></div></div></div>;
-  if(!authenticated)return <PasswordLogin onSuccess={()=>setAuthenticated(true)}/>;
-  if(!currentUser)return <TestUserLogin onSelect={user=>{
-    setCurrentUser(user);
-    try{localStorage.setItem("customs-idp-user",user.id);}catch{}
-    setPage("inbox");
-  }}/>;
+  if(!authenticated)return <SupabaseLogin onSuccess={user=>{setCurrentUser(user);setAuthenticated(true);setPage("inbox");}}/>;
+  if(!currentUser)return <div className="test-login"><div className="test-login-card"><div className="test-login-copy"><div className="eyebrow">Account</div><h1>Loading profile…</h1><p>Loading your Customs IDP organisation access.</p></div></div></div>;
 
   return <div className={"app-shell "+(sidebarCollapsed?"sidebar-collapsed":"")}>
     <aside className="sidebar">
