@@ -4,7 +4,10 @@ const DEFAULT_ORGANISATION_ID="demo-organisation";
 const DEFAULT_ORGANISATION_NAME="Customs IDP Demo Organisation";
 
 export default async function handler(req,res){
-  const auth= requireAuth(req,res);\n  if(!auth)return;\n\n  const organisationId=auth.organisationId;
+  const auth=requireAuth(req,res);
+  if(!auth)return;
+
+  const organisationId=auth.organisationId;
 
   if(req.method==="GET"){
     try{
