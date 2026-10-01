@@ -12,6 +12,7 @@ export default async function handler(req,res){
       const pack=req.body||{};
       if(!pack.id) return res.status(400).json({error:"Pack id is required"});
       const extractedData=pack.extractedData?{...pack.extractedData}:{};
+      extractedData._tenant={organisationId:String(pack.organisationId||"demo-organisation"),organisationName:String(pack.organisationName||"Customs IDP Demo Organisation")};
       const managerMeta={processingStartedAt:pack.processingStartedAt||null,processingCompletedAt:pack.processingCompletedAt||null,uploadedFiles:Array.isArray(pack.uploadedFiles)?pack.uploadedFiles:[]};
       if(managerMeta.processingStartedAt||managerMeta.processingCompletedAt||managerMeta.uploadedFiles.length) extractedData._manager=managerMeta;
       const validationMeta={validationStatus:pack.validationStatus||null,validationChecks:Array.isArray(pack.validationChecks)?pack.validationChecks:null,validationSummary:pack.validationSummary||null};
@@ -48,7 +49,8 @@ function normalizePack(row){
   const validation=data?._validation||{};
   const workingRecord=data?._workingRecord;
   const email=data?.email||null;
+  const tenant=data?._tenant||{};
   let extractedData=data;
-  if(data){const rest={...data};delete rest._manager;delete rest._validation;delete rest._workingRecord;extractedData=Object.keys(rest).length?rest:undefined;}
-  return {...row,assignedTo:row.assigned_to||"Unassigned",extractedData,workingRecord,email,validationStatus:validation.validationStatus||undefined,validationChecks:Array.isArray(validation.validationChecks)?validation.validationChecks:undefined,validationSummary:validation.validationSummary||undefined,uploadedFiles:Array.isArray(meta.uploadedFiles)?meta.uploadedFiles:undefined,processingStartedAt:meta.processingStartedAt||undefined,processingCompletedAt:meta.processingCompletedAt||undefined,processingError:row.processing_error||undefined};
+  if(data){const rest={...data};delete rest._manager;delete rest._validation;delete rest._workingRecord;delete rest._tenant;extractedData=Object.keys(rest).length?rest:undefined;}
+  return {...row,organisationId:tenant.organisationId||"demo-organisation",organisationName:tenant.organisationName||"Customs IDP Demo Organisation",assignedTo:row.assigned_to||"Unassigned",extractedData,workingRecord,email,validationStatus:validation.validationStatus||undefined,validationChecks:Array.isArray(validation.validationChecks)?validation.validationChecks:undefined,validationSummary:validation.validationSummary||undefined,uploadedFiles:Array.isArray(meta.uploadedFiles)?meta.uploadedFiles:undefined,processingStartedAt:meta.processingStartedAt||undefined,processingCompletedAt:meta.processingCompletedAt||undefined,processingError:row.processing_error||undefined};
 }
