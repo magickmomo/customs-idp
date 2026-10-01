@@ -2062,3 +2062,6 @@ body {
 .field-suggestion-actions button{display:inline-flex;align-items:center;gap:7px}
 .field-suggestion-result{display:flex;align-items:center;gap:6px;margin-top:11px;padding:8px 9px;border-radius:6px;background:#fff;border:1px solid #e7ebf2;color:#667287;font-size:9px}
 .field-suggestion-result.success{color:#15803d;background:#f0fdf4;border-color:#bbf7d0}
+
+
+.workspace-organisation{display:block;font-size:10px;color:#7b8794;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px}.organisation-crumb{font-weight:600;color:#344054}
