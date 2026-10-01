@@ -54,8 +54,8 @@ async function sync(req,res){
       const messageId=String(message.internetMessageId||"").trim()||null;
       const ticket=graphMessageId ? "GRAPH:"+graphMessageId : (messageId || "");
       const existing=await findExistingEmailPack({ticket,messageId,subject:message.subject||"",receivedAt:message.receivedDateTime||"",from:message.from?.emailAddress?.address||""});
-      const existingFiles=existing[0]?.extracted_data?._manager?.uploadedFiles;
-      const repair=Boolean(existing[0]&&(!Number(existing[0].docs||0)||!Array.isArray(existingFiles)||!existingFiles.length));
+      const existingFiles=existing?.extracted_data?._manager?.uploadedFiles;
+      const repair=Boolean(existing&&(!Number(existing.docs||0)||!Array.isArray(existingFiles)||!existingFiles.length));
       if(existing[0]&&!repair){duplicates++;continue;}
       try{
         const attachments=message.hasAttachments?await getAttachments(message.id,token):[];
