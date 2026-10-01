@@ -39,10 +39,6 @@ export default async function handler(req,res){
     const configured=strategy[customer] || DEFAULT_STRATEGIES[customer] || {emailFields:[]};
     const emailFields=Array.isArray(configured.emailFields)?configured.emailFields.filter(Boolean):[];
 
-    const emailExtraction=emailFields.length
-      ? await extractConfiguredEmailFields({subject,text,html,emailFields})
-      : {fields:[],warnings:[]};
-
     const ticket=ingestTicket||messageId||("EMAIL-"+Date.now().toString().slice(-6));
     let id="PK-EMAIL-"+Date.now().toString(36).toUpperCase();
     const existingByTicket=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(ticket)+"&select=id,customer,status,docs&limit=1");
@@ -54,6 +50,15 @@ export default async function handler(req,res){
       if(!repair)return res.status(200).json({ok:true,duplicate:true,packId:existing.id,customer:existing.customer,status:existing.status,message:"Email already ingested."});
       id=existing.id;
     }
+    let emailExtraction={fields:[],warnings:[]};
+    if(emailFields.length){
+      try{
+        emailExtraction=await extractConfiguredEmailFields({subject,text,html,emailFields});
+      }catch(error){
+        emailExtraction={fields:[],warnings:["Configured email-field extraction failed: "+formatExtractionError(error)]};
+      }
+    }
+
     const pack={
       organisationId:DEFAULT_ORGANISATION.id,
       organisationName:DEFAULT_ORGANISATION.name,
@@ -84,6 +89,38 @@ export default async function handler(req,res){
         configuredFields:emailFields
       }
     };
+
+    // Persist the pack immediately so the inbox can observe the webhook intake
+    // while attachment storage/extraction is still running.
+    await supabaseFetch("document_packs?id=eq."+encodeURIComponent(pack.id),{
+      method:"PATCH",
+      body:JSON.stringify({
+        id:pack.id,
+        organisation_id:DEFAULT_ORGANISATION.id,
+        customer:pack.customer,
+        docs:pack.docs,
+        status:"Processing",
+        confidence:0,
+        received:pack.received,
+        ticket:pack.ticket,
+        assigned_to:pack.assignedTo,
+        extracted_data:{
+          _tenant:{organisationId:DEFAULT_ORGANISATION.id,organisationName:DEFAULT_ORGANISATION.name},
+          documentType:"email",
+          email:pack.email,
+          documents:[],
+          documentCount:0,
+          sourceDocuments:[],
+          emailFields:emailExtraction.fields,
+          warnings:emailExtraction.warnings||[],
+          agentMessages:[],
+          _manager:{processingStartedAt:new Date().toISOString(),processingCompletedAt:null,uploadedFiles:pack.uploadedFiles}
+        },
+        processing_error:emailExtraction.warnings?.length?emailExtraction.warnings.join(" | "):null,
+        updated_at:new Date().toISOString()
+      }),
+      headers:{"Prefer":"resolution=merge-duplicates,return=minimal"}
+    });
 
     const attachmentResults=[];
     const storedFiles=[];
