@@ -1,6 +1,5 @@
 import { normalizeCountryCode } from "../src/utils/countryCodes.js";
 export async function extractDocument({fileData, filename, mimeType}) {
-  if(!requireAuth(req,res))return;
   if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured in Vercel.");
   if (!fileData || !filename) throw new Error("fileData and filename are required.");
   try {
