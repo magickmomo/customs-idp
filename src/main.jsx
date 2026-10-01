@@ -63,7 +63,7 @@ function SupabaseLogin({onSuccess}){const [email,setEmail]=useState("");const [p
 function App(){
   const [authenticated,setAuthenticated]=useState(null);
   const [currentUser,setCurrentUser]=useState(null);
-  const [passwordSetup,setPasswordSetup]=useState(()=>typeof window!=="undefined" && /(?:^|[#&])type=(?:invite|recovery)(?:&|$)/.test(window.location.hash));
+  const [passwordSetup,setPasswordSetup]=useState(()=>typeof window!=="undefined" && /(?:^|[?&#])type=(?:invite|recovery)(?:[&#]|$)/.test(window.location.href));
 
   useEffect(()=>{
     let active=true;
@@ -88,7 +88,8 @@ function App(){
     const {data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
       if(event==="SIGNED_OUT"){if(active){setCurrentUser(null);setAuthenticated(false);}}
       else if(event==="PASSWORD_RECOVERY" && session){setPasswordSetup(true);syncSession(session);}
-      else if(event==="SIGNED_IN" && session && /(?:^|[#&])type=(?:invite|recovery)(?:&|$)/.test(window.location.hash)){setPasswordSetup(true);syncSession(session);}
+      else if(event==="SIGNED_IN" && session && /(?:^|[?&#])type=(?:invite|recovery)(?:[&#]|$)/.test(window.location.href)){setPasswordSetup(true);syncSession(session);}
+      else if(event==="INITIAL_SESSION" && session && /(?:^|[?&#])type=(?:invite|recovery)(?:[&#]|$)/.test(window.location.href)){setPasswordSetup(true);syncSession(session);}
       else if(session)syncSession(session);
     });
     return()=>{active=false;subscription.unsubscribe();};
