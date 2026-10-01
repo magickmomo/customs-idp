@@ -32,7 +32,7 @@ async function status(req,res){
   if(!requireAuth(req,res))return;
   try{
     const rows=await supabaseFetch("outlook_connections?select=email,display_name,status,subscription_id,subscription_expires_at,updated_at&status=eq.connected&order=updated_at.desc&limit=1");
-    const row=rows[0]||null;
+    const row=Array.isArray(rows)?(rows[0]||null):null;
     return res.status(200).json({connected:Boolean(row),connection:row});
   }catch(error){return res.status(503).json({error:error.message});}
 }
@@ -43,7 +43,7 @@ async function sync(req,res){
   try{
     console.info("Outlook subscription renewal started");
     const rows=await supabaseFetch("outlook_connections?select=*&status=eq.connected&limit=1");
-    const connection=rows[0];
+    const connection=Array.isArray(rows)?rows[0]:null;
     if(!connection)return res.status(200).json({ok:true,connected:false,processed:0,message:"Outlook is not connected."});
     const token=await getAccessToken(connection);
     const data=await graphGet("/me/messages?$top=50&$orderby=receivedDateTime%20desc&$select=id,internetMessageId,subject,body,from,toRecipients,receivedDateTime,hasAttachments",token);
@@ -56,7 +56,7 @@ async function sync(req,res){
       const existing=await findExistingEmailPack({ticket,messageId,subject:message.subject||"",receivedAt:message.receivedDateTime||"",from:message.from?.emailAddress?.address||""});
       const existingFiles=existing?.extracted_data?._manager?.uploadedFiles;
       const repair=Boolean(existing&&(!Number(existing.docs||0)||!Array.isArray(existingFiles)||!existingFiles.length));
-      if(existing[0]&&!repair){duplicates++;continue;}
+      if(existing&&!repair){duplicates++;continue;}
       try{
         const attachments=message.hasAttachments?await getAttachments(message.id,token):[];
         await postToIngest({
@@ -106,7 +106,7 @@ export async function webhook(req,res){
       const connections=await supabaseFetch(
         "outlook_connections?subscription_id=eq."+encodeURIComponent(subscriptionId)+"&status=eq.connected&select=*&limit=1"
       );
-      const connection=connections[0];
+      const connection=Array.isArray(connections)?connections[0]:null;
       if(!connection)throw new Error("No connected Outlook account matches subscription "+subscriptionId+".");
       if(!clientState||clientState!==String(connection.client_state||""))throw new Error("Outlook notification clientState did not match the active subscription.");
 
@@ -233,11 +233,11 @@ async function getAccessToken(connection){
 async function findExistingEmailPack({ticket,messageId,subject,receivedAt,from}){
   if(ticket){
     const byTicket=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(ticket)+"&select=id,docs,extracted_data&limit=1");
-    if(byTicket[0])return byTicket[0];
+    if(Array.isArray(byTicket)&&byTicket[0])return byTicket[0];
   }
   if(messageId){
     const byMessage=await supabaseFetch("document_packs?extracted_data->email->>messageId=eq."+encodeURIComponent(messageId)+"&select=id,docs,extracted_data&limit=1").catch(()=>[]);
-    if(byMessage[0])return byMessage[0];
+    if(Array.isArray(byMessage)&&byMessage[0])return byMessage[0];
   }
   // Older packs were keyed only by internetMessageId. As a final guard,
   // treat the same sender/subject/received timestamp as the same email.
