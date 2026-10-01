@@ -63,7 +63,9 @@ function SupabaseLogin({onSuccess}){const [email,setEmail]=useState("");const [p
 function App(){
   const [authenticated,setAuthenticated]=useState(null);
   const [currentUser,setCurrentUser]=useState(null);
-  const hasPasswordSetupMarker=()=>typeof window!=="undefined" && /(?:^|[?&#])type=(?:invite|recovery)(?:[&#]|$)/.test(window.location.href);\n  const requiresInvitedUserSetup=session=>Boolean(session?.user?.invited_at && session?.user?.user_metadata?.customs_idp_password_set!==true);\n  const [passwordSetup,setPasswordSetup]=useState(()=>hasPasswordSetupMarker());
+  const hasPasswordSetupMarker=()=>typeof window!=="undefined" && /(?:^|[?&#])type=(?:invite|recovery)(?:[&#]|$)/.test(window.location.href);
+  const requiresInvitedUserSetup=session=>Boolean(session?.user?.invited_at && session?.user?.user_metadata?.customs_idp_password_set!==true);
+  const [passwordSetup,setPasswordSetup]=useState(()=>hasPasswordSetupMarker());
 
   useEffect(()=>{
     let active=true;
