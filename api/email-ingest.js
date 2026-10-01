@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { extractDocument } from "../src/document-extraction.js";
+import { DEFAULT_ORGANISATION } from "../src/tenant.js";
 
 const DEFAULT_STRATEGIES = {
   "Acme Components Ltd": { emailFields: [] },
@@ -44,6 +45,8 @@ export default async function handler(req,res){
     let id="PK-EMAIL-"+Date.now().toString(36).toUpperCase();
     if(messageId){const existing=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(messageId)+"&select=id,customer,status,docs&limit=1");if(existing[0]){if(!repair)return res.status(200).json({ok:true,duplicate:true,packId:existing[0].id,customer:existing[0].customer,status:existing[0].status,message:"Email already ingested."});id=existing[0].id;}}
     const pack={
+      organisationId:DEFAULT_ORGANISATION.id,
+      organisationName:DEFAULT_ORGANISATION.name,
       id,
       customer,
       docs:attachments.length,
@@ -102,7 +105,7 @@ export default async function handler(req,res){
     const successfulExtractions=attachmentResults.filter(item=>item.extraction).map(item=>item.extraction);
     const primaryExtraction=successfulExtractions.find(item=>item.documentType==="commercial_invoice")||successfulExtractions[0]||null;
     const extractionWarnings=[...(emailExtraction.warnings||[]),...attachmentResults.filter(item=>item.error).map(item=>item.filename+": "+formatExtractionError(item.error))];
-    const extractedData={...(primaryExtraction||{}),documentType:primaryExtraction?.documentType||"email",email:pack.email,documents:attachmentResults,documentCount:attachmentResults.length,sourceDocuments:attachmentResults.map(item=>({name:item.filename,type:item.extraction?.documentType||item.mimeType,extraction:item.extraction||null,error:item.error||null})),emailFields:emailExtraction.fields,warnings:extractionWarnings,agentMessages:[]};
+    const extractedData={...(primaryExtraction||{}),_tenant:{organisationId:DEFAULT_ORGANISATION.id,organisationName:DEFAULT_ORGANISATION.name},documentType:primaryExtraction?.documentType||"email",email:pack.email,documents:attachmentResults,documentCount:attachmentResults.length,sourceDocuments:attachmentResults.map(item=>({name:item.filename,type:item.extraction?.documentType||item.mimeType,extraction:item.extraction||null,error:item.error||null})),emailFields:emailExtraction.fields,warnings:extractionWarnings,agentMessages:[]};
     const processingStatus="Needs review";
 
     extractedData._manager={processingStartedAt:receivedAt,processingCompletedAt:new Date().toISOString(),uploadedFiles:storedFiles.length?storedFiles:pack.uploadedFiles};
