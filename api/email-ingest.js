@@ -26,6 +26,7 @@ export default async function handler(req,res){
     const text=String(body.text||body.body||"");
     const html=String(body.html||"");
     const messageId=String(body.messageId||body.message_id||"").trim()||null;
+    const ingestTicket=String(body.ticket||"").trim()||null;
     const receivedAt=body.receivedAt||body.received_at||new Date().toISOString();
     const attachments=Array.isArray(body.attachments)?body.attachments:[];
     const repair=Boolean(body.repair);
@@ -42,8 +43,17 @@ export default async function handler(req,res){
       ? await extractConfiguredEmailFields({subject,text,html,emailFields})
       : {fields:[],warnings:[]};
 
+    const ticket=ingestTicket||messageId||("EMAIL-"+Date.now().toString().slice(-6));
     let id="PK-EMAIL-"+Date.now().toString(36).toUpperCase();
-    if(messageId){const existing=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(messageId)+"&select=id,customer,status,docs&limit=1");if(existing[0]){if(!repair)return res.status(200).json({ok:true,duplicate:true,packId:existing[0].id,customer:existing[0].customer,status:existing[0].status,message:"Email already ingested."});id=existing[0].id;}}
+    const existingByTicket=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(ticket)+"&select=id,customer,status,docs&limit=1");
+    const existingByMessage=messageId
+      ? await supabaseFetch("document_packs?extracted_data->email->>messageId=eq."+encodeURIComponent(messageId)+"&select=id,customer,status,docs&limit=1").catch(()=>[])
+      : [];
+    const existing=existingByTicket[0]||existingByMessage[0];
+    if(existing){
+      if(!repair)return res.status(200).json({ok:true,duplicate:true,packId:existing.id,customer:existing.customer,status:existing.status,message:"Email already ingested."});
+      id=existing.id;
+    }
     const pack={
       organisationId:DEFAULT_ORGANISATION.id,
       organisationName:DEFAULT_ORGANISATION.name,
@@ -53,7 +63,7 @@ export default async function handler(req,res){
       status:"Processing",
       confidence:0,
       received:receivedAt,
-      ticket:messageId||("EMAIL-"+Date.now().toString().slice(-6)),
+      ticket,
       assignedTo:"Unassigned",
       uploadedFiles:attachments.map((a,index)=>({
         id:id+"-"+index,
