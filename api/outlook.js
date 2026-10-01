@@ -11,6 +11,7 @@ export default async function handler(req,res){
   if(action==="status")return status(req,res);
   if(action==="sync")return sync(req,res);
   if(action==="renew")return renew(req,res);
+  if(action==="webhook")return webhook(req,res);
   return res.status(400).json({error:"Unknown Outlook action."});
 }
 
@@ -77,6 +78,82 @@ async function sync(req,res){
     console.error("Outlook sync error",error);
     return res.status(500).json({ok:false,error:error.message||"Outlook sync failed."});
   }
+}
+
+async function webhook(req,res){
+  // Microsoft Graph validates a notification endpoint with a validationToken
+  // query parameter before it starts delivering change notifications.
+  if(req.method==="GET"){
+    const validationToken=String(req.query?.validationToken||"");
+    if(!validationToken)return res.status(400).send("validationToken is required.");
+    res.setHeader("Content-Type","text/plain; charset=utf-8");
+    return res.status(200).send(validationToken);
+  }
+  if(req.method!=="POST")return res.status(405).json({error:"Method not allowed"});
+
+  const notifications=Array.isArray(req.body?.value)?req.body.value:[];
+  if(!notifications.length)return res.status(202).json({ok:true,processed:0});
+
+  let processed=0,duplicates=0,failed=0;
+  const failures=[];
+  for(const notification of notifications){
+    try{
+      const subscriptionId=String(notification?.subscriptionId||"").trim();
+      const clientState=String(notification?.clientState||"").trim();
+      if(!subscriptionId)throw new Error("Outlook notification is missing subscriptionId.");
+
+      const connections=await supabaseFetch(
+        "outlook_connections?subscription_id=eq."+encodeURIComponent(subscriptionId)+"&status=eq.connected&select=*&limit=1"
+      );
+      const connection=connections[0];
+      if(!connection)throw new Error("No connected Outlook account matches subscription "+subscriptionId+".");
+      if(!clientState||clientState!==String(connection.client_state||""))throw new Error("Outlook notification clientState did not match the active subscription.");
+
+      const token=await getAccessToken(connection);
+      const messageIdFromNotification=String(notification?.resourceData?.id||"").trim();
+      if(!messageIdFromNotification)throw new Error("Outlook notification is missing the message id.");
+
+      const message=await graphGet(
+        "/me/messages/"+encodeURIComponent(messageIdFromNotification)+"?$select=id,internetMessageId,subject,body,from,toRecipients,receivedDateTime,hasAttachments",
+        token
+      );
+      if(!/CUSTOMS-IDP/i.test(String(message.subject||"")))continue;
+
+      const graphMessageId=String(message.id||"").trim();
+      const internetMessageId=String(message.internetMessageId||"").trim()||null;
+      const ticket=graphMessageId?"GRAPH:"+graphMessageId:(internetMessageId||"");
+      const existing=await findExistingEmailPack({
+        ticket,
+        messageId:internetMessageId,
+        subject:message.subject||"",
+        receivedAt:message.receivedDateTime||"",
+        from:message.from?.emailAddress?.address||""
+      });
+      const existingFiles=existing?.extracted_data?._manager?.uploadedFiles;
+      const repair=Boolean(existing&&(!Number(existing.docs||0)||!Array.isArray(existingFiles)||!existingFiles.length));
+      if(existing&&!repair){duplicates++;continue;}
+
+      const attachments=message.hasAttachments?await getAttachments(message.id,token):[];
+      await postToIngest({
+        to:firstAddress(message.toRecipients)||connection.email,
+        from:message.from?.emailAddress?.address||"",
+        subject:message.subject||"",
+        text:stripHtml(message.body?.content||""),
+        html:message.body?.content||"",
+        messageId:internetMessageId,
+        ticket,
+        receivedAt:message.receivedDateTime||new Date().toISOString(),
+        attachments,
+        repair
+      });
+      processed++;
+    }catch(error){
+      failed++;
+      failures.push(error.message||"Unknown webhook failure");
+      console.error("Outlook webhook notification failed",error);
+    }
+  }
+  return res.status(202).json({ok:true,processed,duplicates,failed,failures});
 }
 
 async function renew(req,res){
