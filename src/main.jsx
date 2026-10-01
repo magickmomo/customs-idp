@@ -56,46 +56,14 @@ const normalizeCountryCode=value=>{
   return map[upper]||upper;
 };
 
-function SupabaseLogin({onSuccess}){
-  const [email,setEmail]=useState("");
-  const [password,setPassword]=useState("");
-  const [error,setError]=useState("");
-  const [busy,setBusy]=useState(false);
-  const submit=async(e)=>{
-    e.preventDefault();
-    setError("");
-    setBusy(true);
-    try{
-      const {data,error:signInError}=await supabase.auth.signInWithPassword({email:email.trim(),password});
-      if(signInError)throw signInError;
-      if(!data.session?.access_token)throw new Error("Supabase did not return an active session.");
-      const response=await fetch("/api/auth",{method:"POST",headers:{Authorization:"Bearer "+data.session.access_token},credentials:"include"});
-      const result=await response.json().catch(()=>({}));
-      if(!response.ok){
-        await supabase.auth.signOut();
-        throw new Error(result.error||"Your account is not authorised for Customs IDP.");
-      }
-      onSuccess(result.user);
-    }catch(error){setError(error.message||"Unable to sign in");}
-    finally{setBusy(false);}
-  };
-  return <div className="test-login">
-    <div className="test-login-card">
-      <div className="test-login-brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div>
-      <div className="test-login-copy"><div className="eyebrow">Secure access</div><h1>Sign in</h1><p>Use your Customs IDP account. Authentication is managed by Supabase.</p></div>
-      <form onSubmit={submit} className="password-login-form">
-        <label>Email<input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoFocus autoComplete="username" placeholder="name@company.com"/></label>
-        <label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" placeholder="Enter password"/></label>
-        {error&&<div className="password-login-error">{error}</div>}
-        <button className="primary-action password-login-submit" type="submit" disabled={busy||!email.trim()||!password}>{busy?"Signing in…":"Sign in"}</button>
-      </form>
-    </div>
-  </div>;
-}
+function SupabasePasswordSetup({onComplete}){const [password,setPassword]=useState("");const [confirm,setConfirm]=useState("");const [error,setError]=useState("");const [busy,setBusy]=useState(false);const submit=async(e)=>{e.preventDefault();setError("");if(password.length<8){setError("Password must be at least 8 characters.");return;}if(password!==confirm){setError("Passwords do not match.");return;}setBusy(true);try{const {data,error:updateError}=await supabase.auth.updateUser({password});if(updateError)throw updateError;const sessionResult=await supabase.auth.getSession();const token=sessionResult.data.session?.access_token;if(!token)throw new Error("Your authentication session could not be established.");const response=await fetch("/api/auth",{method:"POST",headers:{Authorization:"Bearer "+token},credentials:"include"});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.error||"Your account is not authorised for Customs IDP.");window.history.replaceState({},document.title,window.location.pathname+window.location.search);onComplete(result.user);}catch(error){setError(error.message||"Unable to set password");}finally{setBusy(false);}};return <div className="test-login"><div className="test-login-card"><div className="test-login-brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><div className="test-login-copy"><div className="eyebrow">Account setup</div><h1>Set your password</h1><p>Choose a password for your Customs IDP account. You can use it for future sign-ins.</p></div><form onSubmit={submit} className="password-login-form"><label>New password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoFocus autoComplete="new-password" placeholder="At least 8 characters"/></label><label>Confirm password<input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)} autoComplete="new-password" placeholder="Enter it again"/></label>{error&&<div className="password-login-error">{error}</div>}<button className="primary-action password-login-submit" type="submit" disabled={busy||!password||!confirm}>{busy?"Saving…":"Set password"}</button></form></div></div>;}
+
+function SupabaseLogin({onSuccess}){const [email,setEmail]=useState("");const [password,setPassword]=useState("");const [error,setError]=useState("");const [message,setMessage]=useState("");const [busy,setBusy]=useState(false);const [resetSent,setResetSent]=useState(false);const submit=async(e)=>{e.preventDefault();setError("");setMessage("");setBusy(true);try{const {data,error:signInError}=await supabase.auth.signInWithPassword({email:email.trim(),password});if(signInError)throw signInError;if(!data.session?.access_token)throw new Error("Supabase did not return an active session.");const response=await fetch("/api/auth",{method:"POST",headers:{Authorization:"Bearer "+data.session.access_token},credentials:"include"});const result=await response.json().catch(()=>({}));if(!response.ok){await supabase.auth.signOut();throw new Error(result.error||"Your account is not authorised for Customs IDP.");}onSuccess(result.user);}catch(error){setError(error.message||"Unable to sign in");}finally{setBusy(false);}};const sendReset=async()=>{setError("");setMessage("");if(!email.trim()){setError("Enter your email address first.");return;}setBusy(true);try{const {error:resetError}=await supabase.auth.resetPasswordForEmail(email.trim(),{redirectTo:window.location.origin+"/"});if(resetError)throw resetError;setResetSent(true);setMessage("Password setup/reset email sent. Check your inbox and follow the link.");}catch(error){setError(error.message||"Unable to send password reset email");}finally{setBusy(false);}};return <div className="test-login"><div className="test-login-card"><div className="test-login-brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><div className="test-login-copy"><div className="eyebrow">Secure access</div><h1>Sign in</h1><p>Use your Customs IDP account. Authentication is managed by Supabase.</p></div><form onSubmit={submit} className="password-login-form"><label>Email<input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoFocus autoComplete="username" placeholder="name@company.com"/></label><label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" placeholder="Enter password"/></label>{error&&<div className="password-login-error">{error}</div>}{message&&<div className="password-login-message">{message}</div>}<button className="primary-action password-login-submit" type="submit" disabled={busy||!email.trim()||!password}>{busy?"Signing in…":"Sign in"}</button><button type="button" className="secondary-action" onClick={sendReset} disabled={busy||!email.trim()}>{resetSent?"Send setup/reset email again":"Set or reset password"}</button></form></div></div>;}
 
 function App(){
   const [authenticated,setAuthenticated]=useState(null);
   const [currentUser,setCurrentUser]=useState(null);
+  const [passwordSetup,setPasswordSetup]=useState(()=>typeof window!=="undefined" && /(?:^|[#&])type=invite(?:&|$)/.test(window.location.hash));
 
   useEffect(()=>{
     let active=true;
@@ -119,6 +87,8 @@ function App(){
     supabase.auth.getSession().then(({data:{session}})=>{if(active)syncSession(session);});
     const {data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
       if(event==="SIGNED_OUT"){if(active){setCurrentUser(null);setAuthenticated(false);}}
+      else if(event==="PASSWORD_RECOVERY" && session){setPasswordSetup(true);syncSession(session);}
+      else if(event==="SIGNED_IN" && session && /(?:^|[#&])type=invite(?:&|$)/.test(window.location.hash)){setPasswordSetup(true);syncSession(session);}
       else if(session)syncSession(session);
     });
     return()=>{active=false;subscription.unsubscribe();};
@@ -646,7 +616,7 @@ const postToLCA=()=>{
 };
 
   if(authenticated===null)return <div className="test-login"><div className="test-login-card"><div className="test-login-brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><div className="test-login-copy"><div className="eyebrow">Secure access</div><h1>Checking access…</h1><p>Please wait.</p></div></div></div>;
-  if(!authenticated)return <SupabaseLogin onSuccess={user=>{setCurrentUser(user);setAuthenticated(true);setPage("inbox");}}/>;
+  if(!authenticated)return passwordSetup ? <SupabasePasswordSetup onComplete={user=>{setPasswordSetup(false);setCurrentUser(user);setAuthenticated(true);setPage("inbox");}}/> : <SupabaseLogin onSuccess={user=>{setCurrentUser(user);setAuthenticated(true);setPage("inbox");}}/>;
   if(!currentUser)return <div className="test-login"><div className="test-login-card"><div className="test-login-copy"><div className="eyebrow">Account</div><h1>Loading profile…</h1><p>Loading your Customs IDP organisation access.</p></div></div></div>;
 
   return <div className={"app-shell "+(sidebarCollapsed?"sidebar-collapsed":"")}>
