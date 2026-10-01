@@ -258,17 +258,55 @@ async function runAutomatedEmailAudit(pack){
     });
     const result=await response.json().catch(()=>({}));
     if(!response.ok)return {completed:false,error:result.error||("Review Agent returned HTTP "+response.status)};
-    if(result.action!=="suggest_field_updates"||!Array.isArray(result.suggestions)||!result.suggestions.length)return {completed:true};
-    return {completed:true,suggestionMessage:{
-      type:"fieldSuggestion",
-      text:result.reply||"I found additional customs information in the email that is missing from the document extraction. Review the suggestions below and confirm whether to add them.",
-      suggestions:result.suggestions,
-      handled:null,
-      persist:true
-    }};
+    if(result.action==="suggest_field_updates"&&Array.isArray(result.suggestions)&&result.suggestions.length){
+      return {completed:true,suggestionMessage:{
+        type:"fieldSuggestion",
+        text:result.reply||"I found additional customs information in the email that is missing from the document extraction. Review the suggestions below and confirm whether to add them.",
+        suggestions:result.suggestions,
+        handled:null,
+        persist:true
+      }};
+    }
+
+    // Deterministic safety net: an explicitly labelled HS/commodity code in
+    // an email must not disappear just because the model did not return a
+    // structured suggestion. Keep it as a shipment-level recommendation when
+    // line allocation is not unambiguous; never silently populate every line.
+    const emailHs=extractExplicitEmailHsCode(pack.email);
+    const lines=Array.isArray(pack.workingRecord?.lines)?pack.workingRecord.lines:[];
+    const hasLineHs=lines.some(line=>String(line?.hsCode||"").trim());
+    if(emailHs&&!hasLineHs){
+      const suggestion={
+        scope:"primary",
+        field:"hsCode",
+        lineIndex:null,
+        value:emailHs,
+        sourceDocumentId:null,
+        sourcePage:null,
+        sourceLabel:"Email body",
+        reason:"The email explicitly supplied HS/commodity code "+emailHs+" for this shipment. No extracted goods line has an HS code, so this is surfaced as an email-source recommendation for human confirmation rather than being assigned silently to all lines."
+      };
+      return {completed:true,suggestionMessage:{
+        type:"fieldSuggestion",
+        text:"The email contains an explicit HS/commodity code that is missing from the extracted goods lines. I have surfaced it for review without assigning it to the lines.",
+        suggestions:[suggestion],
+        handled:null,
+        persist:true
+      }};
+    }
+
+    return {completed:true};
   }catch(error){
     return {completed:false,error:error?.message||"Automated Review Agent failed."};
   }
+}
+
+function extractExplicitEmailHsCode(email){
+  const source=[email?.subject,email?.text,email?.html].filter(Boolean).join("\n");
+  const match=source.match(/\b(?:HS|H\.S\.|commodity)\s*(?:\/\s*(?:HS|commodity))?\s*(?:code|number|no\.?)?\s*[:#-]?\s*([0-9][0-9 .-]{5,15}[0-9])\b/i);
+  if(!match)return null;
+  const digits=String(match[1]).replace(/\D/g,"");
+  return digits.length>=6&&digits.length<=12?digits:null;
 }
 
 async function storeAttachment({packId,filename,mimeType,fileData}){
