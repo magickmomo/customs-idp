@@ -153,9 +153,29 @@ export default async function handler(req,res){
     const primaryExtraction=successfulExtractions.find(item=>item.documentType==="commercial_invoice")||successfulExtractions[0]||null;
     const extractionWarnings=[...(emailExtraction.warnings||[]),...attachmentResults.filter(item=>item.error).map(item=>item.filename+": "+formatExtractionError(item.error))];
     const extractedData={...(primaryExtraction||{}),_tenant:{organisationId:DEFAULT_ORGANISATION.id,organisationName:DEFAULT_ORGANISATION.name},documentType:primaryExtraction?.documentType||"email",email:pack.email,documents:attachmentResults,documentCount:attachmentResults.length,sourceDocuments:attachmentResults.map(item=>({name:item.filename,type:item.extraction?.documentType||item.mimeType,extraction:item.extraction||null,error:item.error||null})),emailFields:emailExtraction.fields,warnings:extractionWarnings,agentMessages:[]};
-    const processingStatus="Needs review";
+    // Build the combined customs record before the pack can leave Processing.
+    // Supporting documents (especially Packing Lists) may fill missing invoice
+    // fields and line-level weights, but never overwrite populated invoice data.
+    extractedData._workingRecord=combineWorkingRecord(extractedData);
 
-    extractedData._manager={processingStartedAt:receivedAt,processingCompletedAt:new Date().toISOString(),uploadedFiles:storedFiles.length?storedFiles:pack.uploadedFiles};
+    const audit=await runAutomatedEmailAudit({
+      ...pack,
+      workingRecord:extractedData._workingRecord,
+      extractedData
+    });
+
+    if(audit.completed){
+      extractedData.agentAuditCompleted=true;
+      if(audit.suggestionMessage) extractedData.agentMessages=[audit.suggestionMessage];
+    }
+
+    const processingComplete=Boolean(audit.completed);
+    const processingStatus=processingComplete?"Needs review":"Processing";
+    const processingError=processingComplete
+      ? (extractionWarnings.length?extractionWarnings.join(" | "):null)
+      : (audit.error||"Automated Review Agent did not complete. The pack remains locked until the automated review finishes.");
+
+    extractedData._manager={processingStartedAt:receivedAt,processingCompletedAt:processingComplete?new Date().toISOString():null,uploadedFiles:storedFiles.length?storedFiles:pack.uploadedFiles};
     await supabaseFetch("document_packs",{
       method:"POST",
       body:JSON.stringify({
@@ -169,7 +189,7 @@ export default async function handler(req,res){
         ticket:pack.ticket,
         assigned_to:pack.assignedTo,
         extracted_data:extractedData,
-        processing_error:extractionWarnings.length?extractionWarnings.join(" | "):null,
+        processing_error:processingError,
         updated_at:new Date().toISOString()
       }),
       headers:{"Prefer":"resolution=merge-duplicates,return=minimal"}
@@ -183,10 +203,71 @@ export default async function handler(req,res){
       attachmentCount:attachmentResults.length,
       extractedAttachmentCount:successfulExtractions.length,
       emailExtraction,
-      message:"Email accepted into the Customs IDP ingestion pipeline."
+      message:processingComplete?"Email processing and automated review completed.":"Email accepted but remains locked in Processing until automated review completes."
     });
   }catch(error){
     return res.status(500).json({error:error.message||"Email ingestion failed."});
+  }
+}
+
+function combineWorkingRecord(data){
+  const docs=Array.isArray(data?.documents)?data.documents:[];
+  const invoiceDoc=docs.find(d=>d?.extraction?.documentType==="commercial_invoice")||docs.find(Boolean);
+  if(!invoiceDoc?.extraction)return data||{};
+  const invoice={...invoiceDoc.extraction};
+  const supporting=docs.filter(d=>d&&d!==invoiceDoc);
+  const missing=v=>v===undefined||v===null||v==="";
+
+  for(const doc of supporting){
+    for(const [key,value] of Object.entries(doc?.extraction||{})){
+      if(["lines","documents","sourceDocuments","agentMessages"].includes(key))continue;
+      if(missing(invoice[key])&&!missing(value))invoice[key]=value;
+    }
+  }
+
+  const invoiceLines=Array.isArray(invoice.lines)?invoice.lines.map(line=>({...line})):[];
+  const key=line=>String(line?.hsCode||"")+"|"+String(line?.description||"").trim().toLowerCase();
+  for(const doc of supporting){
+    const sourceLines=Array.isArray(doc?.extraction?.lines)?doc.extraction.lines:[];
+    for(const source of sourceLines){
+      let target=invoiceLines.find(line=>key(line)===key(source));
+      if(!target)target=invoiceLines.find(line=>String(line?.description||"").trim().toLowerCase()===String(source?.description||"").trim().toLowerCase());
+      if(!target)continue;
+      for(const field of ["netMassKg","grossMassKg","quantity","sourceCountryCode","totalValue","hsCode"]){
+        if(missing(target[field])&&!missing(source?.[field]))target[field]=source[field];
+      }
+    }
+  }
+  invoice.lines=invoiceLines;
+  invoice.workingRecordSource="primary invoice + supporting documents";
+  return invoice;
+}
+
+async function runAutomatedEmailAudit(pack){
+  const secret=String(process.env.EMAIL_INGEST_SECRET||"");
+  if(!secret)return {completed:false,error:"EMAIL_INGEST_SECRET is not configured."};
+  const base=(String(process.env.APP_URL||"").trim()||"https://customs-idp.vercel.app").replace(/\/+$/,"");
+  try{
+    const response=await fetch(base+"/api/agent",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","x-email-ingest-secret":secret},
+      body:JSON.stringify({
+        message:"[AUTOMATED EMAIL AUDIT] Review the associated email against the extracted document data and the combined working customs record before the user opens the pack. Identify clear customs-relevant information present in the email but missing from the extracted/combined data, including any HS/commodity-code information. Do not change the pack; return suggestions requiring human confirmation. If there is no clear additional information, return no suggestions.",
+        pack:{...pack,conversation:[],extractedData:{...(pack.extractedData||{}),agentMessages:undefined}}
+      })
+    });
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok)return {completed:false,error:result.error||("Review Agent returned HTTP "+response.status)};
+    if(result.action!=="suggest_field_updates"||!Array.isArray(result.suggestions)||!result.suggestions.length)return {completed:true};
+    return {completed:true,suggestionMessage:{
+      type:"fieldSuggestion",
+      text:result.reply||"I found additional customs information in the email that is missing from the document extraction. Review the suggestions below and confirm whether to add them.",
+      suggestions:result.suggestions,
+      handled:null,
+      persist:true
+    }};
+  }catch(error){
+    return {completed:false,error:error?.message||"Automated Review Agent failed."};
   }
 }
 
