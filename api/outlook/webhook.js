@@ -46,6 +46,7 @@ async function processNotification(notification){
     text:stripHtml(message.body?.content||""),
     html:message.body?.content||"",
     messageId:message.internetMessageId||message.id,
+    ticket:"GRAPH:"+String(message.id||""),
     receivedAt:message.receivedDateTime||new Date().toISOString(),
     attachments
   };
