@@ -9,7 +9,7 @@ function localApiPlugin(){
         if(!req.url?.startsWith("/api/"))return next();
 
         const url=new URL(req.url,"http://localhost");
-        const handlerPath=url.pathname==="/api/extract"?"./api/extract.js":url.pathname==="/api/packs"?"./api/packs.js":null;
+        const handlerPath=url.pathname==="/api/extract"?"./api/extract.js":url.pathname==="/api/packs"?"./api/packs.js":url.pathname==="/api/auth"?"./api/auth.js":null;
         if(!handlerPath)return next();
 
         req.query=Object.fromEntries(url.searchParams.entries());
@@ -22,6 +22,7 @@ function localApiPlugin(){
 
         const response={
           status(code){res.statusCode=code;return response;},
+          setHeader(name,value){res.setHeader(name,value);return response;},
           json(payload){return sendJson(res,res.statusCode||200,payload);}
         };
         try{

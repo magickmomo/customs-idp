@@ -1,5 +1,8 @@
 {
   "$schema":"https://openapi.vercel.sh/vercel.json",
-  "rewrites":[{"source":"/(.*)","destination":"/index.html"}],
+  "rewrites":[
+    {"source":"/api/outlook/webhook","destination":"/api/outlook?action=webhook"},
+    {"source":"/(.*)","destination":"/index.html"}
+  ],
   "crons":[{"path":"/api/outlook?action=renew","schedule":"0 3 * * *"}]
 }

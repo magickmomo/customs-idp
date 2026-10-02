@@ -7,7 +7,7 @@ const TOKEN_URL="https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
 
 export default async function handler(req,res){
   const pathname=String(req.url||"").split("?")[0].replace(/\/+$/,"").toLowerCase();
-  const action=pathname.endsWith("/webhook")?"webhook":String(req.query?.action||"status").toLowerCase();
+  const action=pathname.endsWith("/webhook")?"webhook":String(req.query?.action||req.query?.route||"status").toLowerCase();
   if(action==="connect")return connect(req,res);
   if(action==="status")return status(req,res);
   if(action==="sync")return sync(req,res);
@@ -145,8 +145,7 @@ export async function webhook(req,res){
         messageId:internetMessageId,
         ticket,
         receivedAt:message.receivedDateTime||new Date().toISOString(),
-        attachments,
-        repair
+        attachments
       });
       processed++;
     }catch(error){

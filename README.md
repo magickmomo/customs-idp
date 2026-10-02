@@ -21,6 +21,10 @@ npm install
 npm run dev
 ```
 
+For local UI testing without a Supabase account, open `http://localhost:5173/test-auth`.
+This development-only route offers sample manager and processor accounts. It only accepts
+requests from localhost and is unavailable in production.
+
 `npm run dev` now includes a local adapter for the extraction and pack endpoints in
 `api/`, so it can use your `.env` without a Vercel project. If you want to test the
 functions through Vercel's own runtime instead, use:
