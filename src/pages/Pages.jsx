@@ -523,7 +523,6 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
        <div className="chat-message-avatar"><Sparkles size={15}/></div>
        <div className="chat-message-content">
          <div className="customs-entry-summary-card">
-           
            {s.weightSourceDecision&&<div className="weight-source-selected"><CheckCircle2 size={15}/><span><b>Working weights:</b> {s.weightSourceDecision==="packing_list"?"Packing List":"Commercial Invoice"} selected. The selected values are now used for customs validation and downstream data.</span></div>}
            <div className="customs-party-grid">
              <div className="customs-party-card">
@@ -611,14 +610,14 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
 
    <div className="review-head"><div><div className="eyebrow">{pack.customer||"Customs pack"}</div><h1>{pack.email?.subject||pack.title||pack.uploadedFiles?.[0]?.name||pack.id}</h1><p>{pack.docs} document{Number(pack.docs)===1?"":"s"} · Received {formatReceivedDateTime(pack.received)}</p></div></div>
    <div className="chat-review-panel chat-review-full">
-     <div className="chat-review-head"><div className="agent-title"><div className="agent-orb"><Sparkles size={18}/></div><div><b>Extraction Agent</b><span>Source-grounded document review</span></div></div><div className="chat-review-head-actions"><button type="button" className="secondary review-show-summary-btn" onClick={()=>setShowSummary(true)}><FileText size={14}/> Customs summary</button>{pack.email&&<button type="button" className="secondary review-show-email-btn" onClick={()=>setShowEmailSource(true)}><Mail size={14}/> Show email</button>}<button type="button" className="secondary review-show-document-btn" onClick={()=>{setSelectedDocumentId(selectedDocumentId||(documentRows[0]?.id||documentRows[0]?.name));setPreviewPage(1);setShowPreview(true);}}><FileText size={14}/> Show document</button></div></div>
+     <div className="chat-review-head"><div className="agent-title"><div className="agent-orb"><Sparkles size={18}/></div><div><b>Extraction Agent</b><span>Source-grounded document review</span></div></div><div className="review-source-actions"><button type="button" className="secondary" onClick={()=>setShowSummary(true)}><FileText size={14}/> Customs summary</button>{pack.email&&<button type="button" className="secondary review-show-email-btn" onClick={()=>setShowEmailSource(true)}><Mail size={14}/> Show email</button>}<button type="button" className="secondary" onClick={()=>{setSelectedDocumentId(selectedDocumentId||(documentRows[0]?.id||documentRows[0]?.name));setPreviewPage(1);setShowPreview(true);}}><FileText size={14}/> Show document</button></div></div>
      <div className="chat-review-intro">I read the complete document pack first. The conversation below is the review record: extracted values stay connected to their source, and discrepancies are surfaced rather than silently resolved.</div>
-   
+
      {pack.processingError&&<div className="reprocess-error-banner"><div><b>Re-processing failed</b><span>{pack.processingError}</span></div><button type="button" className="secondary" onClick={()=>reprocessPack?.(pack)}>Try again</button></div>}
      <div ref={chatHistoryRef} className="chat-history chat-review-history">{messages.map(renderMessage)}</div>
      <div className="chat-input chat-review-input"><input value={chat} onChange={e=>setChat(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendChat()} placeholder="Ask where a value came from, why it was used, or tell the agent what to change..."/><button onClick={sendChat}><ArrowRight size={16}/></button></div>
    </div>
-   <div className="panel pack-history-panel"><div className="panel-head"><div><span className="summary-kicker">AUDIT TRAIL</span><h2>Pack history</h2><p>Who uploaded, amended, validated, reprocessed or posted this pack.</p></div></div><div className="pack-history-list">{history.length?history.map(x=><div className="pack-history-item" key={x.id}><div className="pack-history-dot"></div><div><b>{x.description}</b><span>{x.actor_name} · {x.actor_type} · {new Date(x.created_at).toLocaleString("en-GB")}</span></div></div>):<div className="pack-history-empty">No history recorded yet.</div>}</div></div>
+   <details className="review-audit-details"><summary><span><span className="summary-kicker">AUDIT TRAIL</span><b>Pack history</b></span><span className="review-audit-summary-meta">{history.length} event{history.length===1?"":"s"} <ChevronDown size={15}/></span></summary><div className="review-audit-section"><div className="review-audit-head"><div><p>Who uploaded, amended, validated, reprocessed or posted this pack.</p></div></div><div className="pack-history-list">{history.length?history.map(x=><div className="pack-history-item" key={x.id}><div className="pack-history-dot"></div><div><b>{x.description}</b><span>{x.actor_name} · {x.actor_type} · {new Date(x.created_at).toLocaleString("en-GB")}</span></div></div>):<div className="pack-history-empty">No history recorded yet.</div>}</div></div></details>
    {showSummary&&<div className="customs-summary-modal-overlay" onClick={()=>setShowSummary(false)}><div className="customs-summary-modal" onClick={e=>e.stopPropagation()}><div className="customs-summary-modal-head"><div><span className="summary-kicker">CUSTOMS ENTRY SUMMARY</span></div><button type="button" className="row-btn" onClick={()=>setShowSummary(false)}><X size={18}/></button></div><div className="customs-summary-modal-body">{buildSummary().find(m=>m.type==="customsEntrySummary") ? renderMessage(buildSummary().find(m=>m.type==="customsEntrySummary"),0) : <div className="review-document-empty"><FileText size={28}/><b>Customs summary not available</b><span>Waiting for document extraction to complete.</span></div>}</div></div></div>}
    {showEmailSource&&pack.email&&<div className="review-source-modal-overlay" onClick={()=>setShowEmailSource(false)}>
      <div className="review-email-modal" onClick={e=>e.stopPropagation()}>
@@ -881,11 +880,3 @@ function SettingsPage(){
 function Toggle({label,on}){return <div className="toggle-row"><span>{label}</span><div className={"toggle "+(on?"on":"")}><i></i></div></div>}
 
 export { Review, AgentPage, SettingsPage, Toggle };
-
-
-
-
-
-
-
-

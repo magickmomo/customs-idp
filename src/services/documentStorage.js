@@ -5,4 +5,3 @@ async function saveUploadedDocument(id,file){const db=await openDocDb();return n
 async function deleteUploadedDocument(id){if(!id)return;try{const db=await openDocDb();await new Promise((resolve,reject)=>{const tx=db.transaction(DOC_STORE,"readwrite");tx.objectStore(DOC_STORE).delete(id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});}catch{}}
 async function getUploadedDocument(id){const db=await openDocDb();return new Promise((resolve,reject)=>{const tx=db.transaction(DOC_STORE,"readonly");const req=tx.objectStore(DOC_STORE).get(id);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error);});}
 export { openDocDb, saveUploadedDocument, deleteUploadedDocument, getUploadedDocument };
-
