@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import nextVitals from "eslint-config-next/core-web-vitals";
 import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 
@@ -7,7 +8,8 @@ const browserGlobals={
 };
 
 export default [
-  { ignores:["dist/**","node_modules/**"] },
+  ...nextVitals,
+  { ignores:["dist/**","node_modules/**",".next/**"] },
   {
     files:["src/**/*.{js,jsx}","api/**/*.js","test/**/*.js"],
     languageOptions:{
