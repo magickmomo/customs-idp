@@ -109,15 +109,20 @@ function SupabasePasswordSetup({onComplete}){const [password,setPassword]=useSta
 
 function SupabaseLogin({onSuccess}){const [email,setEmail]=useState("");const [password,setPassword]=useState("");const [error,setError]=useState("");const [message,setMessage]=useState("");const [busy,setBusy]=useState(false);const [resetSent,setResetSent]=useState(false);const submit=async(e)=>{e.preventDefault();setError("");setMessage("");setBusy(true);try{const {data,error:signInError}=await supabase.auth.signInWithPassword({email:email.trim(),password});if(signInError)throw signInError;if(!data.session?.access_token)throw new Error("Supabase did not return an active session.");const response=await fetch("/api/auth",{method:"POST",headers:{Authorization:"Bearer "+data.session.access_token},credentials:"include"});const result=await response.json().catch(()=>({}));if(!response.ok){await supabase.auth.signOut();throw new Error(result.error||"Your account is not authorised for Customs IDP.");}onSuccess(result.user);}catch(error){setError(error.message||"Unable to sign in");}finally{setBusy(false);}};const sendReset=async()=>{setError("");setMessage("");if(!email.trim()){setError("Enter your email address first.");return;}setBusy(true);try{const {error:resetError}=await supabase.auth.resetPasswordForEmail(email.trim(),{redirectTo:window.location.origin+"/"});if(resetError)throw resetError;setResetSent(true);setMessage("Password setup/reset email sent. Check your inbox and follow the link.");}catch(error){setError(error.message||"Unable to send password reset email");}finally{setBusy(false);}};return <div className="test-login"><div className="test-login-card"><div className="test-login-brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><div className="test-login-copy"><div className="eyebrow">Secure access</div><h1>Sign in</h1><p>Use your Customs IDP account. Authentication is managed by Supabase.</p></div><form onSubmit={submit} className="password-login-form"><label>Email<input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoFocus autoComplete="username" placeholder="name@company.com"/></label><label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" placeholder="Enter password"/></label>{error&&<div className="password-login-error">{error}</div>}{message&&<div className="password-login-message">{message}</div>}<button className="primary-action password-login-submit" type="submit" disabled={busy||!email.trim()||!password}>{busy?"Signing in…":"Sign in"}</button><button type="button" className="secondary-action" onClick={sendReset} disabled={busy||!email.trim()}>{resetSent?"Send setup/reset email again":"Set or reset password"}</button></form></div></div>;}
 
+const LOCAL_TEST_USERS=[{id:"liam",name:"Liam Wingrove",role:"manager",initials:"LW"},{id:"muhammad",name:"Muhammad Amer",role:"manager",initials:"MA"},{id:"processor1",name:"Data Processor 1",role:"member",initials:"P1"},{id:"processor2",name:"Data Processor 2",role:"member",initials:"P2"}];
+function LocalTestLogin({onSuccess}){const [busy,setBusy]=useState("");const [error,setError]=useState("");const signIn=async(user)=>{setBusy(user.id);setError("");try{const response=await fetch("/api/auth?mode=local-test",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({userId:user.id})});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.error||"Local test sign-in failed.");onSuccess(result.user);}catch(error){setError(error.message||"Local test sign-in failed.");}finally{setBusy("");}};return <div className="test-login"><div className="test-login-card"><div className="test-login-brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Local development</span></div></div><div className="test-login-copy"><div className="eyebrow">Development only</div><h1>Choose a test account</h1><p>This route is available on localhost only and does not bypass authentication in production.</p></div><div className="test-user-list">{LOCAL_TEST_USERS.map(user=><button className="test-user-button" key={user.id} onClick={()=>signIn(user)} disabled={Boolean(busy)}><span className="test-user-avatar">{user.initials}</span><span><b>{user.name}</b><small>{user.role}</small></span><ChevronRight size={16}/></button>)}</div>{error&&<div className="password-login-error">{error}</div>}</div></div>;}
+
 function App(){
   const [authenticated,setAuthenticated]=useState(null);
   const [currentUser,setCurrentUser]=useState(null);
+  const localTestRoute=import.meta.env.DEV&&typeof window!=="undefined"&&window.location.pathname==="/test-auth";
   const hasPasswordSetupMarker=()=>typeof window!=="undefined" && /(?:^|[?&#])type=(?:invite|recovery)(?:[&#]|$)/.test(window.location.href);
   const requiresInvitedUserSetup=session=>Boolean(session?.user?.invited_at && session?.user?.user_metadata?.customs_idp_password_set!==true);
   const [passwordSetup,setPasswordSetup]=useState(()=>hasPasswordSetupMarker());
 
   useEffect(()=>{
     let active=true;
+    if(localTestRoute){setAuthenticated(false);return()=>{active=false;};}
     const syncSession=async(session)=>{
       if(!session?.access_token){
         try{await fetch("/api/auth",{method:"DELETE",credentials:"include"});}catch{}
@@ -144,7 +149,7 @@ function App(){
       else if(session){if(requiresInvitedUserSetup(session))setPasswordSetup(true);syncSession(session);}
     });
     return()=>{active=false;subscription.unsubscribe();};
-  },[]);
+  },[localTestRoute]);
   const [page,setPage]=useState("inbox");
   const [selectedPack,setSelectedPack]=useState(packs[0]);
   const [agentOpen,setAgentOpen]=useState(true);
@@ -162,7 +167,7 @@ function App(){
   });
   const [dataSource,setDataSource]=useState("local");
   const [packLoadError,setPackLoadError]=useState("");
-  const [emailSyncStatus,setEmailSyncStatus]=useState({state:"idle",checked:0,processed:0,duplicates:0,failed:0,error:""});
+  const [emailSyncStatus,setEmailSyncStatus]=useState({state:"ready",checked:0,processed:0,duplicates:0,failed:0,error:"",message:"Webhook intake active; recovery scan is secondary."});
   const [pendingUploadFiles,setPendingUploadFiles]=useState([]),[uploadCustomer,setUploadCustomer]=useState("Unassigned customer"),[showUploadConfirm,setShowUploadConfirm]=useState(false);
   useEffect(()=>{
     if(authenticated!==true)return;
@@ -193,22 +198,28 @@ function App(){
       return normalized;
     };
 
-    const runMailboxFallback=async()=>{
+    // Webhooks are the primary mailbox intake path. This scan is deliberately
+    // secondary and starts later, so opening the Inbox does not poll Outlook.
+    const runMailboxRecoveryScan=async()=>{
       try{
-        setEmailSyncStatus(state=>({...state,state:"syncing",error:""}));
+        setEmailSyncStatus(state=>({...state,state:"syncing",error:"",message:""}));
         const response=await fetch("/api/outlook?action=sync",{method:"POST",credentials:"include"});
         const data=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(data.error||("Outlook sync returned HTTP "+response.status));
         if(active){
-          setEmailSyncStatus({state:"ready",checked:Number(data.checked||0),processed:Number(data.processed||0),duplicates:Number(data.duplicates||0),failed:Number(data.failed||0),error:""});
+          setEmailSyncStatus({state:"ready",checked:Number(data.checked||0),processed:Number(data.processed||0),duplicates:Number(data.duplicates||0),failed:Number(data.failed||0),error:"",message:"Recovery scan complete; webhook intake remains primary."});
           await loadDatabasePacks();
         }
       }catch(error){
         if(active)setEmailSyncStatus(state=>({...state,state:"error",error:error?.message||"Outlook sync failed."}));
       }
     };
-    void runMailboxFallback();
-    syncTimer=window.setInterval(runMailboxFallback,60000);
+    const recoveryScanDelay=5*60*1000;
+    const recoveryScanTimer=window.setTimeout(()=>{
+      if(!active)return;
+      void runMailboxRecoveryScan();
+      syncTimer=window.setInterval(runMailboxRecoveryScan,15*60*1000);
+    },recoveryScanDelay);
     const inboxRefreshTimer=window.setInterval(async()=>{
       try{ if(active) await loadDatabasePacks(); }catch(error){ if(active) setPackLoadError(error?.message||"Unable to refresh organisation packs."); }
     },5000);
@@ -253,7 +264,7 @@ function App(){
         }
       }
     })();
-    return()=>{active=false;if(syncTimer)window.clearInterval(syncTimer);if(inboxRefreshTimer)window.clearInterval(inboxRefreshTimer);};
+    return()=>{active=false;window.clearTimeout(recoveryScanTimer);if(syncTimer)window.clearInterval(syncTimer);if(inboxRefreshTimer)window.clearInterval(inboxRefreshTimer);};
   },[authenticated]);
   // Supabase Realtime keeps an open inbox current as soon as the database changes.
   // RLS on document_packs limits each authenticated user to their organisation.
@@ -622,7 +633,7 @@ const postToLCA=()=>{
 
   if(passwordSetup)return <SupabasePasswordSetup onComplete={user=>{setPasswordSetup(false);setCurrentUser(user);setAuthenticated(true);setPage("inbox");}}/>;
   if(authenticated===null)return <div className="test-login"><div className="test-login-card"><div className="test-login-brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><div className="test-login-copy"><div className="eyebrow">Secure access</div><h1>Checking access…</h1><p>Please wait.</p></div></div></div>;
-  if(!authenticated)return passwordSetup ? <SupabasePasswordSetup onComplete={user=>{setPasswordSetup(false);setCurrentUser(user);setAuthenticated(true);setPage("inbox");}}/> : <SupabaseLogin onSuccess={user=>{setCurrentUser(user);setAuthenticated(true);setPage("inbox");}}/>;
+  if(!authenticated)return localTestRoute ? <LocalTestLogin onSuccess={user=>{setCurrentUser(user);setAuthenticated(true);setPage("inbox");}}/> : passwordSetup ? <SupabasePasswordSetup onComplete={user=>{setPasswordSetup(false);setCurrentUser(user);setAuthenticated(true);setPage("inbox");}}/> : <SupabaseLogin onSuccess={user=>{setCurrentUser(user);setAuthenticated(true);setPage("inbox");}}/>;
   if(!currentUser)return <div className="test-login"><div className="test-login-card"><div className="test-login-copy"><div className="eyebrow">Account</div><h1>Loading profile…</h1><p>Loading your Customs IDP organisation access.</p></div></div></div>;
 
   return <div className={"app-shell "+(sidebarCollapsed?"sidebar-collapsed":"")}>
@@ -799,7 +810,7 @@ function Queue({label,value,pct,cls}){return <div className="queue"><div><span c
 
 function InboxPage({packs,query,setQuery,openPack,title="Inbox",onUpload,onAssign,emailSyncStatus,packLoadError}){
  return <section><div className="page-head"><div><div className="eyebrow">Document processing</div><h1>{title}</h1><p>Review incoming document packs, extraction confidence and validation status.</p></div><button className="primary" onClick={()=>document.querySelector(".hidden-upload")?.click()}><Plus size={17}/> Upload documents</button></div>
- <div className={"email-sync-debug "+(emailSyncStatus?.state==="error"?"error":"")}><strong>Outlook intake</strong><span>{emailSyncStatus?.state==="error" ? ("Sync error: "+emailSyncStatus.error) : emailSyncStatus?.state==="success" ? (emailSyncStatus.checked+" matching · "+emailSyncStatus.processed+" processed · "+emailSyncStatus.duplicates+" duplicate · "+emailSyncStatus.failed+" failed"+(emailSyncStatus.failures&&emailSyncStatus.failures.length?" · "+emailSyncStatus.failures[0]:"")) : "Checking Outlook…"}</span></div>
+ <div className={"email-sync-debug "+(emailSyncStatus?.state==="error"?"error":"")}><strong>Outlook intake</strong><span>{emailSyncStatus?.state==="error" ? ("Recovery scan error: "+emailSyncStatus.error) : emailSyncStatus?.message || (emailSyncStatus?.state==="syncing" ? "Running secondary recovery scan…" : emailSyncStatus?.state==="ready" ? (emailSyncStatus.checked+" matching · "+emailSyncStatus.processed+" processed · "+emailSyncStatus.duplicates+" duplicate · "+emailSyncStatus.failed+" failed") : "Webhook intake active")}</span></div>
  {packLoadError&&<div className="email-sync-debug error"><strong>Inbox database</strong><span>{packLoadError}</span></div>}
  <div className="toolbar"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search packs, customers or tickets..."/></div><button className="filter">Status <ChevronDown size={15}/></button><button className="filter">Customer <ChevronDown size={15}/></button></div>
  <div className="panel"><PackTable packs={packs} onOpen={openPack} onAssign={onAssign}/></div></section>

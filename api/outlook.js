@@ -145,8 +145,7 @@ export async function webhook(req,res){
         messageId:internetMessageId,
         ticket,
         receivedAt:message.receivedDateTime||new Date().toISOString(),
-        attachments,
-        repair
+        attachments
       });
       processed++;
     }catch(error){
