@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { validateStandardCustomsRecord } from "../validation/standardEngine.js";
 import { DEFAULT_ORGANISATION } from "../tenant.js";
-import { customerStrategyStore, getCustomerStrategy } from "../domain/packData.js";
+import { getCustomerStrategy } from "../domain/packData.js";
 import { buildWorkingCustomsRecord } from "../domain/workingRecord.js";
 import { runAutomatedEmailAudit } from "../services/agentService.js";
 import { deleteUploadedDocument, getUploadedDocument, saveUploadedDocument } from "../services/documentStorage.js";
