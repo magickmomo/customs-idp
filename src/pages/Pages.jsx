@@ -802,7 +802,8 @@ function AgentPage(){
    </div>
  </section>
 }
-function SettingsPage(){
+function SettingsPage({currentUserRole="member"}){
+  const canInviteUsers=currentUserRole==="manager"||currentUserRole==="admin";
   const [outlook,setOutlook]=useState({loading:true,connected:false,connection:null});
   const [connecting,setConnecting]=useState(false);
   const [error,setError]=useState("");
@@ -850,7 +851,7 @@ function SettingsPage(){
   return <section>
     <div className="page-head"><div><div className="eyebrow">Platform</div><h1>Settings</h1><p>Core processing, middleware and integration configuration.</p></div></div>
     <div className="settings-grid">
-      <div className="panel settings-card">
+      {canInviteUsers&&<div className="panel settings-card">
         <h2>Team access</h2>
         <p>Invite a user to this organisation. The invitation creates their Supabase account and organisation membership together.</p>
         <form onSubmit={sendInvite} className="password-login-form">
@@ -861,7 +862,7 @@ function SettingsPage(){
           {error&&<div className="password-login-error">{error}</div>}
           <button className="primary-action" type="submit" disabled={inviting||!invite.email.trim()}>{inviting?"Sending invitation…":"Invite user"}</button>
         </form>
-      </div>
+      </div>}
 
       <div className="panel settings-card">
         <h2>Outlook email intake</h2>
