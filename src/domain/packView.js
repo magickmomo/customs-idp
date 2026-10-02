@@ -15,7 +15,20 @@ function getPackCustomerLabel(pack){
   const documentExporter=primary?.extraction?.exporter||primary?.extraction?.exporterName||primary?.extraction?.exporterCompany||primary?.extraction?.exporterCompanyName;
   return documentExporter ? String(documentExporter) : "Unassigned customer";
 }
-function getPackColumnValue(pack,key){const data=pack?.workingRecord||pack?.extractedData||{},docs=Array.isArray(data.documents)?data.documents:[],invoice=docs.find(d=>d?.extraction?.documentType==="commercial_invoice")?.extraction||data;if(key==="pack")return pack.email?.subject||pack.title||pack.uploadedFiles?.[0]?.name||pack.id;if(key==="customer")return getPackCustomerLabel(pack);if(key==="owner")return pack.assignedTo||"Unassigned";if(key==="documents")return (Number(pack.docs)||0)+" document"+(Number(pack.docs)===1?"":"s");if(key==="status")return pack.status||"—";if(key==="invoiceNumber")return invoice.invoiceNumber||"—";if(key==="export")return invoice.countryOfExport||invoice.exporterCountryIso||"—";if(key==="destination")return invoice.sourceCountryOfDestination||invoice.consigneeCountryIso||"—";if(key==="invoiceValue")return invoice.totalInvoiceValue||"—";if(key==="currency")return invoice.currency||"—";if(key==="deliveryTerm")return invoice.deliveryTerm||"—";if(key==="received")return formatReceivedDateTime(pack.received);if(key==="validation")return pack.validationStatus==="Validated"?"Passed":pack.validationStatus||"—";return "—"}
+function getPackDisplayName(pack){
+  const data=pack?.extractedData||{};
+  const extractedDocuments=Array.isArray(data.documents)?data.documents:[];
+  const sourceDocuments=Array.isArray(data.sourceDocuments)?data.sourceDocuments:[];
+  return pack?.uploadedFiles?.[0]?.name
+    ||extractedDocuments[0]?.filename
+    ||extractedDocuments[0]?.name
+    ||sourceDocuments[0]?.name
+    ||pack?.title
+    ||pack?.email?.subject
+    ||pack?.id
+    ||"—";
+}
+function getPackColumnValue(pack,key){const data=pack?.workingRecord||pack?.extractedData||{},docs=Array.isArray(data.documents)?data.documents:[],invoice=docs.find(d=>d?.extraction?.documentType==="commercial_invoice")?.extraction||data;if(key==="pack")return getPackDisplayName(pack);if(key==="packId")return pack?.id||"—";if(key==="customer")return getPackCustomerLabel(pack);if(key==="owner")return pack.assignedTo||"Unassigned";if(key==="documents")return (Number(pack.docs)||0)+" document"+(Number(pack.docs)===1?"":"s");if(key==="status")return pack.status||"—";if(key==="invoiceNumber")return invoice.invoiceNumber||"—";if(key==="export")return invoice.countryOfExport||invoice.exporterCountryIso||"—";if(key==="destination")return invoice.sourceCountryOfDestination||invoice.consigneeCountryIso||"—";if(key==="invoiceValue")return invoice.totalInvoiceValue||"—";if(key==="currency")return invoice.currency||"—";if(key==="deliveryTerm")return invoice.deliveryTerm||"—";if(key==="received")return formatReceivedDateTime(pack.received);if(key==="validation")return pack.validationStatus==="Validated"?"Passed":pack.validationStatus||"—";return "—"}
 
 
 function reconcilePackDocuments(pack){
@@ -38,4 +51,4 @@ function reconcilePackDocuments(pack){
 }
 
 
-export { formatReceivedDateTime, getPackCustomerLabel, getPackColumnValue, reconcilePackDocuments };
+export { formatReceivedDateTime, getPackCustomerLabel, getPackColumnValue, getPackDisplayName, reconcilePackDocuments };

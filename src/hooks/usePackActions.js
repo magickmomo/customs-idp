@@ -92,7 +92,6 @@ export function usePackActions({
   livePacks,
   setLivePacks,
   selectedPack,
-  setSelectedPack,
   persistPack,
   navigate,
   notify,
@@ -123,7 +122,6 @@ export function usePackActions({
   const persistValidatedPack = async (pack, showToast = false) => {
     if (!pack) return pack;
     const validated = buildValidatedPack(pack);
-    setSelectedPack(validated);
     setLivePacks(previous => previous.map(item => item.id === validated.id ? validated : item));
     await persistPack(validated);
     await recordHistory(
@@ -177,7 +175,6 @@ export function usePackActions({
             storagePath: file.storagePath
           }));
           pack = { ...pack, uploadedFiles: files, docs: Math.max(Number(pack.docs) || 0, files.length) };
-          setSelectedPack(pack);
           setLivePacks(previous => previous.map(item => item.id === pack.id ? pack : item));
           await persistPack(pack);
         }
@@ -201,7 +198,6 @@ export function usePackActions({
               : file;
           });
           pack = { ...pack, uploadedFiles: files };
-          setSelectedPack(pack);
           setLivePacks(previous => previous.map(item => item.id === pack.id ? pack : item));
           await persistPack(pack);
         }
@@ -223,7 +219,6 @@ export function usePackActions({
       postedToLCAAt: undefined
     };
 
-    setSelectedPack(null);
     setLivePacks(previous => previous.map(item => item.id === pack.id ? processing : item));
     await persistPack(processing);
     navigate("inbox");
@@ -255,7 +250,6 @@ export function usePackActions({
 
       let completedPack = buildValidatedPack(processed);
       completedPack = await runAutomatedEmailAudit(completedPack);
-      setSelectedPack(completedPack);
       setLivePacks(previous => previous.map(item => item.id === completedPack.id ? completedPack : item));
 
       const saved = await persistPack(completedPack);
@@ -272,7 +266,6 @@ export function usePackActions({
     } catch (error) {
       const message = error?.message || "Unknown re-processing error";
       const failed = { ...processing, status: "Needs review", processingError: message };
-      setSelectedPack(failed);
       setLivePacks(previous => previous.map(item => item.id === failed.id ? failed : item));
       await persistPack(failed);
       notify("Re-processing failed: " + message);
@@ -349,6 +342,7 @@ export function usePackActions({
       organisationId: DEFAULT_ORGANISATION.id,
       organisationName: DEFAULT_ORGANISATION.name,
       id,
+      packUuid: crypto.randomUUID(),
       customer: uploadCustomer,
       docs: selected.length,
       status: "Processing",
@@ -402,7 +396,6 @@ export function usePackActions({
       completed = await runAutomatedEmailAudit(completed);
 
       setLivePacks(previous => previous.map(pack => pack.id === id ? completed : pack));
-      setSelectedPack(completed);
       await persistPack(completed);
       await recordHistory(
         completed,
@@ -437,7 +430,6 @@ export function usePackActions({
     } catch (error) {
       const failed = { ...newPack, status: "Needs review", processingError: error.message };
       setLivePacks(previous => previous.map(pack => pack.id === id ? failed : pack));
-      setSelectedPack(failed);
       await persistPack(failed);
       await recordHistory(
         failed,
@@ -470,7 +462,6 @@ export function usePackActions({
 
       setLivePacks(previous => previous.filter(item => item.id !== pack.id));
       if (selectedPack?.id === pack.id) {
-        setSelectedPack(null);
         navigate("inbox");
       }
       notify("Pack deleted");
@@ -485,7 +476,6 @@ export function usePackActions({
 
     const updated = { ...previous, assignedTo };
     setLivePacks(packs => packs.map(pack => pack.id === packId ? updated : pack));
-    if (selectedPack?.id === packId) setSelectedPack(pack => ({ ...pack, assignedTo }));
     void persistPack(updated);
     void recordHistory(
       updated,
@@ -503,7 +493,6 @@ export function usePackActions({
       ? { ...pack, workingRecord: buildWorkingCustomsRecord(pack) }
       : pack;
 
-    setSelectedPack(next);
     setLivePacks(previous => previous.map(item => item.id === next.id ? next : item));
     void persistPack(next);
   };
@@ -534,7 +523,6 @@ export function usePackActions({
       postedToLCAAt: now
     };
 
-    setSelectedPack(posted);
     setLivePacks(previous => previous.map(pack => pack.id === posted.id ? posted : pack));
     void persistPack(posted);
     void recordHistory(posted, "posted_to_lca", "Pack posted to LCA", null, { postedToLCAAt: now });

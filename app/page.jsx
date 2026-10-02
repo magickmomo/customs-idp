@@ -1,5 +1,5 @@
-import App from "../src/App.jsx";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <App />;
+  redirect("/inbox");
 }

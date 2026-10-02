@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_INBOX_COLUMN_KEYS, normaliseDatabasePack, normaliseInboxColumnSelection } from "../src/domain/packData.js";
-import { formatReceivedDateTime, getPackColumnValue, getPackCustomerLabel, reconcilePackDocuments } from "../src/domain/packView.js";
+import { formatReceivedDateTime, getPackColumnValue, getPackCustomerLabel, getPackDisplayName, reconcilePackDocuments } from "../src/domain/packView.js";
 
 test("formats ISO received dates and preserves invalid values",()=>{
   const value="2026-09-19T18:49:25.577Z";
@@ -16,8 +16,16 @@ test("uses singular document wording for one document",()=>{
   assert.equal(getPackColumnValue({id:"PK-2",docs:2},"documents"),"2 documents");
 });
 
+test("uses the retained source document name as the pack display name",()=>{
+  const pack={id:"PK-1",extractedData:{documents:[{filename:"commercial-invoice-10482.pdf"}]}};
+  assert.equal(getPackDisplayName(pack),"commercial-invoice-10482.pdf");
+  assert.equal(getPackColumnValue(pack,"pack"),"commercial-invoice-10482.pdf");
+  assert.equal(getPackColumnValue(pack,"packId"),"PK-1");
+  assert.equal(getPackDisplayName({...pack,email:{subject:"Customs documents"}}),"commercial-invoice-10482.pdf");
+});
+
 test("uses the requested inbox columns by default",()=>{
-  assert.deepEqual(DEFAULT_INBOX_COLUMN_KEYS,["pack","customer","owner","documents","status","received"]);
+  assert.deepEqual(DEFAULT_INBOX_COLUMN_KEYS,["pack","packId","customer","owner","documents","status","received"]);
   assert.deepEqual(normaliseInboxColumnSelection([]),DEFAULT_INBOX_COLUMN_KEYS);
   assert.deepEqual(normaliseInboxColumnSelection(["status","received","unknown","status"]),["status","received"]);
 });

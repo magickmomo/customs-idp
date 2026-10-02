@@ -4,16 +4,18 @@ import { customerStrategyStore, normaliseDatabasePack, packs } from "../domain/p
 
 export function usePackWorkspace({ authenticated }) {
 const [livePacks,setLivePacks]=useState(()=>{
-    try { const saved=localStorage.getItem("customs-idp-packs"); return saved ? JSON.parse(saved) : packs; }
+    try { const saved=typeof window!=="undefined"?localStorage.getItem("customs-idp-packs"):null; return saved ? JSON.parse(saved) : packs; }
     catch { return packs; }
   });
   const [dataSource,setDataSource]=useState("local");
+  const [packsLoading,setPacksLoading]=useState(false);
   const [packLoadError,setPackLoadError]=useState("");
   const [emailSyncStatus,setEmailSyncStatus]=useState({state:"ready",checked:0,processed:0,duplicates:0,failed:0,error:"",message:"Webhook intake active; recovery scan is secondary."});
   const [pendingUploadFiles,setPendingUploadFiles]=useState([]),[uploadCustomer,setUploadCustomer]=useState("Unassigned customer"),[showUploadConfirm,setShowUploadConfirm]=useState(false);
   useEffect(()=>{
     if(authenticated!==true)return;
     let active=true;
+    setPacksLoading(true);
     let syncTimer=null;
     const loadDatabasePacks=async()=>{
       const packsResponse=await fetch("/api/packs",{credentials:"include"});
@@ -104,6 +106,8 @@ const [livePacks,setLivePacks]=useState(()=>{
           setPackLoadError(error?.message||"Unable to load organisation packs.");
           setDataSource("error");
         }
+      } finally {
+        if(active)setPacksLoading(false);
       }
     })();
     return()=>{active=false;window.clearTimeout(recoveryScanTimer);if(syncTimer)window.clearInterval(syncTimer);if(inboxRefreshTimer)window.clearInterval(inboxRefreshTimer);};
@@ -157,5 +161,5 @@ const [livePacks,setLivePacks]=useState(()=>{
       return false;
     }
   };
-  return { livePacks, setLivePacks, dataSource, packLoadError, setPackLoadError, emailSyncStatus, persistPack };
+  return { livePacks, setLivePacks, dataSource, packsLoading, packLoadError, setPackLoadError, emailSyncStatus, persistPack };
 }

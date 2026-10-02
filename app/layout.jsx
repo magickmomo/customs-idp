@@ -1,4 +1,5 @@
 import "../src/styles.css";
+import App from "../src/App.jsx";
 
 export const metadata = {
   title: "Customs IDP",
@@ -6,5 +7,5 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="en"><body><App>{children}</App></body></html>;
 }
