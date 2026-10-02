@@ -23,7 +23,7 @@ export default [
       "no-console":"off",
       "no-empty":"off",
       "no-unused-vars":"off",
-      "no-undef":"off",
+      "no-undef":"error",
       "react/jsx-uses-vars":"error",
       "react/react-in-jsx-scope":"off",
       "react-hooks/rules-of-hooks":"error",

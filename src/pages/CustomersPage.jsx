@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Activity, ArrowRight, Mail, MoreHorizontal, Plus, Settings } from "lucide-react";
+import { customerStrategyStore } from "../domain/packData.js";
 
 function Customers({notify}){
   const [loading,setLoading]=useState(true);

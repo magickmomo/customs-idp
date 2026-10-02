@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normaliseDatabasePack } from "../src/domain/packData.js";
+import { DEFAULT_INBOX_COLUMN_KEYS, normaliseDatabasePack, normaliseInboxColumnSelection } from "../src/domain/packData.js";
 import { formatReceivedDateTime, getPackColumnValue, getPackCustomerLabel, reconcilePackDocuments } from "../src/domain/packView.js";
 
 test("formats ISO received dates and preserves invalid values",()=>{
@@ -14,6 +14,12 @@ test("formats ISO received dates and preserves invalid values",()=>{
 test("uses singular document wording for one document",()=>{
   assert.equal(getPackColumnValue({id:"PK-1",docs:1},"documents"),"1 document");
   assert.equal(getPackColumnValue({id:"PK-2",docs:2},"documents"),"2 documents");
+});
+
+test("uses the requested inbox columns by default",()=>{
+  assert.deepEqual(DEFAULT_INBOX_COLUMN_KEYS,["pack","customer","owner","documents","status","received"]);
+  assert.deepEqual(normaliseInboxColumnSelection([]),DEFAULT_INBOX_COLUMN_KEYS);
+  assert.deepEqual(normaliseInboxColumnSelection(["status","received","unknown","status"]),["status","received"]);
 });
 
 test("normalizes database pack metadata without changing extracted fields",()=>{

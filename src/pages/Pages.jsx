@@ -16,7 +16,7 @@ import { formatReceivedDateTime, getPackColumnValue, getPackCustomerLabel, recon
 
 
 
-function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePack,postToLCA,reprocessPack,persistValidatedPack,recordHistory}){
+function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePack,postToLCA,reprocessPack,persistPack,persistValidatedPack,recordHistory}){
  const [docUrls,setDocUrls]=useState({});
  const [chat,setChat]=useState("");
  const [messages,setMessages]=useState([]);
@@ -881,7 +881,6 @@ function SettingsPage(){
 function Toggle({label,on}){return <div className="toggle-row"><span>{label}</span><div className={"toggle "+(on?"on":"")}><i></i></div></div>}
 
 export { Review, AgentPage, SettingsPage, Toggle };
-
 
 
 

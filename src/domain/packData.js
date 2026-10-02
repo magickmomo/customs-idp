@@ -26,7 +26,16 @@ export const customers = [
   {name:"Raven Industrial", code:"RAVN-021", mailbox:"customs.raven@inbox.example", rules:6, processed:"1,406"}
 ];
 
-export const DEFAULT_INBOX_COLUMNS=[{key:"pack",label:"Pack",required:true},{key:"customer",label:"Customer",required:true},{key:"owner",label:"Owner",required:true},{key:"documents",label:"Documents",required:true},{key:"status",label:"Status",required:true},{key:"invoiceNumber",label:"Invoice number"},{key:"export",label:"Export"},{key:"destination",label:"Destination"},{key:"invoiceValue",label:"Invoice value"},{key:"currency",label:"Currency"},{key:"deliveryTerm",label:"Delivery term"},{key:"received",label:"Received"},{key:"validation",label:"Validation"}];
+export const DEFAULT_INBOX_COLUMN_KEYS=["pack","customer","owner","documents","status","received"];
+export const DEFAULT_INBOX_COLUMNS=[{key:"pack",label:"Pack"},{key:"customer",label:"Customer"},{key:"owner",label:"Owner"},{key:"documents",label:"Documents"},{key:"status",label:"Status"},{key:"invoiceNumber",label:"Invoice number"},{key:"export",label:"Export"},{key:"destination",label:"Destination"},{key:"invoiceValue",label:"Invoice value"},{key:"currency",label:"Currency"},{key:"deliveryTerm",label:"Delivery term"},{key:"received",label:"Received"},{key:"validation",label:"Validation"}];
+export function normaliseInboxColumnSelection(value){
+  const available=new Set(DEFAULT_INBOX_COLUMNS.map(column=>column.key));
+  if(Array.isArray(value)){
+    const valid=[...new Set(value.filter(key=>available.has(key)))];
+    if(valid.length)return valid;
+  }
+  return [...DEFAULT_INBOX_COLUMN_KEYS];
+}
 
 export const sampleLines = [
   {line:1,description:"Oak wooden packaging boxes",hs:"4415 10 00",origin:"HU",qty:24,net:"10.080",gross:"11.420",value:"384.00",confidence:97},
@@ -70,5 +79,3 @@ export const normalizeCountryCode=value=>{
   const map={"UNITED KINGDOM":"GB","GREAT BRITAIN":"GB","UK":"GB","ENGLAND":"GB","SCOTLAND":"GB","WALES":"GB","NORTHERN IRELAND":"GB"};
   return map[upper]||upper;
 };
-
-

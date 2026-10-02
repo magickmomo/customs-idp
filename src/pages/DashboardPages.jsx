@@ -52,6 +52,7 @@ function ManagerPage({livePacks,dataSource}){
  });
  const totalPacks=filtered.length;
  const totalDocuments=filtered.reduce((n,p)=>n+(Number(p.docs)||0),0);
+ const avgConfidence=totalPacks?Math.round(filtered.reduce((n,p)=>n+(Number(p.confidence)||0),0)/totalPacks):0;
  const validated=filtered.filter(p=>p.status==="Ready"||p.status==="Validated"||p.status==="Posted to LCA").length;
  const review=filtered.filter(p=>p.status==="Needs review").length;
  const processing=filtered.filter(p=>p.status==="Processing").length;
@@ -129,4 +130,3 @@ function ManagerPage({livePacks,dataSource}){
 
 
 export { Dashboard, ManagerPage };
-
