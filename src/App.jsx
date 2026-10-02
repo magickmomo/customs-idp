@@ -115,7 +115,7 @@ function App(){
         {page==="review" && (selectedPack?.status==="Processing" ? <ProcessingReviewGuard onBack={()=>navigate("inbox")}/> : <Review pack={selectedPack ? {...selectedPack, workingRecord:selectedPack.workingRecord} : selectedPack} currentUserName={currentUserName} back={()=>navigate("inbox")} notify={notify} onAssign={assignPack} updatePack={updatePack} validatePack={validatePack} postToLCA={postToLCA} reprocessPack={reprocessPack} persistPack={persistPack} persistValidatedPack={persistValidatedPack} recordHistory={recordHistory}/>)}
         {page==="customers" && <Customers notify={notify}/>}
         {page==="agent" && <AgentPage/>}
-        {page==="settings" && <SettingsPage/>}
+        {page==="settings" && <SettingsPage currentUserRole={currentUserRole}/>}
       </div>
     </main>
 
