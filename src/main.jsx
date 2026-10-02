@@ -9,7 +9,7 @@ import {
 import "./styles.css";
 import { DEFAULT_ORGANISATION } from "./tenant.js";
 import { supabase } from "./lib/supabase.js";
-import { customerStrategyStore, packs } from "./domain/packData.js";
+import { customerStrategyStore, getCustomerStrategy, packs } from "./domain/packData.js";
 import { Review } from "./pages/Pages.jsx";
 import { AgentPage } from "./pages/AgentPage.jsx";
 import { Customers } from "./pages/CustomersPage.jsx";
@@ -40,6 +40,10 @@ function App(){
   const [toast,setToast]=useState("");
   const { livePacks, setLivePacks, dataSource, packLoadError, setPackLoadError, emailSyncStatus, persistPack } = usePackWorkspace({ authenticated });
   const uploadRef=useRef(null);
+  const navigate=(p)=>{setPage(p);setMobileMenuOpen(false);};
+  const notify=(msg)=>{setToast(msg);setTimeout(()=>setToast(""),2500)};
+  const recordHistory=async(pack,action,description,beforeData=null,afterData=null,metadata=null,actorType="user",actorName=null)=>{if(!pack?.id)return;try{await fetch("/api/history",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({packId:pack.id,action,description,beforeData,afterData,metadata,actorType,actorName})});}catch{}};
+
   const {
     pendingUploadFiles,
     setPendingUploadFiles,
@@ -67,6 +71,10 @@ function App(){
     notify,
     recordHistory
   });
+
+  const filteredPacks=useMemo(()=>livePacks.filter(p=>
+    [p.id,p.customer,p.status,p.ticket].join(" ").toLowerCase().includes(query.toLowerCase())
+  ),[livePacks,query]);
 
   if(passwordSetup)return <SupabasePasswordSetup onComplete={user=>{setPasswordSetup(false);setCurrentUser(user);setAuthenticated(true);setPage("inbox");}}/>;
   if(authenticated===null)return <div className="test-login"><div className="test-login-card"><div className="test-login-brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><div className="test-login-copy"><div className="eyebrow">Secure access</div><h1>Checking access…</h1><p>Please wait.</p></div></div></div>;
