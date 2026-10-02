@@ -7,7 +7,7 @@ const LOCAL_TEST_USERS={
   processor2:{id:"local-processor-2",email:"processor2@example.test",name:"Data Processor 2",role:"member"}
 };
 
-export default async function handler(req,res){
+export default async function handler(req,res){res.setHeader("X-Customs-IDP-Auth-Route","pages-api-v1");
   if(req.method==="POST"&&req.query?.mode==="local-test"){
     if(!isLocalTestRequest(req))return res.status(404).json({error:"Not found"});
     const user=LOCAL_TEST_USERS[String(req.body?.userId||"liam")];
@@ -16,7 +16,7 @@ export default async function handler(req,res){
     res.setHeader("Set-Cookie",createAuthCookie(context,{secure:shouldUseSecureCookies(req)}));
     return res.status(200).json({authenticated:true,user,organisation:{id:context.organisationId}});
   }
-  if(req.method==="GET"){const context=getAuthContext(req);if(!context)return res.status(200).json({authenticated:false});return res.status(200).json({authenticated:true,requiresPasswordSetup:false,user:{id:context.userId,email:context.email,name:context.name,role:context.role},organisation:{id:context.organisationId}});}
+  if(req.method==="GET"){if(req.query?.debug==="1"){return res.status(200).json({route:"pages/api/auth",vercelEnv:process.env.VERCEL_ENV||null,nodeEnv:process.env.NODE_ENV||null,hasCookie:Boolean(req.headers?.cookie),hasIdpAuthSecret:Boolean(process.env.IDP_AUTH_SECRET),hasSupabaseUrl:Boolean(process.env.SUPABASE_URL||process.env.NEXT_PUBLIC_SUPABASE_URL),hasPublishableKey:Boolean(process.env.SUPABASE_PUBLISHABLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||process.env.SUPABASE_ANON_KEY),hasServiceRoleKey:Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY)});}const context=getAuthContext(req);if(!context)return res.status(200).json({authenticated:false});return res.status(200).json({authenticated:true,requiresPasswordSetup:false,user:{id:context.userId,email:context.email,name:context.name,role:context.role},organisation:{id:context.organisationId}});}
   if(req.method==="POST"){
     const token=String(req.headers?.authorization||"").replace(/^Bearer\s+/i,"").trim();
     if(!token)return res.status(401).json({error:"Supabase access token is required."});
