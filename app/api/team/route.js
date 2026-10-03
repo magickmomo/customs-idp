@@ -1,4 +1,4 @@
-import handler from "../../../api/team.js";
+import handler from "../../../src/server/api/team.js";
 
 export const runtime = "nodejs";
 
