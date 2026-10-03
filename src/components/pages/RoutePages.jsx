@@ -10,10 +10,10 @@ import { ProcessingReviewGuard } from "../ProcessingReviewGuard.jsx";
 import { useWorkspace } from "../../App.jsx";
 
 function InboxRoute(){
-  const { livePacks, currentUser, currentUserName, openPack, handleUpload, assignPack, deletePack, emailSyncStatus, packLoadError }=useWorkspace();
+  const { livePacks, currentUser, currentUserName, openPack, handleUpload, assignPack, deletePack, emailSyncStatus, packLoadError, packsLoading }=useWorkspace();
   const [query,setQuery]=useState("");
   const filteredPacks=livePacks.filter(pack=>[pack.id,pack.customer,pack.status,pack.ticket].join(" ").toLowerCase().includes(query.toLowerCase()));
-  return <InboxPage key={currentUser?.id||currentUserName} packs={filteredPacks} query={query} setQuery={setQuery} openPack={openPack} onUpload={handleUpload} onAssign={assignPack} onDelete={deletePack} emailSyncStatus={emailSyncStatus} currentUserKey={currentUser?.id||currentUserName} packLoadError={packLoadError}/>;
+  return <InboxPage key={currentUser?.id||currentUserName} packs={filteredPacks} packsLoading={packsLoading} query={query} setQuery={setQuery} openPack={openPack} onUpload={handleUpload} onAssign={assignPack} onDelete={deletePack} emailSyncStatus={emailSyncStatus} currentUserKey={currentUser?.id||currentUserName} packLoadError={packLoadError}/>;
 }
 
 function PackNotFound(){
