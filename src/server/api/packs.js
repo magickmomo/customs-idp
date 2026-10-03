@@ -58,6 +58,7 @@ export default async function handler(req,res){
 
       const row={
         id:pack.id,
+        ...(pack.packUuid||pack.pack_uuid?{pack_uuid:pack.packUuid||pack.pack_uuid}:{}),
         organisation_id:organisation.id,
         customer:pack.customer||null,
         customer_id:pack.customerId||pack.customer_id||null,
@@ -150,6 +151,7 @@ function normalizePack(row){
 
   return {
     ...row,
+    packUuid:row.pack_uuid||row.packUuid,
     organisationId:row.organisation_id||tenant.organisationId||DEFAULT_ORGANISATION_ID,
     organisationName:organisationName(row.organisation_id,tenant.organisationName),
     assignedTo:row.assigned_to||"Unassigned",

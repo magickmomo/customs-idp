@@ -5,7 +5,6 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "dev:vite": "vite",
     "dev:vercel": "vercel dev",
     "build": "next build",
     "start": "next start",
@@ -21,11 +20,9 @@
     "next": "^15.5.27"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^9.39.5",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^5.2.0",
-    "vite": "^6.0.0",
     "eslint-config-next": "^15.5.27"
   }
 }

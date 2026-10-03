@@ -58,9 +58,10 @@ export default async function handler(req,res){
 
     const ticket=ingestTicket||messageId||("EMAIL-"+Date.now().toString().slice(-6));
     let id="PK-EMAIL-"+Date.now().toString(36).toUpperCase();
-    const existingByTicket=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(ticket)+"&select=id,customer,status,docs&limit=1");
+    let packUuid=crypto.randomUUID();
+    const existingByTicket=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(ticket)+"&select=id,pack_uuid,customer,status,docs&limit=1");
     const existingByMessage=messageId
-      ? await supabaseFetch("document_packs?extracted_data->email->>messageId=eq."+encodeURIComponent(messageId)+"&select=id,customer,status,docs&limit=1").catch(()=>[])
+      ? await supabaseFetch("document_packs?extracted_data->email->>messageId=eq."+encodeURIComponent(messageId)+"&select=id,pack_uuid,customer,status,docs&limit=1").catch(()=>[])
       : [];
     const existing=existingByTicket[0]||existingByMessage[0];
     if(existing){
@@ -80,6 +81,7 @@ export default async function handler(req,res){
         return res.status(200).json({ok:true,duplicate:true,packId:claim.packId,customer,status:"Processing",message:"Email already claimed by another intake worker."});
       }
     }
+    if(existing?.pack_uuid) packUuid=existing.pack_uuid;
     let emailExtraction={fields:[],warnings:[]};
     if(emailFields.length){
       try{
@@ -93,6 +95,7 @@ export default async function handler(req,res){
       organisationId:DEFAULT_ORGANISATION.id,
       organisationName:DEFAULT_ORGANISATION.name,
       id,
+      packUuid,
       customer,
       customerId,
       docs:attachments.length,
@@ -127,6 +130,7 @@ export default async function handler(req,res){
       method:"PATCH",
       body:JSON.stringify({
         id:pack.id,
+        pack_uuid:pack.packUuid,
         organisation_id:DEFAULT_ORGANISATION.id,
         customer:pack.customer,
         customer_id:pack.customerId||null,
@@ -212,6 +216,7 @@ export default async function handler(req,res){
       method:"POST",
       body:JSON.stringify({
         id:pack.id,
+        pack_uuid:pack.packUuid,
         organisation_id:DEFAULT_ORGANISATION.id,
         customer:pack.customer,
         customer_id:pack.customerId||null,
@@ -231,6 +236,7 @@ export default async function handler(req,res){
     return res.status(200).json({
       ok:true,
       packId:id,
+      packUuid,
       customer,
       status:processingStatus,
       attachmentCount:attachmentResults.length,

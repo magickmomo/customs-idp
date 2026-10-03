@@ -1,10 +1,10 @@
 import { DEFAULT_ORGANISATION } from "../tenant.js";
 
 export const packs = [
-  { organisationId:DEFAULT_ORGANISATION.id, organisationName:DEFAULT_ORGANISATION.name, id:"PK-10482", customer:"Acme Components Ltd", docs:4, status:"Needs review", confidence:91, received:"16 Sep 2026, 15:42", ticket:"TK-88421" },
-  { organisationId:DEFAULT_ORGANISATION.id, organisationName:DEFAULT_ORGANISATION.name, id:"PK-10481", customer:"Northstar Manufacturing", docs:7, status:"Processing", confidence:96, received:"16 Sep 2026, 15:38", ticket:"TK-88420" },
-  { organisationId:DEFAULT_ORGANISATION.id, organisationName:DEFAULT_ORGANISATION.name, id:"PK-10480", customer:"Bancale Trading", docs:3, status:"Validated", confidence:98, received:"16 Sep 2026, 15:31", ticket:"TK-88419" },
-  { organisationId:DEFAULT_ORGANISATION.id, organisationName:DEFAULT_ORGANISATION.name, id:"PK-10479", customer:"Raven Industrial", docs:5, status:"Needs review", confidence:88, received:"16 Sep 2026, 15:12", ticket:"TK-88418" }
+  { organisationId:DEFAULT_ORGANISATION.id, organisationName:DEFAULT_ORGANISATION.name, id:"PK-10482", packUuid:"11111111-1111-4111-8111-111111111111", customer:"Acme Components Ltd", docs:4, status:"Needs review", confidence:91, received:"16 Sep 2026, 15:42", ticket:"TK-88421" },
+  { organisationId:DEFAULT_ORGANISATION.id, organisationName:DEFAULT_ORGANISATION.name, id:"PK-10481", packUuid:"22222222-2222-4222-8222-222222222222", customer:"Northstar Manufacturing", docs:7, status:"Processing", confidence:96, received:"16 Sep 2026, 15:38", ticket:"TK-88420" },
+  { organisationId:DEFAULT_ORGANISATION.id, organisationName:DEFAULT_ORGANISATION.name, id:"PK-10480", packUuid:"33333333-3333-4333-8333-333333333333", customer:"Bancale Trading", docs:3, status:"Validated", confidence:98, received:"16 Sep 2026, 15:31", ticket:"TK-88419" },
+  { organisationId:DEFAULT_ORGANISATION.id, organisationName:DEFAULT_ORGANISATION.name, id:"PK-10479", packUuid:"44444444-4444-4444-8444-444444444444", customer:"Raven Industrial", docs:5, status:"Needs review", confidence:88, received:"16 Sep 2026, 15:12", ticket:"TK-88418" }
 ];
 
 export const customerStrategies = {
@@ -19,6 +19,21 @@ export const customerStrategyStore = { ...customerStrategies };
 export const getCustomerStrategy = customer =>
   customerStrategyStore[customer] || { autoApplyWeightApportionment: false, emailFields: [] };
 
+// Older rows may not have received the pack_uuid migration yet. Derive a
+// stable UUID-shaped value from the legacy id so those rows never produce an
+// undefined route; migrated/new rows still use their stored UUID.
+export function ensurePackUuid(pack){
+  if(pack?.packUuid||pack?.pack_uuid)return pack.packUuid||pack.pack_uuid;
+  const seed=String(pack?.id||pack?.ticket||"pack");
+  let hash=2166136261;
+  for(const character of seed){hash^=character.charCodeAt(0);hash=Math.imul(hash,16777619);}
+  const hex=Array.from({length:8},(_,index)=>{
+    hash^=hash<<13; hash^=hash>>>17; hash^=hash<<5;
+    return (hash>>>0).toString(16).padStart(8,"0").slice(index%4,index%4+4);
+  }).join("").slice(0,32);
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-5${hex.slice(13,16)}-8${hex.slice(17,20)}-${hex.slice(20,32)}`;
+}
+
 export const customers = [
   {name:"Acme Components Ltd", code:"ACME-001", mailbox:"customs.acme@inbox.example", rules:12, processed:"2,481"},
   {name:"Northstar Manufacturing", code:"NSTM-014", mailbox:"customs.northstar@inbox.example", rules:8, processed:"1,972"},
@@ -26,8 +41,8 @@ export const customers = [
   {name:"Raven Industrial", code:"RAVN-021", mailbox:"customs.raven@inbox.example", rules:6, processed:"1,406"}
 ];
 
-export const DEFAULT_INBOX_COLUMN_KEYS=["pack","customer","owner","documents","status","received"];
-export const DEFAULT_INBOX_COLUMNS=[{key:"pack",label:"Pack"},{key:"customer",label:"Customer"},{key:"owner",label:"Owner"},{key:"documents",label:"Documents"},{key:"status",label:"Status"},{key:"invoiceNumber",label:"Invoice number"},{key:"export",label:"Export"},{key:"destination",label:"Destination"},{key:"invoiceValue",label:"Invoice value"},{key:"currency",label:"Currency"},{key:"deliveryTerm",label:"Delivery term"},{key:"received",label:"Received"},{key:"validation",label:"Validation"}];
+export const DEFAULT_INBOX_COLUMN_KEYS=["pack","packId","customer","owner","documents","status","received"];
+export const DEFAULT_INBOX_COLUMNS=[{key:"pack",label:"File name"},{key:"packId",label:"Pack ID"},{key:"customer",label:"Customer"},{key:"owner",label:"Owner"},{key:"documents",label:"Documents"},{key:"status",label:"Status"},{key:"invoiceNumber",label:"Invoice number"},{key:"export",label:"Export"},{key:"destination",label:"Destination"},{key:"invoiceValue",label:"Invoice value"},{key:"currency",label:"Currency"},{key:"deliveryTerm",label:"Delivery term"},{key:"received",label:"Received"},{key:"validation",label:"Validation"}];
 export function normaliseInboxColumnSelection(value){
   const available=new Set(DEFAULT_INBOX_COLUMNS.map(column=>column.key));
   if(Array.isArray(value)){
@@ -57,6 +72,7 @@ export function normaliseDatabasePack(row){
   }
   return {
     ...row,
+    packUuid:row?.pack_uuid||row?.packUuid,
     organisationId:row?.organisation_id||data?._tenant?.organisationId||DEFAULT_ORGANISATION.id,
     organisationName:data?._tenant?.organisationName||DEFAULT_ORGANISATION.name,
     assignedTo:row?.assigned_to||"Unassigned",

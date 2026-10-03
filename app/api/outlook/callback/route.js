@@ -1,4 +1,5 @@
 import handler from "../../../../src/server/api/outlook/callback.js";
+import { runLegacyHandler } from "../../../../src/server/nextLegacyAdapter.js";
 
 export const runtime = "nodejs";
 
@@ -11,27 +12,8 @@ function createLegacyRequest(request) {
   };
 }
 
-function createLegacyResponse() {
-  let statusCode = 200;
-  const headers = new Headers();
-
-  return {
-    status(code) {
-      statusCode = code;
-      return this;
-    },
-    setHeader(name, value) {
-      headers.set(name, String(value));
-      return this;
-    },
-    send(payload) {
-      return new Response(payload, { status: statusCode, headers });
-    }
-  };
-}
-
 export async function GET(request) {
-  return handler(createLegacyRequest(request), createLegacyResponse());
+  return runLegacyHandler(handler, createLegacyRequest(request));
 }
 
 export async function POST() {

@@ -12,7 +12,7 @@ import { NavItem, SpreadsheetPreview, Status } from "../SharedComponents.jsx";
 import { Dashboard, ManagerPage } from "./DashboardPages.jsx";
 import { InboxPage } from "./InboxPage.jsx";
 import { Customers } from "./CustomersPage.jsx";
-import { formatReceivedDateTime, getPackColumnValue, getPackCustomerLabel, reconcilePackDocuments } from "../../domain/packView.js";
+import { formatReceivedDateTime, getPackColumnValue, getPackCustomerLabel, getPackDisplayName, reconcilePackDocuments } from "../../domain/packView.js";
 
 
 
@@ -608,7 +608,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
 
  return <section className="review-chat-page">
 
-   <div className="review-head"><div><div className="eyebrow">{pack.customer||"Customs pack"}</div><h1>{pack.email?.subject||pack.title||pack.uploadedFiles?.[0]?.name||pack.id}</h1><p>{pack.docs} document{Number(pack.docs)===1?"":"s"} · Received {formatReceivedDateTime(pack.received)}</p></div></div>
+   <div className="review-head"><div><div className="eyebrow">{pack.customer||"Customs pack"}</div><h1>{getPackDisplayName(pack)}</h1><p>{pack.docs} document{Number(pack.docs)===1?"":"s"} · Received {formatReceivedDateTime(pack.received)}</p></div></div>
    <div className="chat-review-panel chat-review-full">
      <div className="chat-review-head"><div className="agent-title"><div className="agent-orb"><Sparkles size={18}/></div><div><b>Extraction Agent</b><span>Source-grounded document review</span></div></div><div className="review-source-actions"><button type="button" className="secondary" onClick={()=>setShowSummary(true)}><FileText size={14}/> Customs summary</button>{pack.email&&<button type="button" className="secondary review-show-email-btn" onClick={()=>setShowEmailSource(true)}><Mail size={14}/> Show email</button>}<button type="button" className="secondary" onClick={()=>{setSelectedDocumentId(selectedDocumentId||(documentRows[0]?.id||documentRows[0]?.name));setPreviewPage(1);setShowPreview(true);}}><FileText size={14}/> Show document</button><details className="review-audit-inline"><summary><ShieldCheck size={14}/> Audit trail</summary><div className="review-audit-inline-panel"><div className="review-audit-inline-head"><div><span className="summary-kicker">AUDIT TRAIL</span><b>Pack history</b></div><span>{history.length} event{history.length===1?"":"s"}</span></div><div className="pack-history-list">{history.length?history.map(x=><div className="pack-history-item" key={x.id}><div className="pack-history-dot"></div><div><b>{x.description}</b><span>{x.actor_name} · {x.actor_type} · {new Date(x.created_at).toLocaleString("en-GB")}</span></div></div>):<div className="pack-history-empty">No history recorded yet.</div>}</div></div></details></div></div>
      <div className="chat-review-intro">I read the complete document pack first. The conversation below is the review record: extracted values stay connected to their source, and discrepancies are surfaced rather than silently resolved.</div>

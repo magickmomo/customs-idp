@@ -4,10 +4,20 @@ import { PackTable } from "../SharedComponents.jsx";
 import { DEFAULT_INBOX_COLUMNS, DEFAULT_INBOX_COLUMN_KEYS, normaliseInboxColumnSelection } from "../../domain/packData.js";
 
 const INBOX_COLUMNS_STORAGE_KEY="customs-idp-inbox-columns";
+const INBOX_COLUMNS_STORAGE_VERSION=2;
 const columnStorageKey=userKey=>INBOX_COLUMNS_STORAGE_KEY+":"+(String(userKey||"default").trim()||"default");
 
 function loadInboxColumns(storageKey){
-  try{return normaliseInboxColumnSelection(JSON.parse(localStorage.getItem(storageKey)||"null"));}
+  try{
+    const saved=normaliseInboxColumnSelection(JSON.parse(localStorage.getItem(storageKey)||"null"));
+    const version=Number(localStorage.getItem(storageKey+":version")||1);
+    if(version<INBOX_COLUMNS_STORAGE_VERSION){
+      const migrated=[...saved];
+      if(migrated.includes("pack")&&!migrated.includes("packId"))migrated.splice(migrated.indexOf("pack")+1,0,"packId");
+      return migrated;
+    }
+    return saved;
+  }
   catch{return [...DEFAULT_INBOX_COLUMN_KEYS];}
 }
 
@@ -17,7 +27,7 @@ function InboxPage({packs,query,setQuery,openPack,title="Inbox",onAssign,onDelet
  const [columnMenuOpen,setColumnMenuOpen]=useState(false);
  const columnPickerRef=useRef(null);
 
- useEffect(()=>{try{localStorage.setItem(storageKey,JSON.stringify(columns));}catch{}},[columns,storageKey]);
+ useEffect(()=>{try{localStorage.setItem(storageKey,JSON.stringify(columns));localStorage.setItem(storageKey+":version",String(INBOX_COLUMNS_STORAGE_VERSION));}catch{}},[columns,storageKey]);
  useEffect(()=>{
    if(!columnMenuOpen)return undefined;
    const closeOnOutsideClick=event=>{if(!columnPickerRef.current?.contains(event.target))setColumnMenuOpen(false);};

@@ -1,4 +1,5 @@
 import handler from "../../../src/server/api/organisation.js";
+import { runLegacyHandler } from "../../../src/server/nextLegacyAdapter.js";
 
 export const runtime = "nodejs";
 
@@ -24,22 +25,8 @@ async function createLegacyRequest(request) {
   };
 }
 
-function createLegacyResponse() {
-  let statusCode = 200;
-
-  return {
-    status(code) {
-      statusCode = code;
-      return this;
-    },
-    json(payload) {
-      return Response.json(payload, { status: statusCode });
-    },
-  };
-}
-
 async function handle(request) {
-  return handler(await createLegacyRequest(request), createLegacyResponse());
+  return runLegacyHandler(handler, await createLegacyRequest(request));
 }
 
 export async function GET(request) {
