@@ -37,6 +37,11 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
  useEffect(()=>{let active=true;(async()=>{try{const r=await fetch("/api/history?packId="+encodeURIComponent(pack.id),{credentials:"include"}),d=await r.json();if(active&&r.ok)setHistory(Array.isArray(d.history)?d.history:[])}catch{}})();return()=>{active=false}},[pack.id,pack.status,pack.assignedTo,pack.validationStatus,pack.postedToLCAAt,pack.extractedData?.reviewOverrides?.length]);
 
  const [emailDraft,setEmailDraft]=useState(null);
+ const [showCreateCustomer,setShowCreateCustomer]=useState(false);
+ const [createCustomerForm,setCreateCustomerForm]=useState({name:""});
+ const [createCustomerError,setCreateCustomerError]=useState("");
+ const [creatingCustomer,setCreatingCustomer]=useState(false);
+ const [customerSetupDeclined,setCustomerSetupDeclined]=useState(false);
  const emailAuditStartedRef=useRef(null);
 
  useEffect(()=>{let active=true;(async()=>{const entries=await Promise.all((pack.uploadedFiles||[]).map(async f=>{try{if(f.storagePath){const response=await fetch("/api/storage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"signed-url",path:f.storagePath})});const data=await response.json();if(response.ok&&data.signedUrl)return [f.id,data.signedUrl];}const file=await getUploadedDocument(f.id);return file?[f.id,URL.createObjectURL(file)]:null;}catch{return null;}}));if(active)setDocUrls(Object.fromEntries(entries.filter(Boolean)));})();return()=>{active=false;};},[pack.id,pack.uploadedFiles]);
@@ -605,6 +610,55 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
  const summaryHeaderData=pack.workingRecord||{};
  const summaryFallbackData=pack.extractedData||{};
  const summaryInvoiceNumber=summaryHeaderData.invoiceNumber||summaryHeaderData.invoiceNo||summaryHeaderData.invoice||summaryFallbackData.invoiceNumber||summaryFallbackData.invoiceNo||summaryFallbackData.invoice||"—";
+ const customerIdentification=pack.customerIdentification||{};
+ const identificationAmbiguous=customerIdentification.ambiguous===true;
+ const identificationMatched=customerIdentification.matched===true;
+ const identificationStatus=identificationMatched?"Matched":identificationAmbiguous?"Confirmation required":"Unassigned";
+ const identificationCustomer=identificationMatched
+   ? customerIdentification.customerName||"Customer identified"
+   : identificationAmbiguous
+     ? "Customer identification requires confirmation"
+     : "No customer identified";
+ const identificationNote=identificationMatched
+   ? `Customer strategy selected: ${customerIdentification.customerName||"the matched customer"}`
+   : identificationAmbiguous
+     ? "More than one customer matched the extracted party information. Review the candidates before assigning the pack."
+     : "No active customer matched the extracted party information. The standard strategy is being used.";
+ const canCreateCustomer=!identificationMatched&&!identificationAmbiguous;
+ const suggestedCustomerName=customerIdentification.exporterName||customerIdentification.importerName||"this customer";
+ const openCreateCustomer=()=>{
+   setCreateCustomerForm({name:customerIdentification.exporterName||customerIdentification.importerName||""});
+   setCreateCustomerError("");
+   setShowCreateCustomer(true);
+ };
+ const createCustomer=async event=>{
+   event.preventDefault();
+   const name=createCustomerForm.name.trim();
+   if(!name){setCreateCustomerError("Customer name is required.");return;}
+   setCreatingCustomer(true);setCreateCustomerError("");
+   try{
+     const response=await fetch("/api/organisation",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});
+     const data=await response.json().catch(()=>({}));
+     if(!response.ok||!data.customer?.id)throw new Error(data.error||"Unable to create customer.");
+     const createdCustomerId=data.customer.id;
+     const createdIdentification={
+       ...customerIdentification,
+       matched:true,
+       ambiguous:false,
+       customerId:createdCustomerId,
+       customerName:data.customer.name||name,
+       method:"created",
+       matchedBy:customerIdentification.matchedBy||(customerIdentification.exporterName?"exporter":"importer")
+     };
+     const updatedPack={...pack,customer:data.customer.name||name,customerId:createdCustomerId,customerStrategyApplied:false,customerIdentification:createdIdentification};
+     updatePack?.(updatedPack);
+     const persisted=await persistPack?.(updatedPack);
+     if(persisted===false)throw new Error("Customer was created, but the pack association could not be saved.");
+     await recordHistory?.(updatedPack,"customer_created_and_associated",`Customer created and associated with pack: ${data.customer.name||name}`,null,{customerId:createdCustomerId,identificationSource:createdIdentification.matchedBy||null},null,"user",currentUserName||null);
+     setShowCreateCustomer(false);
+   }catch(error){setCreateCustomerError(error.message||"Unable to create customer.");}
+   finally{setCreatingCustomer(false);}
+ };
 
  return <section className="review-chat-page">
 
@@ -612,6 +666,22 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
    <div className="chat-review-panel chat-review-full">
      <div className="chat-review-head"><div className="agent-title"><div className="agent-orb"><Sparkles size={18}/></div><div><b>Extraction Agent</b><span>Source-grounded document review</span></div></div><div className="review-source-actions"><button type="button" className="secondary" onClick={()=>setShowSummary(true)}><FileText size={14}/> Customs summary</button>{pack.email&&<button type="button" className="secondary review-show-email-btn" onClick={()=>setShowEmailSource(true)}><Mail size={14}/> Show email</button>}<button type="button" className="secondary" onClick={()=>{setSelectedDocumentId(selectedDocumentId||(documentRows[0]?.id||documentRows[0]?.name));setPreviewPage(1);setShowPreview(true);}}><FileText size={14}/> Show document</button><details className="review-audit-inline"><summary><ShieldCheck size={14}/> Audit trail</summary><div className="review-audit-inline-panel"><div className="review-audit-inline-head"><div><span className="summary-kicker">AUDIT TRAIL</span><b>Pack history</b></div><span>{history.length} event{history.length===1?"":"s"}</span></div><div className="pack-history-list">{history.length?history.map(x=><div className="pack-history-item" key={x.id}><div className="pack-history-dot"></div><div><b>{x.description}</b><span>{x.actor_name} · {x.actor_type} · {new Date(x.created_at).toLocaleString("en-GB")}</span></div></div>):<div className="pack-history-empty">No history recorded yet.</div>}</div></div></details></div></div>
      <div className="chat-review-intro">I read the complete document pack first. The conversation below is the review record: extracted values stay connected to their source, and discrepancies are surfaced rather than silently resolved.</div>
+     <div className="agent-customer-context">
+       <div className="agent-customer-context-head">
+         <div><span className="summary-kicker">CUSTOMER</span><strong>{identificationCustomer}</strong></div>
+         <span className="summary-status">{identificationStatus}</span>
+       </div>
+       <div className="agent-customer-context-details">
+         {customerIdentification.exporterName&&<div className="agent-customer-context-detail"><span>Exporter</span><b>{customerIdentification.exporterName}</b></div>}
+         {customerIdentification.importerName&&<div className="agent-customer-context-detail"><span>Importer</span><b>{customerIdentification.importerName}</b></div>}
+         <div className="agent-customer-context-detail"><span>Method</span><b>{customerIdentification.method==="manual"?"Manual selection":"Automatic identification"}</b></div>
+         {customerIdentification.matchedBy&&<div className="agent-customer-context-detail"><span>Matched by</span><b>{customerIdentification.matchedBy}</b></div>}
+       </div>
+       <div className="customer-identification-note">{identificationNote}</div>
+       {Array.isArray(customerIdentification.candidates)&&customerIdentification.candidates.length>0&&<div className="customer-identification-candidates"><b>Possible customers</b>{customerIdentification.candidates.map((candidate,index)=><div key={candidate.id||index}><span>{candidate.name}</span><small>{candidate.matchedBy}</small></div>)}</div>}
+     </div>
+   {canCreateCustomer&&!customerSetupDeclined&&<div className="chat-message-row agent customer-not-found-prompt"><div className="chat-message-avatar"><Sparkles size={15}/></div><div className="chat-message-content"><div className="chat-message-text"><strong>Customer not found</strong><br/>I couldn't find an existing customer matching {suggestedCustomerName}. Would you like to set this customer up?</div><div className="customer-not-found-actions"><button type="button" className="primary" onClick={openCreateCustomer}><Plus size={14}/> Set up customer</button><button type="button" className="secondary" onClick={async()=>{setCustomerSetupDeclined(true);await recordHistory?.(pack,"customer_setup_declined","Customer setup declined — pack remains unassigned.",null,null,{customerId:null,identificationSource:customerIdentification.matchedBy||null},"user",currentUserName||null);}}>Keep unassigned</button></div></div></div>}
+   {showCreateCustomer&&<div className="modal-backdrop" onMouseDown={()=>{if(!creatingCustomer)setShowCreateCustomer(false);}}><div className="modal-card customer-create-modal" onMouseDown={event=>event.stopPropagation()}><div className="modal-head"><div><div className="eyebrow">Customer identification</div><h2>Create customer</h2><p>Create and associate a customer with this pack.</p></div><button type="button" className="row-btn" onClick={()=>setShowCreateCustomer(false)} disabled={creatingCustomer}><X size={18}/></button></div><form onSubmit={createCustomer}><label className="field"><span>Customer name <strong>*</strong></span><input value={createCustomerForm.name} onChange={event=>setCreateCustomerForm(current=>({...current,name:event.target.value}))} disabled={creatingCustomer}/></label>{createCustomerError&&<div className="password-login-error">{createCustomerError}</div>}<div className="modal-actions"><button type="button" className="secondary" onClick={()=>setShowCreateCustomer(false)} disabled={creatingCustomer}>Cancel</button><button type="submit" className="primary" disabled={creatingCustomer}>{creatingCustomer?"Creating…":"Create customer"}</button></div></form></div></div>}
 
      {pack.processingError&&<div className="reprocess-error-banner"><div><b>Re-processing failed</b><span>{pack.processingError}</span></div><button type="button" className="secondary" onClick={()=>reprocessPack?.(pack)}>Try again</button></div>}
      <div ref={chatHistoryRef} className="chat-history chat-review-history">{messages.map(renderMessage)}</div>

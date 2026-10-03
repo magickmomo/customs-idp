@@ -37,16 +37,121 @@ const fetchStorageBlob = async (path, filename) => {
 
 const DEFAULT_CUSTOMER_STRATEGY={instructions:"",requiredFields:[],weightHandling:"ask_user"};
 
-const resolveCustomerContext=async customerName=>{
-  const name=String(customerName||"").trim();
-  if(!name||name==="Unassigned customer")return {customerId:null,customerName:null,strategy:DEFAULT_CUSTOMER_STRATEGY,matched:false};
-  const response=await fetch("/api/organisation?action=customers",{credentials:"include"});
-  const data=await response.json().catch(()=>({}));
-  if(!response.ok)throw new Error(data.error||"Unable to load customer strategy.");
-  const customers=Array.isArray(data.customers)?data.customers:[];
-  const match=customers.find(customer=>String(customer.name||"").trim().toLowerCase()===name.toLowerCase()&&String(customer.status||"active").toLowerCase()==="active");
-  if(!match)return {customerId:null,customerName:name,strategy:DEFAULT_CUSTOMER_STRATEGY,matched:false};
-  return {customerId:match.id,customerName:match.name,strategy:{...DEFAULT_CUSTOMER_STRATEGY,...(match.strategy||{})},matched:true};
+const normaliseCustomerName = value =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\\s+/g, " ");
+
+const loadCustomers = async () => {
+  const response = await fetch("/api/organisation?action=customers", {
+    credentials: "include"
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.error || "Unable to load customers.");
+  }
+
+  return Array.isArray(data.customers) ? data.customers : [];
+};
+
+const buildCustomerContext = (customers, customerId) => {
+  if (!customerId || customerId === "Auto-detect customer") {
+    return {
+      customerId: null,
+      customerName: null,
+      strategy: DEFAULT_CUSTOMER_STRATEGY,
+      matched: false
+    };
+  }
+
+  const customer = customers.find(item =>
+    String(item.id) === String(customerId) &&
+    String(item.status || "active").toLowerCase() === "active"
+  );
+
+  if (!customer) {
+    return {
+      customerId: null,
+      customerName: null,
+      strategy: DEFAULT_CUSTOMER_STRATEGY,
+      matched: false
+    };
+  }
+
+  return {
+    customerId: customer.id,
+    customerName: customer.name,
+    strategy: {
+      ...DEFAULT_CUSTOMER_STRATEGY,
+      ...(customer.strategy || {})
+    },
+    matched: true,
+    matchedBy: "manual"
+  };
+};
+
+const resolveExtractedCustomer = (customers, exporterName, importerName) => {
+  const exporter = normaliseCustomerName(exporterName);
+  const importer = normaliseCustomerName(importerName);
+
+  const activeCustomers = customers.filter(customer =>
+    String(customer.status || "active").toLowerCase() === "active"
+  );
+
+  const exporterMatch = exporter
+    ? activeCustomers.find(customer => normaliseCustomerName(customer.name) === exporter)
+    : null;
+
+  const importerMatch = importer
+    ? activeCustomers.find(customer => normaliseCustomerName(customer.name) === importer)
+    : null;
+
+  if (
+    exporterMatch &&
+    importerMatch &&
+    String(exporterMatch.id) !== String(importerMatch.id)
+  ) {
+    return {
+      customerId: null,
+      customerName: null,
+      strategy: DEFAULT_CUSTOMER_STRATEGY,
+      matched: false,
+      ambiguous: true,
+      candidates: [
+        { id: exporterMatch.id, name: exporterMatch.name, matchedBy: "exporter" },
+        { id: importerMatch.id, name: importerMatch.name, matchedBy: "importer" }
+      ]
+    };
+  }
+
+  const match = exporterMatch || importerMatch;
+
+  if (!match) {
+    return {
+      customerId: null,
+      customerName: null,
+      strategy: DEFAULT_CUSTOMER_STRATEGY,
+      matched: false,
+      ambiguous: false,
+      candidates: []
+    };
+  }
+
+  return {
+    customerId: match.id,
+    customerName: match.name,
+    strategy: {
+      ...DEFAULT_CUSTOMER_STRATEGY,
+      ...(match.strategy || {})
+    },
+    matched: true,
+    matchedBy: exporterMatch ? "exporter" : "importer",
+    ambiguous: false,
+    candidates: []
+  };
 };
 
 const extractDocument = async (source, uploaded, customerStrategy=DEFAULT_CUSTOMER_STRATEGY) => {
@@ -112,7 +217,7 @@ export function usePackActions({
   recordHistory
 }) {
   const [pendingUploadFiles, setPendingUploadFiles] = useState([]);
-  const [uploadCustomer, setUploadCustomer] = useState("Unassigned customer");
+  const [uploadCustomer,setUploadCustomer] = useState("Auto-detect customer");
   const [showUploadConfirm, setShowUploadConfirm] = useState(false);
 
   const buildValidatedPack = pack => {
@@ -250,8 +355,9 @@ export function usePackActions({
           throw new Error("Uploaded document is unavailable: " + uploaded.name);
         }
 
-        const customerContext=await resolveCustomerContext(pack.customer||"");
-        extractedDocuments.push(await extractDocument(source, uploaded, customerContext.strategy));
+        extractedDocuments.push(
+          await extractDocument(source, uploaded, DEFAULT_CUSTOMER_STRATEGY)
+        );
       }
 
       const processed = {
@@ -351,22 +457,43 @@ export function usePackActions({
       return;
     }
 
-    let customerContext;
-    try{
-      customerContext=await resolveCustomerContext(uploadCustomer);
-    }catch(error){
-      notify("Customer strategy lookup failed: "+error.message);
-      return;
+    const manuallySelectedCustomer =
+      uploadCustomer && uploadCustomer !== "Auto-detect customer"
+        ? uploadCustomer
+        : null;
+
+    let uploadCustomerContext = {
+      customerId: null,
+      customerName: null,
+      strategy: DEFAULT_CUSTOMER_STRATEGY,
+      matched: false
+    };
+
+    if (manuallySelectedCustomer) {
+      const customers = await loadCustomers();
+      const selected = customers.find(customer =>
+        String(customer.name || "") === String(manuallySelectedCustomer) &&
+        String(customer.status || "active").toLowerCase() === "active"
+      );
+
+      if (!selected) {
+        notify("Selected customer could not be found");
+        return;
+      }
+
+      uploadCustomerContext = buildCustomerContext(customers, selected.id);
     }
-    const strategy=customerContext.strategy;
-    const strategyApplied=customerContext.matched;
+
+    const strategy = uploadCustomerContext.strategy;
+    const strategyApplied = uploadCustomerContext.matched;
+
     const newPack = {
       organisationId: DEFAULT_ORGANISATION.id,
       organisationName: DEFAULT_ORGANISATION.name,
       id,
       packUuid: crypto.randomUUID(),
-      customer: customerContext.customerName||null,
-      customerId: customerContext.customerId,
+      customer: uploadCustomerContext.customerName,
+      customerId: uploadCustomerContext.customerId,
       docs: selected.length,
       status: "Processing",
       confidence: 0,
@@ -389,15 +516,15 @@ export function usePackActions({
       null,
       {
         documents: selected.map(file => file.name),
-        customer: customerContext.customerName||null,
-        customerId: customerContext.customerId,
+        customer: uploadCustomerContext.customerName,
+        customerId: uploadCustomerContext.customerId,
         strategyApplied
       }
     );
 
     setPendingUploadFiles([]);
     setShowUploadConfirm(false);
-    setUploadCustomer("Unassigned customer");
+    setUploadCustomer("Auto-detect customer");
     navigate("inbox");
     notify("Document pack confirmed — AI extraction started");
 
@@ -412,15 +539,88 @@ export function usePackActions({
         }
         if (!source) throw new Error("Document " + uploaded.name + " is unavailable");
 
-        extractedDocuments.push(await extractDocument(source, uploaded));
+        extractedDocuments.push(await extractDocument(source, uploaded, strategy));
       }
 
       const processed = buildExtractedPack(newPack, extractedDocuments);
-      let completed = buildValidatedPack(processed);
+
+      const extractedExporter =
+        processed.extractedData?.exporter ||
+        processed.extractedData?.exporterName ||
+        "";
+
+      const extractedImporter =
+        processed.extractedData?.consignee ||
+        processed.extractedData?.importer ||
+        processed.extractedData?.importerName ||
+        "";
+
+      let customerContext;
+
+      if (uploadCustomerContext.matched) {
+        customerContext = {
+          ...uploadCustomerContext,
+          matchedBy: "manual",
+          ambiguous: false,
+          candidates: []
+        };
+      } else {
+        const customers = await loadCustomers();
+        customerContext = resolveExtractedCustomer(
+          customers,
+          extractedExporter,
+          extractedImporter
+        );
+      }
+
+      const identifiedPack = {
+        ...processed,
+        customer: customerContext.customerName,
+        customerId: customerContext.customerId,
+        customerStrategyApplied: customerContext.matched,
+        customerIdentification: {
+          exporterName: extractedExporter || null,
+          importerName: extractedImporter || null,
+          matched: customerContext.matched,
+          matchedBy: customerContext.matchedBy || null,
+          ambiguous: customerContext.ambiguous || false,
+          candidates: customerContext.candidates || [],
+          customerId: customerContext.customerId,
+          customerName: customerContext.customerName,
+          method: uploadCustomerContext.matched ? "manual" : "automatic"
+        }
+      };
+
+      let completed = buildValidatedPack(identifiedPack);
       completed = await runAutomatedEmailAudit(completed);
 
       setLivePacks(previous => previous.map(pack => pack.id === id ? completed : pack));
       await persistPack(completed);
+      await recordHistory(
+        completed,
+        "customer_identified",
+        customerContext.ambiguous
+          ? "Customer identification requires confirmation"
+          : customerContext.matched
+            ? `Customer identified: ${customerContext.customerName}`
+            : "No customer identified — standard strategy used",
+        null,
+        {
+          method: uploadCustomerContext.matched ? "manual" : "automatic",
+          matchedBy: customerContext.matchedBy || null,
+          customerId: customerContext.customerId,
+          customerName: customerContext.customerName,
+          exporterName: extractedExporter || null,
+          importerName: extractedImporter || null,
+          matched: customerContext.matched,
+          ambiguous: customerContext.ambiguous || false,
+          candidates: customerContext.candidates || []
+        },
+        null,
+        "system",
+        "Customs IDP System"
+      );
+
       await recordHistory(
         completed,
         "extracted",
@@ -436,9 +636,9 @@ export function usePackActions({
         await recordHistory(
           completed,
           "strategy_applied",
-          `Applied customer strategy for ${uploadCustomer}`,
+          `Applied customer strategy for ${customerContext.customerName}`,
           null,
-          { customer: uploadCustomer },
+          { customer: customerContext.customerName, customerId: customerContext.customerId, matchedBy: customerContext.matchedBy || null },
           null,
           "system",
           "Customs IDP System"
@@ -556,9 +756,9 @@ export function usePackActions({
 
   return {
     pendingUploadFiles,
-    setPendingUploadFiles,
     uploadCustomer,
     setUploadCustomer,
+    setPendingUploadFiles,
     showUploadConfirm,
     setShowUploadConfirm,
     handleUpload,

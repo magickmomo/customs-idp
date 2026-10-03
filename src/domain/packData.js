@@ -63,12 +63,14 @@ export function normaliseDatabasePack(row){
   const data=row?.extracted_data||null;
   const meta=data?._manager||{};
   const validation=data?._validation||{};
+  const customerIdentification=row?.customerIdentification||data?.customerIdentification||null;
   const rest=data?{...data}:null;
   if(rest){
     delete rest._manager;
     delete rest._validation;
     delete rest._workingRecord;
     delete rest._tenant;
+    delete rest.customerIdentification;
   }
   return {
     ...row,
@@ -77,6 +79,7 @@ export function normaliseDatabasePack(row){
     organisationName:data?._tenant?.organisationName||DEFAULT_ORGANISATION.name,
     assignedTo:row?.assigned_to||"Unassigned",
     extractedData:rest&&Object.keys(rest).length?rest:undefined,
+    customerIdentification,
     workingRecord:data?._workingRecord,
     email:data?.email||null,
     validationStatus:validation.validationStatus||undefined,

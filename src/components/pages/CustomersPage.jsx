@@ -115,9 +115,11 @@ function Customers({notify}){
       });
     }catch(e){
       setError(e.message||"Unable to load customers.");
+      return false;
     }finally{
       setLoading(false);
     }
+    return true;
   };
 
   useEffect(()=>{
@@ -156,8 +158,8 @@ function Customers({notify}){
     setSaved(false);
   };
 
-  const closeSetup=()=>{
-    if(saving)return;
+  const closeSetup=(allowWhileSaving=false)=>{
+    if(saving&&!allowWhileSaving)return;
 
     setSelectedCustomer(null);
     setSetupError("");
@@ -216,9 +218,9 @@ function Customers({notify}){
 
       const createdCustomer={
         ...(data.customer||{}),
-        strategy:data.strategy?.config||cloneStrategy(),
-        strategyVersion:data.strategy?.version||1,
-        strategyStatus:data.strategy?.status||"active",
+        strategy:data.strategy?.config||{},
+        strategyVersion:data.strategy?.version||null,
+        strategyStatus:data.strategy?.status||null,
         teamId:data.customer?.teamId||createForm.teamId||null
       };
 
@@ -282,16 +284,13 @@ function Customers({notify}){
         updatedCustomer.strategy
       );
 
-      setCustomerRows(rows=>
-        rows.map(row=>
-          row.id===updatedCustomer.id
-            ? {...row,...updatedCustomer}
-            : row
-        )
-      );
+      const refreshed=await loadCustomers();
+      if(!refreshed)throw new Error("Customer strategy saved, but the customer list could not be refreshed.");
 
       setSaved(true);
-      notify(`${updatedCustomer.name} setup saved`);
+      notify(`${updatedCustomer.name} strategy saved`);
+      setSaving(false);
+      closeSetup(true);
     }catch(e){
       setSetupError(
         e.message||"Unable to save customer setup."
@@ -362,7 +361,6 @@ function Customers({notify}){
       teams={teams}
       customerId={selectedCustomer.id}
       strategyVersion={selectedCustomer.strategyVersion}
-      onApplyStrategy={nextStrategy=>saveSetup(nextStrategy)}
     />;
   }
 
@@ -455,8 +453,9 @@ function Customers({notify}){
               <div>
                 <Settings size={15}/>
                 <span>
-                  {customer.rules} strategy rules · v
-                  {customer.strategyVersion||1}
+                  {customer.strategyStatus==="active"&&customer.strategyVersion
+                    ?`1 strategy · v${customer.strategyVersion}`
+                    :"No strategy configured"}
                 </span>
               </div>
 
@@ -628,8 +627,7 @@ function CustomerSetup({
   updateStrategyItem,
   teams,
   customerId,
-  strategyVersion,
-  onApplyStrategy
+  strategyVersion
 }){
   return <section className="customer-setup">
     <div className="customer-setup-header">
@@ -670,7 +668,7 @@ function CustomerSetup({
         <button
           className="primary"
           type="button"
-          onClick={onSave}
+          onClick={()=>onSave()}
           disabled={saving}
         >
           <Save size={16}/>
@@ -718,7 +716,6 @@ function CustomerSetup({
             setStrategy={setStrategy}
             customerId={customerId}
             strategyVersion={strategyVersion}
-            onApplyStrategy={onApplyStrategy}
             addStrategyItem={addStrategyItem}
             removeStrategyItem={removeStrategyItem}
             updateStrategyItem={updateStrategyItem}
@@ -857,27 +854,29 @@ function DetailsSection({form,setForm,teams}){
   </div>;
 }
 
-function StrategyReadableCard({title,strategy}){
+function StrategyReadableCard({title="Strategy summary",strategy}){
   const requiredFields=Array.isArray(strategy?.requiredFields)?strategy.requiredFields:[];
   const instructions=String(strategy?.instructions||"").trim();
-  const weightHandling={
-    ask_user:"Ask the user",
-    invoice:"Prefer invoice",
-    packing_list:"Prefer packing list"
-  }[strategy?.weightHandling||"ask_user"]||"Ask the user";
 
   return (
-    <div className="strategy-v1-card">
+    <div className="strategy-v1-card strategy-summary-card">
       <div className="strategy-v1-card-head">
         <div>
           <strong>{title}</strong>
-          <span>Summary of the strategy that will be used for this customer.</span>
+          <span>What the system will apply when processing this customer's documents.</span>
         </div>
       </div>
-      <div className="strategy-v1-list">
-        <div><strong>Processing instructions</strong><span>{instructions||"No customer-specific instructions configured."}</span></div>
-        <div><strong>Required information</strong><span>{requiredFields.length?requiredFields.join(", "):"No additional required information configured."}</span></div>
-        <div><strong>Weight handling</strong><span>{weightHandling}</span></div>
+
+      <div className="strategy-summary-items">
+        <div>
+          <strong>Processing</strong>
+          <span>{instructions||"Standard processing rules will be used for this customer."}</span>
+        </div>
+
+        <div>
+          <strong>Required information</strong>
+          <span>{requiredFields.length?requiredFields.join(", "):"No additional customer-specific information required."}</span>
+        </div>
       </div>
     </div>
   );
@@ -889,7 +888,6 @@ function StrategySection({
   setStrategy,
   customerId,
   strategyVersion,
-  onApplyStrategy,
   addStrategyItem,
   removeStrategyItem,
   updateStrategyItem
@@ -944,13 +942,12 @@ function StrategySection({
     if(historyRef.current)historyRef.current.scrollTop=historyRef.current.scrollHeight;
   },[messages,activeProposal]);
 
-  const applyProposal=async()=>{
+  const applyProposal=()=>{
     if(!activeProposal)return;
     const next=activeProposal.resultingStrategy;
     setStrategy(next);
     setActiveProposal(null);
-    await onApplyStrategy(next);
-    setMessages(current=>[...current,{type:"agent",text:"Strategy updated. The active strategy has been saved."}]);
+    setMessages(current=>[...current,{type:"agent",text:"Strategy changes applied. Review them and click Save changes when you're ready."}]);
   };
 
   const requiredFields=Array.isArray(strategy.requiredFields)?strategy.requiredFields:[];
@@ -1002,31 +999,12 @@ function StrategySection({
           </div>
         </div>
 
-        <div className="strategy-v1-card">
-          <div className="strategy-v1-card-head">
-            <div>
-              <strong>Weight handling</strong>
-              <span>Choose what should happen when invoice and packing-list weights differ.</span>
-            </div>
-          </div>
-          <div className="strategy-v1-weight-options">
-            {[
-              ["ask_user","Ask the user","Surface the discrepancy for a decision."],
-              ["invoice","Prefer invoice","Use invoice weights when both sources are available."],
-              ["packing_list","Prefer packing list","Use packing-list weights when both sources are available."]
-            ].map(([value,label,description])=>
-              <label className={"strategy-v1-weight-option"+(strategy.weightHandling===value?" active":"")} key={value}>
-                <input type="radio" name="weightHandling" value={value} checked={(strategy.weightHandling||"ask_user")===value} onChange={()=>setStrategy(current=>({...current,weightHandling:value}))}/>
-                <span><strong>{label}</strong><small>{description}</small></span>
-              </label>
-            )}
-          </div>
-        </div>
-
-        <StrategyReadableCard title="Active customer strategy" strategy={strategy}/>
       </div>
 
-      <aside className="strategy-v1-agent">
+      <div className="strategy-v1-bottom">
+        <StrategyReadableCard title="Strategy summary" strategy={strategy}/>
+
+        <aside className="strategy-v1-agent">
         <div className="strategy-v1-agent-head">
           <div className="agent-title">
             <div className="agent-orb"><Sparkles size={18}/></div>
@@ -1071,7 +1049,8 @@ function StrategySection({
           <button type="button" onClick={askAgent} disabled={asking||!prompt.trim()} aria-label="Send strategy request"><ArrowRight size={16}/></button>
         </div>
         {agentError&&<div className="strategy-agent-message">{agentError}</div>}
-      </aside>
+        </aside>
+      </div>
     </div>
   </div>;
 }
@@ -1196,11 +1175,12 @@ function PlaceholderSection({
 
 function countStrategyRules(strategy){
   if(!strategy||typeof strategy!=="object")return 0;
-  let count=0;
-  if(String(strategy.instructions||"").trim())count+=1;
-  if(Array.isArray(strategy.requiredFields))count+=strategy.requiredFields.filter(Boolean).length;
-  if(["invoice","packing_list"].includes(strategy.weightHandling))count+=1;
-  return count;
+
+  const hasInstructions=String(strategy.instructions||"").trim().length>0;
+  const hasRequiredFields=Array.isArray(strategy.requiredFields)
+    && strategy.requiredFields.some(Boolean);
+
+  return hasInstructions||hasRequiredFields?1:0;
 }
 
 export { Customers };

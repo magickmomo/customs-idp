@@ -128,15 +128,10 @@ async function createCustomer(req,res,auth){
     const body=parseBody(req);
 
     const name=String(body.name||"").trim();
-    const code=String(body.code||"").trim();
     const teamId=String(body.teamId||"").trim()||null;
 
     if(!name){
       return res.status(400).json({error:"Customer name is required."});
-    }
-
-    if(!code){
-      return res.status(400).json({error:"Customer code is required."});
     }
 
     const organisationId=auth.organisationId;
@@ -153,10 +148,24 @@ async function createCustomer(req,res,auth){
       });
     }
 
-    if(existing.some(customer=>normalise(customer.code)===normalise(code))){
-      return res.status(409).json({
-        error:"A customer with this code already exists."
-      });
+    const baseCode=name
+      .replace(/&/g," and ")
+      .replace(/[^a-zA-Z0-9]+/g," ")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .filter(word=>!["ltd","limited","llp","plc","inc","incorporated","corp","corporation","gmbh","co","company"].includes(word.toLowerCase()))
+      .join("-")
+      .toUpperCase()
+      .slice(0,40) || "CUSTOMER";
+
+    let code=baseCode;
+    let suffix=2;
+
+    while(existing.some(customer=>normalise(customer.code)===normalise(code))){
+      const suffixText=`-${suffix}`;
+      code=`${baseCode.slice(0,40-suffixText.length)}${suffixText}`;
+      suffix+=1;
     }
 
     if(teamId){
@@ -194,39 +203,6 @@ async function createCustomer(req,res,auth){
       throw new Error("Customer was created but no customer ID was returned.");
     }
 
-    const defaultConfig=createDefaultStrategy();
-
-    try{
-      await supabaseFetch(
-        "customer_strategies",
-        {
-          method:"POST",
-          headers:{
-            Prefer:"return=representation"
-          },
-          body:JSON.stringify({
-            organisation_id:organisationId,
-            customer_id:customer.id,
-            version:1,
-            status:"active",
-            config:defaultConfig
-          })
-        }
-      );
-    }catch(strategyError){
-      try{
-        await supabaseFetch(
-          `customers?id=eq.${encodeURIComponent(customer.id)}&organisation_id=eq.${encodeURIComponent(organisationId)}`,
-          {method:"DELETE"}
-        );
-      }catch{}
-
-      throw new Error(
-        strategyError?.message||
-        "Unable to create the default customer strategy."
-      );
-    }
-
     return res.status(201).json({
       customer:{
         id:customer.id,
@@ -235,11 +211,7 @@ async function createCustomer(req,res,auth){
         status:customer.status,
         teamId:customer.team_id||null
       },
-      strategy:{
-        version:1,
-        status:"active",
-        config:defaultConfig
-      }
+      strategy:null
     });
   }catch(error){
     const message=error?.message||"Unable to create customer.";

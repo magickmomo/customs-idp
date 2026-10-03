@@ -39,6 +39,8 @@ function App({children}){
   const currentUserInitials=currentUser?.initials||"";
   const canViewManager=currentUserRole==="manager" || currentUserRole==="admin";
   const [toast,setToast]=useState("");
+  const [uploadCustomer,setUploadCustomer]=useState("Auto-detect customer");
+  const [uploadCustomers,setUploadCustomers]=useState([]);
   const { livePacks, setLivePacks, dataSource, packsLoading, packLoadError, setPackLoadError, emailSyncStatus, persistPack } = usePackWorkspace({ authenticated });
   const uploadRef=useRef(null);
   const packUuid=packUuidFromPath(pathname);
@@ -48,13 +50,22 @@ function App({children}){
   const navigate=(target)=>{const routes={inbox:"/inbox",manager:"/manager",customers:"/customers",agent:"/agent",settings:"/settings"};router.push(routes[target]||"/inbox");setMobileMenuOpen(false);};
   const openPack=pack=>{if(!pack)return;if(pack.status==="Processing"){notify("This pack is still processing. It will become available when extraction completes.");return;}router.push(packRoute(ensurePackUuid(pack)));setMobileMenuOpen(false);};
   const notify=(msg)=>{setToast(msg);setTimeout(()=>setToast(""),2500)};
+
+  const loadUploadCustomers=async()=>{
+    try{
+      const response=await fetch("/api/organisation?action=customers",{credentials:"include"});
+      const data=await response.json().catch(()=>({}));
+      if(response.ok&&Array.isArray(data.customers)){
+        setUploadCustomers(data.customers);
+      }
+    }catch{}
+  };
+
   const recordHistory=async(pack,action,description,beforeData=null,afterData=null,metadata=null,actorType="user",actorName=null)=>{if(!pack?.id)return;try{await fetch("/api/history",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({packId:pack.id,action,description,beforeData,afterData,metadata,actorType,actorName})});}catch{}};
 
   const {
     pendingUploadFiles,
     setPendingUploadFiles,
-    uploadCustomer,
-    setUploadCustomer,
     showUploadConfirm,
     setShowUploadConfirm,
     handleUpload,
@@ -76,6 +87,14 @@ function App({children}){
     notify,
     recordHistory
   });
+
+
+
+  React.useEffect(()=>{
+    if(showUploadConfirm){
+      loadUploadCustomers();
+    }
+  },[showUploadConfirm]);
 
   if(passwordSetup)return <SupabasePasswordSetup onComplete={user=>{setPasswordSetup(false);setCurrentUser(user);setAuthenticated(true);router.push("/inbox");}}/>;
   if(authenticated===null)return <div className="test-login"><div className="test-login-card"><div className="test-login-brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><div className="test-login-copy"><div className="eyebrow">Secure access</div><h1>Checking access…</h1><p>Please wait.</p></div></div></div>;
@@ -119,7 +138,16 @@ function App({children}){
     </main>
 
     {agentOpen && routePage!=="agent" && !isReview && <button className="agent-fab" onClick={()=>navigate("agent")}><Sparkles size={18}/> AI Agent</button>}
-    {showUploadConfirm&&<UploadConfirmModal files={pendingUploadFiles} setFiles={setPendingUploadFiles} customer={uploadCustomer} setCustomer={setUploadCustomer} customers={Object.keys(customerStrategyStore)} getStrategy={getCustomerStrategy} onAddFiles={handleUpload} onCancel={()=>{setPendingUploadFiles([]);setShowUploadConfirm(false)}} onConfirm={confirmUpload}/>}    {toast && <div className="toast"><CheckCircle2 size={17}/>{toast}</div>}
+    {showUploadConfirm&&<UploadConfirmModal
+      files={pendingUploadFiles}
+      setFiles={setPendingUploadFiles}
+      customer={uploadCustomer}
+      setCustomer={setUploadCustomer}
+      customers={uploadCustomers}
+      onAddFiles={handleUpload}
+      onCancel={()=>{setPendingUploadFiles([]);setShowUploadConfirm(false)}}
+      onConfirm={confirmUpload}
+    />}    {toast && <div className="toast"><CheckCircle2 size={17}/>{toast}</div>}
   </div></WorkspaceContext.Provider>
 }
 

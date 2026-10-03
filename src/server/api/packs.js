@@ -34,6 +34,7 @@ export default async function handler(req,res){
       }
 
       const extractedData=pack.extractedData?{...pack.extractedData}:{};
+      extractedData.customerIdentification=pack.customerIdentification||extractedData.customerIdentification||null;
       extractedData._tenant={
         organisationId:organisation.id,
         organisationName:organisation.name
@@ -136,6 +137,7 @@ function normalizePack(row){
   const meta=data?._manager||{};
   const validation=data?._validation||{};
   const workingRecord=data?._workingRecord;
+  const customerIdentification=row.customerIdentification||data?.customerIdentification||null;
   const email=data?.email||null;
   const tenant=data?._tenant||{};
   let extractedData=data;
@@ -146,6 +148,7 @@ function normalizePack(row){
     delete rest._validation;
     delete rest._workingRecord;
     delete rest._tenant;
+    delete rest.customerIdentification;
     extractedData=Object.keys(rest).length?rest:undefined;
   }
 
@@ -156,6 +159,7 @@ function normalizePack(row){
     organisationName:organisationName(row.organisation_id,tenant.organisationName),
     assignedTo:row.assigned_to||"Unassigned",
     extractedData,
+    customerIdentification,
     workingRecord,
     email,
     validationStatus:validation.validationStatus||undefined,
