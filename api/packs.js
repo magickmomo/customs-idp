@@ -59,7 +59,8 @@ export default async function handler(req,res){
       const row={
         id:pack.id,
         organisation_id:organisation.id,
-        customer:pack.customer||"Unassigned customer",
+        customer:pack.customer||null,
+        customer_id:pack.customerId||pack.customer_id||null,
         docs:Number(pack.docs)||0,
         status:pack.status||"Processing",
         confidence:Number(pack.confidence)||0,

@@ -223,7 +223,7 @@ export function usePackActions({
       postedToLCAAt: undefined
     };
 
-    setSelectedPack(null);
+    setSelectedPack(processing);
     setLivePacks(previous => previous.map(item => item.id === pack.id ? processing : item));
     await persistPack(processing);
     navigate("inbox");

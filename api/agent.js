@@ -20,8 +20,10 @@ export default async function handler(req,res){
         target:null
       });
     }
+    const strategyRequest=pack?.type==="customer_strategy";
     const context={
       packId:pack.id,customer:pack.customer,ticket:pack.ticket,
+      customerId:pack.customerId||null,
       extractedData:pack.extractedData||{},
       workingRecord:pack.workingRecord||pack.extractedData?._workingRecord||null,
       uploadedFiles:pack.uploadedFiles||[],
@@ -49,6 +51,7 @@ export default async function handler(req,res){
       "If the user explicitly instructs you to change a field to a specific value, treat that as a direct correction instruction. The new value does NOT need to already exist in the supplied documents. Return an update_field action targeting the existing matching field. Record the user instruction as the reason; sourceDocumentId/sourcePage may be null when the new value comes from the user rather than a document.",
       "For a correction, action must be update_field and target must identify a top-level primary extraction field or a line field. For line-level corrections, use grossMassKg for gross weight and netMassKg for net weight. If the user names a line number, use the zero-based lineIndex for that line. For a top-level gross-weight correction, use totalGrossWeight. Keep the old value and explain that the new value came from the user's instruction when applicable.",
       "Do not apply customer-specific rules unless they are present in the supplied context.",
+      strategyRequest?"This is a CUSTOMER STRATEGY request. Explain the current strategy or interpret the user's requested strategy change. Return action strategy_proposal only when you can identify a concrete, unambiguous change. Return strategyProposal with a changes array and a complete resultingStrategy object using only the existing strategy keys: requiredFields, extractionRules, validationRules, fieldRules, customValidations, emailFields, autoApplyWeightApportionment. Never modify the strategy in storage. If clarification is needed, return action strategy_clarification and strategyProposal null.":"",
       "For document-level total weights with missing line-level weights, ask the user whether they want the configured apportionment method applied unless the supplied customer strategy explicitly enables automatic weight apportionment.",
       "If the recent conversation shows that you already asked the user to approve weight apportionment and the user responds with a clear approval such as \"yes\", \"yes apply\", \"apply it\", or \"do it\", return action approve_weight_apportionment. Also return approve_weight_apportionment when the user directly instructs you to apportion the document-level weights using the configured method. Do not require the user to repeat the method if it has already been established in the conversation. The configured method is: allocate total net weight by line value, then allocate total gross weight by the resulting net-weight ratio, with final values rounded to a maximum of 3 decimal places while preserving the document totals.",
       "Return concise, operational answers.",
@@ -59,7 +62,7 @@ export default async function handler(req,res){
       type:"object",additionalProperties:false,
       properties:{
         reply:{type:"string"},
-        action:{type:"string",enum:["none","update_field","approve_weight_apportionment","suggest_field_updates"]},
+        action:{type:"string",enum:["none","update_field","approve_weight_apportionment","suggest_field_updates","strategy_proposal","strategy_clarification"]},
         suggestions:{type:"array",items:{type:"object",additionalProperties:false,properties:{
           scope:{type:"string",enum:["line","primary"]},
           field:{type:"string"},
@@ -70,6 +73,18 @@ export default async function handler(req,res){
           sourceLabel:{type:"string"},
           reason:{type:"string"}
         },required:["scope","field","lineIndex","value","sourceDocumentId","sourcePage","sourceLabel","reason"]}},
+        strategyProposal:{type:["object","null"],additionalProperties:false,properties:{
+          changes:{type:"array",items:{type:"object",additionalProperties:false,properties:{before:{type:"string"},after:{type:"string"}},required:["before","after"]}},
+          resultingStrategy:{type:["object","null"],additionalProperties:false,properties:{
+            requiredFields:{type:"array",items:{type:"string"}},
+            extractionRules:{type:"array",items:{type:"string"}},
+            validationRules:{type:"array",items:{type:"string"}},
+            fieldRules:{type:"array",items:{type:"string"}},
+            customValidations:{type:"array",items:{type:"string"}},
+            emailFields:{type:"array",items:{type:"string"}},
+            autoApplyWeightApportionment:{type:"boolean"}
+          },required:["requiredFields","extractionRules","validationRules","fieldRules","customValidations","emailFields","autoApplyWeightApportionment"]}
+        },required:["changes","resultingStrategy"]},
         target:{type:["object","null"],additionalProperties:false,properties:{
           scope:{type:"string",enum:["primary","line"]},
           field:{type:"string"},
@@ -79,7 +94,7 @@ export default async function handler(req,res){
           sourcePage:{type:["integer","null"]}
         },required:["scope","field","lineIndex","value","sourceDocumentId","sourcePage"]}
       },
-      required:["reply","action","target","suggestions"]
+      required:["reply","action","target","suggestions","strategyProposal"]
     };
     const controller=new AbortController();
     const timeout=setTimeout(()=>controller.abort(),30000);
