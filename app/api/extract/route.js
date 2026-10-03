@@ -1,4 +1,4 @@
-import handler from "../../../api/extract.js";
+import handler from "../../../src/server/api/extract.js";
 
 export const runtime = "nodejs";
 
