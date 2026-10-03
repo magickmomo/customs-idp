@@ -21,7 +21,7 @@ function loadInboxColumns(storageKey){
   catch{return [...DEFAULT_INBOX_COLUMN_KEYS];}
 }
 
-function InboxPage({packs,query,setQuery,openPack,title="Inbox",onAssign,onDelete,emailSyncStatus,packLoadError,currentUserKey}){
+function InboxPage({packs,query,setQuery,openPack,title="Inbox",onAssign,onDelete,emailSyncStatus,packLoadError,packsLoading,currentUserKey}){
  const storageKey=columnStorageKey(currentUserKey);
  const [columns,setColumns]=useState(()=>loadInboxColumns(storageKey));
  const [columnMenuOpen,setColumnMenuOpen]=useState(false);
@@ -47,7 +47,15 @@ function InboxPage({packs,query,setQuery,openPack,title="Inbox",onAssign,onDelet
  <div className={"email-sync-debug "+(emailSyncStatus?.state==="error"?"error":"")}><strong>Outlook intake</strong><span>{emailSyncStatus?.state==="error" ? ("Recovery scan error: "+emailSyncStatus.error) : emailSyncStatus?.message || (emailSyncStatus?.state==="syncing" ? "Running secondary recovery scan…" : emailSyncStatus?.state==="ready" ? (emailSyncStatus.checked+" matching · "+emailSyncStatus.processed+" processed · "+emailSyncStatus.duplicates+" duplicate · "+emailSyncStatus.failed+" failed") : "Webhook intake active")}</span></div>
  {packLoadError&&<div className="email-sync-debug error"><strong>Inbox database</strong><span>{packLoadError}</span></div>}
  <div className="toolbar"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search packs, customers or tickets..."/></div><button className="filter">Status <ChevronDown size={15}/></button><button className="filter">Customer <ChevronDown size={15}/></button><div className="column-picker" ref={columnPickerRef}><button className="filter" type="button" aria-expanded={columnMenuOpen} onClick={()=>setColumnMenuOpen(open=>!open)}><SlidersHorizontal size={15}/> Columns <ChevronDown size={15}/></button>{columnMenuOpen&&<div className="column-menu"><div className="column-menu-head"><b>Inbox columns</b><button type="button" className="text-btn" onClick={resetColumns}>Reset</button></div><p>Choose which columns appear in the inbox.</p>{DEFAULT_INBOX_COLUMNS.map(column=>{const selected=columns.includes(column.key),lastSelected=selected&&columns.length===1;return <label key={column.key} className={"column-menu-item "+(lastSelected?"disabled":"")}><input type="checkbox" checked={selected} disabled={lastSelected} onChange={()=>toggleColumn(column.key)}/><span>{column.label}</span>{selected&&<Check size={15}/>}</label>})}</div>}</div></div>
- <div className="panel"><PackTable packs={packs} onOpen={openPack} onAssign={onAssign} onDelete={onDelete} columns={columns}/></div></section>
+ <div className="panel">
+   {packsLoading
+     ? <div className="inbox-data-state"><strong>Loading inbox…</strong><span>Fetching live document packs.</span></div>
+     : packLoadError
+       ? <div className="inbox-data-state error"><strong>Unable to load inbox</strong><span>The live inbox data could not be loaded. Please refresh and try again.</span></div>
+       : packs.length===0
+         ? <div className="inbox-data-state"><strong>No document packs</strong><span>There are currently no document packs in the inbox.</span></div>
+         : <PackTable packs={packs} onOpen={openPack} onAssign={onAssign} onDelete={onDelete} columns={columns}/>}
+ </div></section>
 }
 
 export { InboxPage };
