@@ -1,4 +1,4 @@
-import handler from "../../../../../src/server/api/outlook/callback.js";
+import handler from "../../../../src/server/api/outlook/callback.js";
 
 export const runtime = "nodejs";
 
