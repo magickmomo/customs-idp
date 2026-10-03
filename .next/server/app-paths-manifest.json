@@ -1,7 +1,0 @@
-{
-  "/api/organisation/route": "app/api/organisation/route.js",
-  "/api/packs/route": "app/api/packs/route.js",
-  "/api/agent/route": "app/api/agent/route.js",
-  "/api/auth/route": "app/api/auth/route.js",
-  "/page": "app/page.js"
-}

@@ -5,3 +5,8 @@ dist/
 !.env.example
 .vercel/
 .DS_Store
+
+.next/
+
+supabase/.temp/
+supabase/.branches/
