@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase.js";
-import { customerStrategyStore, normaliseDatabasePack, packs } from "../domain/packData.js";
+import { customerStrategyStore, normaliseDatabasePack } from "../domain/packData.js";
 
 export function usePackWorkspace({ authenticated }) {
 const localPacksRef=useRef([]);
