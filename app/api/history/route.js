@@ -1,4 +1,4 @@
-import handler from "../../../api/history.js";
+import handler from "../../../src/server/api/history.js";
 
 export const runtime = "nodejs";
 
