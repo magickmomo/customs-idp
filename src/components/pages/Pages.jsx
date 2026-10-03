@@ -25,16 +25,17 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
  const [selectedDocumentId,setSelectedDocumentId]=useState(null);
  const [previewPage,setPreviewPage]=useState(1);
  const [showPreview,setShowPreview]=useState(false);
- const previousMessageCountRef=useRef(0);
+ const autoScrollChatRef=useRef(false);
  useEffect(()=>{
    const el=chatHistoryRef.current;
-   if(!el)return;
-   if(previousMessageCountRef.current===0){
-     previousMessageCountRef.current=messages.length;
-     return;
-   }
-   previousMessageCountRef.current=messages.length;
-   const frame=requestAnimationFrame(()=>{el.scrollTop=el.scrollHeight;});
+   if(!el||!autoScrollChatRef.current)return;
+   const frame=requestAnimationFrame(()=>{
+     el.scrollTop=el.scrollHeight;
+     const lastMessage=messages[messages.length-1];
+     if(lastMessage?.type==="agent"&&lastMessage?.text&&lastMessage.text!=="I'm checking the uploaded documents and their source evidence..."){
+       autoScrollChatRef.current=false;
+     }
+   });
    return()=>cancelAnimationFrame(frame);
  },[messages]);
  const [showSummary,setShowSummary]=useState(false);
@@ -356,6 +357,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
  };
  const sendChat=async()=>{
    const q=chat.trim();if(!q||isSending)return;
+   autoScrollChatRef.current=true;
    const userMessage={type:"user",text:q,persist:true};
    const thinking={type:"agent",text:"I'm checking the uploaded documents and their source evidence...",persist:false};
    const conversationBefore=[...messages,userMessage];
