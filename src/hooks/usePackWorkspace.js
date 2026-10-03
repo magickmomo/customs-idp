@@ -1,12 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase.js";
 import { customerStrategyStore, normaliseDatabasePack, packs } from "../domain/packData.js";
 
 export function usePackWorkspace({ authenticated }) {
-const [livePacks,setLivePacks]=useState(()=>{
-    try { const saved=typeof window!=="undefined"?localStorage.getItem("customs-idp-packs"):null; return saved ? JSON.parse(saved) : packs; }
-    catch { return packs; }
-  });
+const localPacksRef=useRef([]);
+  try{
+    if(typeof window!=="undefined"){
+      const saved=localStorage.getItem("customs-idp-packs");
+      localPacksRef.current=saved?JSON.parse(saved):[];
+    }
+  }catch{
+    localPacksRef.current=[];
+  }
+  const [livePacks,setLivePacks]=useState([]);
+
   const [dataSource,setDataSource]=useState("local");
   const [packsLoading,setPacksLoading]=useState(false);
   const [packLoadError,setPackLoadError]=useState("");
@@ -91,7 +98,7 @@ const [livePacks,setLivePacks]=useState(()=>{
         if(active && Array.isArray(data) && data.length){
           // Keep browser-stored document metadata when older database rows pre-date
           // persistent uploadedFiles support, and prefer database metadata once present.
-          const localPackMap=new Map((livePacks||[]).map(pack=>[pack.id,pack]));
+          const localPackMap=new Map((localPacksRef.current||[]).map(pack=>[pack.id,pack]));
           const nextPacks=data.map(pack=>{
             const local=localPackMap.get(pack.id);
             return pack.uploadedFiles?.length ? pack : (local?.uploadedFiles?.length ? {...pack,uploadedFiles:local.uploadedFiles} : pack);
@@ -136,7 +143,7 @@ const [livePacks,setLivePacks]=useState(()=>{
     return()=>{active=false;if(channel)supabase.removeChannel(channel);};
   },[authenticated]);
 
-  useEffect(()=>{ try { localStorage.setItem("customs-idp-packs",JSON.stringify(livePacks)); } catch {} },[livePacks]);
+  useEffect(()=>{ if(dataSource!=="database")return; try { localStorage.setItem("customs-idp-packs",JSON.stringify(livePacks)); } catch {} },[livePacks,dataSource]);
   const persistPack=async(pack)=>{
     const save=async()=>{
       const response=await fetch("/api/packs",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify(pack)});
