@@ -1,4 +1,4 @@
-import handler from "../../../api/email-ingest.js";
+import handler from "../../../src/server/api/email-ingest.js";
 
 export const runtime = "nodejs";
 
