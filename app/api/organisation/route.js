@@ -1,4 +1,4 @@
-import handler from "../../../api/organisation.js";
+import handler from "../../../src/server/api/organisation.js";
 
 export const runtime = "nodejs";
 
