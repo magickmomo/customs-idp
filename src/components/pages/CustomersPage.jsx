@@ -26,10 +26,12 @@ const SETUP_SECTIONS=[
 ];
 
 const DEFAULT_STRATEGY={
+  instructions:"",
+  requiredFields:[],
+  weightHandling:"ask_user",
   emailFields:[],
   validationRules:[],
   extractionRules:[],
-  requiredFields:[],
   fieldRules:[],
   customValidations:[],
   autoApplyWeightApportionment:false
@@ -39,6 +41,8 @@ function cloneStrategy(strategy){
   return {
     ...DEFAULT_STRATEGY,
     ...(strategy||{}),
+    instructions:typeof strategy?.instructions==="string"?strategy.instructions:"",
+    weightHandling:["ask_user","invoice","packing_list"].includes(strategy?.weightHandling)?strategy.weightHandling:"ask_user",
     emailFields:Array.isArray(strategy?.emailFields)?[...strategy.emailFields]:[],
     validationRules:Array.isArray(strategy?.validationRules)?[...strategy.validationRules]:[],
     extractionRules:Array.isArray(strategy?.extractionRules)?[...strategy.extractionRules]:[],
@@ -709,12 +713,12 @@ function CustomerSetup({
 
         {section==="strategy"&&
           <StrategySection
+            customer={customer}
             strategy={strategy}
             setStrategy={setStrategy}
             customerId={customerId}
             strategyVersion={strategyVersion}
             onApplyStrategy={onApplyStrategy}
-            updateStrategyArray={updateStrategyArray}
             addStrategyItem={addStrategyItem}
             removeStrategyItem={removeStrategyItem}
             updateStrategyItem={updateStrategyItem}
@@ -854,11 +858,15 @@ function DetailsSection({form,setForm,teams}){
 }
 
 function StrategySection({
+  customer,
   strategy,
   setStrategy,
   customerId,
   strategyVersion,
-  onApplyStrategy
+  onApplyStrategy,
+  addStrategyItem,
+  removeStrategyItem,
+  updateStrategyItem
 }){
   const [prompt,setPrompt]=useState("");
   const [messages,setMessages]=useState([]);
@@ -875,23 +883,35 @@ function StrategySection({
     const conversation=[...messages,userMessage];
     setAsking(true);setAgentError("");setActiveProposal(null);setMessages(conversation);setPrompt("");
     try{
-      const response=await fetch("/api/agent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-        message:question,
-        pack:{type:"customer_strategy",id:customerId,customerId,customer:"Customer",customerStrategy:strategy,conversation:conversation.slice(-12)}
-      })});
+      const response=await fetch("/api/agent",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          message:question,
+          pack:{
+            type:"customer_strategy",
+            id:customerId,
+            customerId,
+            customer:customer?.name||"Customer",
+            customerContext:customer||null,
+            customerStrategy:strategy,
+            conversation:conversation.slice(-12)
+          }
+        })
+      });
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(data.error||"Unable to ask the Agent.");
       if(data.action!=="strategy_proposal"||!data.strategyProposal?.resultingStrategy){
         setMessages(current=>[...current,{type:"agent",text:data.reply||"The Agent needs more detail before it can propose a strategy change."}]);
       }else{
         setActiveProposal(data.strategyProposal);
-        setMessages(current=>[...current,{type:"agent",text:data.reply||`I've identified ${data.strategyProposal.changes.length} strategy change${data.strategyProposal.changes.length===1?"":"s"}.`,proposal:data.strategyProposal}]);
+        setMessages(current=>[...current,{type:"agent",text:data.reply||"I've prepared a strategy change for your review.",proposal:data.strategyProposal}]);
       }
     }catch(error){
       const text=error.message||"Unable to ask the Agent.";
-      setAgentError(text);setMessages(current=>[...current,{type:"agent",text:"I couldn't reach the strategy Agent. "+text}]);
-    }
-    finally{setAsking(false);}
+      setAgentError(text);
+      setMessages(current=>[...current,{type:"agent",text:"I couldn't reach the strategy Agent. "+text}]);
+    }finally{setAsking(false);}
   };
 
   useEffect(()=>{
@@ -907,42 +927,127 @@ function StrategySection({
     setMessages(current=>[...current,{type:"agent",text:"Strategy updated. The active strategy has been saved."}]);
   };
 
+  const requiredFields=Array.isArray(strategy.requiredFields)?strategy.requiredFields:[];
+
   return <div className="setup-section">
     <div className="setup-section-head">
       <div>
         <div className="eyebrow">Customer processing</div>
         <h2>Customer Strategy</h2>
-        <p>Tell the Agent how this customer should be processed.</p>
+        <p>Keep V1 simple: tell the system what matters for this customer and how to handle weight differences.</p>
       </div>
-
-      <span className="strategy-version">
-        {version>0?`Strategy v${version}`:"No strategy configured"}
-      </span>
+      <span className="strategy-version">{version>0?"Strategy v"+version:"No strategy configured"}</span>
     </div>
 
-    <div className="strategy-agent-chat chat-review-panel">
-      <div className="chat-review-head"><div className="agent-title"><div className="agent-orb"><Sparkles size={18}/></div><div><b>Strategy Agent</b><span>Customer processing strategy assistant</span></div></div></div>
-      <div ref={historyRef} className="chat-review-history strategy-chat-history">
-        {!messages.length&&<div className="strategy-chat-welcome"><Sparkles size={22}/><strong>Ask the Agent about this customer strategy</strong><span>Describe a processing preference or ask for a strategy change.</span></div>}
-        {messages.map((message,index)=><div className={`chat-message-row ${message.type}`} key={index}><div className="chat-message-avatar">{message.type==="user"?"You":<Sparkles size={15}/>}</div><div className="chat-message-content"><div className="chat-message-text">{message.text}</div>{message.proposal&&activeProposal===message.proposal&&<div className="strategy-chat-proposal"><div className="strategy-change-list">{message.proposal.changes.map((change,changeIndex)=><div key={changeIndex}><Check size={16}/><span>{change.after}</span></div>)}</div><p>Would you like me to apply this strategy?</p><div className="strategy-proposal-actions"><button className="secondary" type="button" onClick={()=>setActiveProposal(null)}>Cancel</button><button className="primary" type="button" onClick={applyProposal}>Apply strategy</button></div></div>}</div></div>)}
-        {asking&&<div className="chat-message-row agent"><div className="chat-message-avatar"><Sparkles size={15}/></div><div className="chat-message-content"><div className="chat-message-text">I'm thinking through the customer's processing strategy…</div></div></div>}
+    <div className="strategy-v1-grid">
+      <div className="strategy-v1-main">
+        <div className="strategy-v1-card">
+          <div className="strategy-v1-card-head">
+            <div>
+              <strong>Customer processing instructions</strong>
+              <span>These instructions are added to the customer prompt sent to the document extraction workflow.</span>
+            </div>
+          </div>
+          <textarea
+            className="strategy-v1-textarea"
+            value={strategy.instructions||""}
+            onChange={event=>setStrategy(current=>({...current,instructions:event.target.value}))}
+            placeholder="Example: This customer normally provides weights on the packing list. Use those weights when the invoice does not contain weights."
+            rows={7}
+          />
+        </div>
+
+        <div className="strategy-v1-card">
+          <div className="strategy-v1-card-head">
+            <div>
+              <strong>Required information</strong>
+              <span>Fields the customer normally needs to provide. Missing values are handled by the standard validation workflow.</span>
+            </div>
+            <button className="secondary" type="button" onClick={()=>addStrategyItem("requiredFields")}><Plus size={14}/> Add field</button>
+          </div>
+          <div className="strategy-v1-list">
+            {!requiredFields.length&&<div className="strategy-v1-empty">No customer-specific required fields yet.</div>}
+            {requiredFields.map((value,index)=>
+              <div className="strategy-v1-list-row" key={index}>
+                <input value={typeof value==="string"?value:""} onChange={event=>updateStrategyItem("requiredFields",index,event.target.value)} placeholder="e.g. invoiceNumber"/>
+                <button className="row-btn" type="button" title="Remove field" onClick={()=>removeStrategyItem("requiredFields",index)}><Trash2 size={15}/></button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="strategy-v1-card">
+          <div className="strategy-v1-card-head">
+            <div>
+              <strong>Weight handling</strong>
+              <span>Choose what should happen when invoice and packing-list weights differ.</span>
+            </div>
+          </div>
+          <div className="strategy-v1-weight-options">
+            {[
+              ["ask_user","Ask the user","Surface the discrepancy for a decision."],
+              ["invoice","Prefer invoice","Use invoice weights when both sources are available."],
+              ["packing_list","Prefer packing list","Use packing-list weights when both sources are available."]
+            ].map(([value,label,description])=>
+              <label className={"strategy-v1-weight-option"+(strategy.weightHandling===value?" active":"")} key={value}>
+                <input type="radio" name="weightHandling" value={value} checked={(strategy.weightHandling||"ask_user")===value} onChange={()=>setStrategy(current=>({...current,weightHandling:value}))}/>
+                <span><strong>{label}</strong><small>{description}</small></span>
+              </label>
+            )}
+          </div>
+        </div>
+
+        <StrategyReadableCard title="Active customer strategy" strategy={strategy}/>
       </div>
-      <div className="chat-input strategy-chat-input"><input value={prompt} onChange={event=>setPrompt(event.target.value)} onKeyDown={event=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();askAgent();}}} placeholder="Ask for follow-up changes…"/><button type="button" onClick={askAgent} disabled={asking||!prompt.trim()} aria-label="Send strategy request"><ArrowRight size={16}/></button></div>
+
+      <aside className="strategy-v1-agent">
+        <div className="strategy-v1-agent-head">
+          <div className="agent-title">
+            <div className="agent-orb"><Sparkles size={18}/></div>
+            <div><b>Customer Agent</b><span>{customer?.name||"Customer"} context</span></div>
+          </div>
+        </div>
+        <div className="strategy-v1-agent-context">
+          <div><span>Customer</span><strong>{customer?.name||"—"}</strong></div>
+          <div><span>Code</span><strong>{customer?.code||"—"}</strong></div>
+          <div><span>Team</span><strong>{customer?.teamName||"No team assigned"}</strong></div>
+          <div><span>Mailbox</span><strong>{customer?.mailbox||"No mailbox assigned"}</strong></div>
+          <div><span>Documents processed</span><strong>{Number(customer?.processed||0).toLocaleString()}</strong></div>
+        </div>
+
+        <div ref={historyRef} className="strategy-v1-agent-history">
+          {!messages.length&&<div className="strategy-chat-welcome"><Sparkles size={22}/><strong>Ask about this customer</strong><span>The Agent can see the customer profile and current strategy.</span></div>}
+          {messages.map((message,index)=>
+            <div className={"chat-message-row "+message.type} key={index}>
+              <div className="chat-message-avatar">{message.type==="user"?"You":<Sparkles size={15}/>}</div>
+              <div className="chat-message-content">
+                <div className="chat-message-text">{message.text}</div>
+                {message.proposal&&activeProposal===message.proposal&&
+                  <div className="strategy-chat-proposal">
+                    <div className="strategy-change-list">
+                      {message.proposal.changes.map((change,changeIndex)=><div key={changeIndex}><Check size={16}/><span>{change.after}</span></div>)}
+                    </div>
+                    <p>Would you like me to apply this strategy?</p>
+                    <div className="strategy-proposal-actions">
+                      <button className="secondary" type="button" onClick={()=>setActiveProposal(null)}>Cancel</button>
+                      <button className="primary" type="button" onClick={applyProposal}>Apply strategy</button>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          )}
+          {asking&&<div className="chat-message-row agent"><div className="chat-message-avatar"><Sparkles size={15}/></div><div className="chat-message-content"><div className="chat-message-text">I'm thinking through this customer's strategy…</div></div></div>}
+        </div>
+
+        <div className="chat-input strategy-chat-input">
+          <input value={prompt} onChange={event=>setPrompt(event.target.value)} onKeyDown={event=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();askAgent();}}} placeholder="Ask the Agent to change the strategy…"/>
+          <button type="button" onClick={askAgent} disabled={asking||!prompt.trim()} aria-label="Send strategy request"><ArrowRight size={16}/></button>
+        </div>
+        {agentError&&<div className="strategy-agent-message">{agentError}</div>}
+      </aside>
     </div>
-    <StrategyReadableCard title="Current strategy" strategy={strategy}/>
-    {agentError&&<div className="strategy-agent-message">{agentError}</div>}
   </div>;
-}
-
-function StrategyReadableCard({title,strategy}){
-  const statements=[];
-  const labels={requiredFields:"Required field",extractionRules:"Extraction rule",validationRules:"Validation rule",fieldRules:"Field rule",customValidations:"Custom validation",emailFields:"Email field"};
-  Object.entries(labels).forEach(([key,label])=>(Array.isArray(strategy[key])?strategy[key]:[]).forEach(value=>{
-    const readable=typeof value==="string"?value.trim():value&&typeof value==="object"?Object.values(value).filter(item=>typeof item==="string"&&item.trim()).join(" — "):"";
-    if(readable)statements.push(`${label}: ${readable}`);
-  }));
-  statements.push(strategy.autoApplyWeightApportionment?"Automatic weight apportionment enabled":"Automatic weight apportionment disabled");
-  return <div className="strategy-readable-card"><div className="strategy-card-label">{title}</div>{statements.length?statements.map((statement,index)=><div className="strategy-readable-row" key={index}><Check size={15}/><span>{statement}</span></div>):<div className="strategy-readable-empty">No strategy configured yet.</div>}</div>;
 }
 
 function StrategyRuleGroup({
@@ -1065,29 +1170,11 @@ function PlaceholderSection({
 
 function countStrategyRules(strategy){
   if(!strategy||typeof strategy!=="object")return 0;
-
-  const keys=[
-    "emailFields",
-    "validationRules",
-    "extractionRules",
-    "requiredFields",
-    "fieldRules",
-    "customValidations"
-  ];
-
-  return keys.reduce((count,key)=>{
-    const value=strategy[key];
-
-    if(Array.isArray(value)){
-      return count+value.length;
-    }
-
-    if(value&&typeof value==="object"){
-      return count+Object.keys(value).length;
-    }
-
-    return count;
-  },0);
+  let count=0;
+  if(String(strategy.instructions||"").trim())count+=1;
+  if(Array.isArray(strategy.requiredFields))count+=strategy.requiredFields.filter(Boolean).length;
+  if(["invoice","packing_list"].includes(strategy.weightHandling))count+=1;
+  return count;
 }
 
 export { Customers };

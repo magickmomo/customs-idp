@@ -8,16 +8,16 @@ export const packs = [
 ];
 
 export const customerStrategies = {
-  "Acme Components Ltd": { autoApplyWeightApportionment: false, emailFields: [] },
-  "Northstar Manufacturing": { autoApplyWeightApportionment: false, emailFields: [] },
-  "Bancale Trading": { autoApplyWeightApportionment: false, emailFields: [] },
-  "Raven Industrial": { autoApplyWeightApportionment: false, emailFields: [] }
+  "Acme Components Ltd": { instructions:"", requiredFields:[], weightHandling:"ask_user", autoApplyWeightApportionment:false, emailFields:[] },
+  "Northstar Manufacturing": { instructions:"", requiredFields:[], weightHandling:"ask_user", autoApplyWeightApportionment:false, emailFields:[] },
+  "Bancale Trading": { instructions:"", requiredFields:[], weightHandling:"ask_user", autoApplyWeightApportionment:false, emailFields:[] },
+  "Raven Industrial": { instructions:"", requiredFields:[], weightHandling:"ask_user", autoApplyWeightApportionment:false, emailFields:[] }
 };
 
 export const customerStrategyStore = { ...customerStrategies };
 
 export const getCustomerStrategy = customer =>
-  customerStrategyStore[customer] || { autoApplyWeightApportionment: false, emailFields: [] };
+  customerStrategyStore[customer] || { instructions:"", requiredFields:[], weightHandling:"ask_user", autoApplyWeightApportionment:false, emailFields:[] };
 
 // Older rows may not have received the pack_uuid migration yet. Derive a
 // stable UUID-shaped value from the legacy id so those rows never produce an

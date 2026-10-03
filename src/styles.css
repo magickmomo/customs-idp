@@ -2594,3 +2594,32 @@ body {
 
 .strategy-agent-chat{margin-bottom:16px}.strategy-chat-history{min-height:280px;height:min(52vh,480px);max-height:480px}.strategy-chat-welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:220px;text-align:center;color:#8a95a5}.strategy-chat-welcome svg{color:#2563eb;background:#eaf1ff;padding:10px;width:42px;height:42px;border-radius:12px;margin-bottom:4px}.strategy-chat-welcome strong{font-size:12px;color:#4a5870}.strategy-chat-welcome span{font-size:10px}.strategy-chat-proposal{margin-top:10px;padding:12px 13px;background:#f7fbff;border:1px solid #bfd6f6;border-radius:10px}.strategy-chat-proposal .strategy-change-list{margin:0;border-top:0}.strategy-chat-proposal .strategy-change-list>div{padding:8px 0;border-bottom:1px solid #dce8f8}.strategy-chat-proposal p{margin:11px 0;color:#526177;font-size:10px}.strategy-chat-proposal .strategy-proposal-actions{justify-content:flex-start}.strategy-chat-input{margin:0 16px 16px}.strategy-chat-input button:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:600px){.strategy-chat-history{height:360px;min-height:260px}.strategy-chat-input{margin:0 12px 12px}.strategy-chat-proposal .strategy-proposal-actions{flex-direction:row}.strategy-chat-proposal .strategy-proposal-actions button{width:auto}}
+
+.strategy-v1-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(320px,.8fr);gap:16px;align-items:start}
+.strategy-v1-main{min-width:0}
+.strategy-v1-card{background:#fff;border:1px solid #e1e7ef;border-radius:13px;box-shadow:0 3px 12px rgba(20,35,60,.035);padding:20px;margin-bottom:14px}
+.strategy-v1-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}
+.strategy-v1-card-head strong{display:block;color:#263147;font-size:13px;margin-bottom:4px}
+.strategy-v1-card-head span{display:block;color:#7b8798;font-size:10px;line-height:1.5;max-width:680px}
+.strategy-v1-textarea{display:block;width:100%;min-height:150px;resize:vertical;border:1px solid #cbd9ed;background:#fff;border-radius:9px;padding:12px;color:#334057;font:inherit;font-size:12px;line-height:1.55;outline:0;box-sizing:border-box}
+.strategy-v1-textarea:focus{border-color:#6d9eea;box-shadow:0 0 0 3px #2563eb14}
+.strategy-v1-list{display:flex;flex-direction:column;gap:8px}
+.strategy-v1-list-row{display:flex;align-items:center;gap:8px}
+.strategy-v1-list-row input{flex:1;min-width:0;height:36px;border:1px solid #dce3ed;border-radius:8px;padding:0 10px;color:#334057;background:#fff;font:inherit;font-size:11px;outline:0}
+.strategy-v1-list-row input:focus{border-color:#6d9eea;box-shadow:0 0 0 3px #2563eb14}
+.strategy-v1-empty{padding:13px;border:1px dashed #d9e0ea;border-radius:9px;color:#8993a3;font-size:10px}
+.strategy-v1-weight-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.strategy-v1-weight-option{display:flex;gap:9px;align-items:flex-start;padding:12px;border:1px solid #e1e7ef;border-radius:9px;background:#fff;cursor:pointer}
+.strategy-v1-weight-option.active{border-color:#9fc1f3;background:#f7fbff}
+.strategy-v1-weight-option input{margin-top:2px;accent-color:#2563eb}
+.strategy-v1-weight-option strong{display:block;color:#334057;font-size:11px;margin-bottom:3px}
+.strategy-v1-weight-option small{display:block;color:#7b8798;font-size:9px;line-height:1.4}
+.strategy-v1-agent{position:sticky;top:16px;min-width:0;background:#fff;border:1px solid #dce5f2;border-radius:13px;box-shadow:0 8px 24px rgba(20,35,60,.055);overflow:hidden}
+.strategy-v1-agent-head{padding:15px 16px;border-bottom:1px solid #edf1f5}
+.strategy-v1-agent-context{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:13px 16px;background:#f8fbff;border-bottom:1px solid #edf1f5}
+.strategy-v1-agent-context div{min-width:0}
+.strategy-v1-agent-context span{display:block;color:#8791a2;font-size:8px;text-transform:uppercase;letter-spacing:.06em;font-weight:800;margin-bottom:3px}
+.strategy-v1-agent-context strong{display:block;color:#334057;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.strategy-v1-agent-history{height:min(48vh,430px);min-height:300px;overflow:auto;padding:14px 15px;background:#fbfcfe}
+@media(max-width:1050px){.strategy-v1-grid{grid-template-columns:1fr}.strategy-v1-agent{position:static}.strategy-v1-weight-options{grid-template-columns:1fr}}
+@media(max-width:600px){.strategy-v1-card{padding:15px}.strategy-v1-agent-context{grid-template-columns:1fr}.strategy-v1-weight-options{grid-template-columns:1fr}.strategy-v1-agent-history{height:360px}}

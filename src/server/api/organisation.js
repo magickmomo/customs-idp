@@ -435,10 +435,12 @@ async function updateCustomer(req,res,auth){
 
 function createDefaultStrategy(){
   return {
+    instructions:"",
+    requiredFields:[],
+    weightHandling:"ask_user",
     emailFields:[],
     validationRules:[],
     extractionRules:[],
-    requiredFields:[],
     fieldRules:[],
     customValidations:[],
     autoApplyWeightApportionment:false
@@ -452,6 +454,8 @@ function normaliseStrategyConfig(value){
   return {
     ...defaultConfig,
     ...config,
+    instructions:typeof config.instructions==="string"?config.instructions:"",
+    weightHandling:["ask_user","invoice","packing_list"].includes(config.weightHandling)?config.weightHandling:"ask_user",
     emailFields:Array.isArray(config.emailFields)?config.emailFields:[],
     validationRules:Array.isArray(config.validationRules)?config.validationRules:[],
     extractionRules:Array.isArray(config.extractionRules)?config.extractionRules:[],
@@ -477,20 +481,13 @@ function parseBody(req){
 function countStrategyRules(config){
   if(!config||typeof config!=="object")return 0;
 
-  const ruleKeys=[
-    "emailFields",
-    "validationRules",
-    "extractionRules",
-    "requiredFields",
-    "fieldRules",
-    "customValidations"
-  ];
+  const ruleKeys=["instructions","requiredFields","weightHandling"];
 
   return ruleKeys.reduce((count,key)=>{
     const value=config[key];
 
     if(Array.isArray(value)){
-      return count+value.length;
+      return count+value.filter(Boolean).length;
     }
 
     if(value&&typeof value==="object"){

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { validateStandardCustomsRecord } from "../validation/standardEngine.js";
 import { DEFAULT_ORGANISATION } from "../tenant.js";
-import { getCustomerStrategy } from "../domain/packData.js";
 import { buildWorkingCustomsRecord } from "../domain/workingRecord.js";
 import { runAutomatedEmailAudit } from "../services/agentService.js";
 import { deleteUploadedDocument, getUploadedDocument, saveUploadedDocument } from "../services/documentStorage.js";
@@ -36,7 +35,21 @@ const fetchStorageBlob = async (path, filename) => {
   return fileResponse.blob();
 };
 
-const extractDocument = async (source, uploaded) => {
+const DEFAULT_CUSTOMER_STRATEGY={instructions:"",requiredFields:[],weightHandling:"ask_user"};
+
+const resolveCustomerContext=async customerName=>{
+  const name=String(customerName||"").trim();
+  if(!name||name==="Unassigned customer")return {customerId:null,customerName:null,strategy:DEFAULT_CUSTOMER_STRATEGY,matched:false};
+  const response=await fetch("/api/organisation?action=customers",{credentials:"include"});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(data.error||"Unable to load customer strategy.");
+  const customers=Array.isArray(data.customers)?data.customers:[];
+  const match=customers.find(customer=>String(customer.name||"").trim().toLowerCase()===name.toLowerCase()&&String(customer.status||"active").toLowerCase()==="active");
+  if(!match)return {customerId:null,customerName:name,strategy:DEFAULT_CUSTOMER_STRATEGY,matched:false};
+  return {customerId:match.id,customerName:match.name,strategy:{...DEFAULT_CUSTOMER_STRATEGY,...(match.strategy||{})},matched:true};
+};
+
+const extractDocument = async (source, uploaded, customerStrategy=DEFAULT_CUSTOMER_STRATEGY) =>
   const mimeType = source.type || uploaded.type || "application/octet-stream";
   const fileData = await toDataUrl(source, mimeType);
   const response = await fetch("/api/extract", {
@@ -45,7 +58,8 @@ const extractDocument = async (source, uploaded) => {
     body: JSON.stringify({
       fileData,
       filename: uploaded.name,
-      mimeType
+      mimeType,
+      customerStrategy
     })
   });
   const result = await response.json().catch(() => ({}));
@@ -236,7 +250,8 @@ export function usePackActions({
           throw new Error("Uploaded document is unavailable: " + uploaded.name);
         }
 
-        extractedDocuments.push(await extractDocument(source, uploaded));
+        const customerContext=await resolveCustomerContext(pack.customer||"");
+        extractedDocuments.push(await extractDocument(source, uploaded, customerContext.strategy));
       }
 
       const processed = {
@@ -336,14 +351,22 @@ export function usePackActions({
       return;
     }
 
-    const strategy = getCustomerStrategy(uploadCustomer);
-    const strategyApplied = uploadCustomer !== "Unassigned customer" && Object.keys(strategy || {}).length > 0;
+    let customerContext;
+    try{
+      customerContext=await resolveCustomerContext(uploadCustomer);
+    }catch(error){
+      notify("Customer strategy lookup failed: "+error.message);
+      return;
+    }
+    const strategy=customerContext.strategy;
+    const strategyApplied=customerContext.matched;
     const newPack = {
       organisationId: DEFAULT_ORGANISATION.id,
       organisationName: DEFAULT_ORGANISATION.name,
       id,
       packUuid: crypto.randomUUID(),
-      customer: uploadCustomer,
+      customer: customerContext.customerName||null,
+      customerId: customerContext.customerId,
       docs: selected.length,
       status: "Processing",
       confidence: 0,
@@ -366,7 +389,8 @@ export function usePackActions({
       null,
       {
         documents: selected.map(file => file.name),
-        customer: uploadCustomer,
+        customer: customerContext.customerName||null,
+        customerId: customerContext.customerId,
         strategyApplied
       }
     );

@@ -50,7 +50,7 @@ export default async function handler(req,res){
     const legacyStrategies=readJson(process.env.CUSTOMER_EMAIL_STRATEGIES_JSON,{});
     const configured=customerId
       ? (customerContext.strategy||legacyStrategies[customer]||DEFAULT_STRATEGIES[customer]||{emailFields:[]})
-      : {};
+      : {instructions:"",requiredFields:[],weightHandling:"ask_user",emailFields:[]};
 
     const emailFields=Array.isArray(configured.emailFields)
       ? configured.emailFields.filter(Boolean)
@@ -179,7 +179,7 @@ export default async function handler(req,res){
           storedFiles.push({id:id+"-"+storedFiles.length,name:filename,size:Number(attachment.size)||0,type:mimeType,storagePath:null,storageError});
         }
 
-        const extraction=await extractAttachment({fileData,filename,mimeType});
+        const extraction=await extractAttachment({fileData,filename,mimeType,customerStrategy:configured});
         attachmentResults.push({filename,mimeType,extraction:extraction.extraction,source:extraction.source,storagePath,storageError});
       }catch(error){
         attachmentResults.push({filename,mimeType,error:formatExtractionError(error)});
@@ -468,11 +468,11 @@ function normaliseAttachmentData(attachment){
   return value.startsWith("http")?value:null;
 }
 
-async function extractAttachment({fileData,filename,mimeType}){
+async function extractAttachment({fileData,filename,mimeType,customerStrategy}){
   // Email ingestion uses the same extraction engine as browser uploads,
   // but invokes it directly so Outlook intake does not depend on a second
   // Vercel HTTP hop or authentication layer.
-  return await extractDocument({fileData,filename,mimeType});
+  return await extractDocument({fileData,filename,mimeType,customerStrategy});
 }
 function formatExtractionError(error){if(error==null)return "Unknown extraction error.";if(typeof error==="string")return error;if(error instanceof Error&&error.message)return error.message;if(typeof error==="object"){if(typeof error.message==="string")return error.message;if(error.error?.message)return String(error.error.message);try{return JSON.stringify(error);}catch{return String(error);}}try{return String(error);}catch{return "Unknown extraction error.";}}
 function readJson(value,fallback){

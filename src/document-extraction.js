@@ -1,10 +1,16 @@
 import { normalizeCountryCode } from "../src/utils/countryCodes.js";
-export async function extractDocument({fileData, filename, mimeType}) {
+export async function extractDocument({fileData, filename, mimeType, customerStrategy=null}) {
   if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured in Vercel.");
   if (!fileData || !filename) throw new Error("fileData and filename are required.");
   try {
 
     const isImage = /^image\//i.test(mimeType || "");
+    const strategyInstructions=String(customerStrategy?.instructions||"").trim();
+    const requiredFields=Array.isArray(customerStrategy?.requiredFields)?customerStrategy.requiredFields.filter(Boolean):[];
+    const weightHandling=["ask_user","invoice","packing_list"].includes(customerStrategy?.weightHandling)?customerStrategy.weightHandling:"ask_user";
+    const customerStrategyPrompt=customerStrategy
+      ? ["CUSTOMER-SPECIFIC STRATEGY:",strategyInstructions?"Processing instructions:\n"+strategyInstructions:"Processing instructions: none configured.",requiredFields.length?"Customer-required information:\n- "+requiredFields.join("\n- "):"Customer-required information: none configured.","Weight handling preference: "+weightHandling+".","Use these settings as customer context only. Do not invent missing values, silently transform source data, or perform weight apportionment during extraction."].join("\n")
+      : "DEFAULT STRATEGY: No customer-specific strategy was found. Use the standard Customs IDP extraction instructions only.";
 
     const content = [
       {
@@ -29,7 +35,9 @@ STRICT SCOPE: You only process the supplied document. Do not answer unrelated qu
 12. Extract separately stated invoice-level freight/transport charges when they are explicitly shown. Put the numeric freight amount in freightAmount and its currency in freightCurrency. Do not include freight in line totalValue. If freight is not explicitly stated, return freightAmount as null. If the document explicitly states an exchange rate that converts the freight currency into the invoice currency, extract that rate as freightToInvoiceExchangeRate. The rate must be directional: multiply the freight amount by this rate to obtain the invoice currency. Only extract a rate explicitly supported by the document; otherwise return null. Return evidence for freight and the exchange rate when present.\n13. Return evidence for important fields. Evidence must describe what was actually visible in the source; do not fabricate quotations.
 13. If the document contains multiple invoices or distinct customs references, report them rather than silently choosing one.
 
-The downstream workflow will use this extraction as the canonical source layer before customer strategy, reconciliation and middleware validation.`
+The downstream workflow will use this extraction as the canonical source layer before reconciliation and middleware validation.
+
+${customerStrategyPrompt}`
       },
       {
         type: isImage ? "input_image" : "input_file",
