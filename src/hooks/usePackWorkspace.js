@@ -15,7 +15,7 @@ const localPacksRef=useRef([]);
   const [livePacks,setLivePacks]=useState([]);
 
   const [dataSource,setDataSource]=useState("local");
-  const [packsLoading,setPacksLoading]=useState(false);
+  const [packsLoading,setPacksLoading]=useState(true);
   const [packLoadError,setPackLoadError]=useState("");
   const [emailSyncStatus,setEmailSyncStatus]=useState({state:"ready",checked:0,processed:0,duplicates:0,failed:0,error:"",message:"Webhook intake active; recovery scan is secondary."});
   const [pendingUploadFiles,setPendingUploadFiles]=useState([]),[uploadCustomer,setUploadCustomer]=useState("Unassigned customer"),[showUploadConfirm,setShowUploadConfirm]=useState(false);
