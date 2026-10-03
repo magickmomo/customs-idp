@@ -26,6 +26,11 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
  const [previewPage,setPreviewPage]=useState(1);
  const [showPreview,setShowPreview]=useState(false);
  const autoScrollChatRef=useRef(false);
+ const isChatNearBottom=()=>{
+   const el=chatHistoryRef.current;
+   if(!el)return false;
+   return el.scrollHeight-el.scrollTop-el.clientHeight<=80;
+ };
  useEffect(()=>{
    const el=chatHistoryRef.current;
    if(!el||!autoScrollChatRef.current)return;
@@ -357,7 +362,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
  };
  const sendChat=async()=>{
    const q=chat.trim();if(!q||isSending)return;
-   autoScrollChatRef.current=true;
+   autoScrollChatRef.current=isChatNearBottom();
    const userMessage={type:"user",text:q,persist:true};
    const thinking={type:"agent",text:"I'm checking the uploaded documents and their source evidence...",persist:false};
    const conversationBefore=[...messages,userMessage];
@@ -690,7 +695,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
    {showCreateCustomer&&<div className="modal-backdrop" onMouseDown={()=>{if(!creatingCustomer)setShowCreateCustomer(false);}}><div className="modal-card customer-create-modal" onMouseDown={event=>event.stopPropagation()}><div className="modal-head"><div><div className="eyebrow">Customer identification</div><h2>Create customer</h2><p>Create and associate a customer with this pack.</p></div><button type="button" className="row-btn" onClick={()=>setShowCreateCustomer(false)} disabled={creatingCustomer}><X size={18}/></button></div><form onSubmit={createCustomer}><label className="field"><span>Customer name <strong>*</strong></span><input value={createCustomerForm.name} onChange={event=>setCreateCustomerForm(current=>({...current,name:event.target.value}))} disabled={creatingCustomer}/></label>{createCustomerError&&<div className="password-login-error">{createCustomerError}</div>}<div className="modal-actions"><button type="button" className="secondary" onClick={()=>setShowCreateCustomer(false)} disabled={creatingCustomer}>Cancel</button><button type="submit" className="primary" disabled={creatingCustomer}>{creatingCustomer?"Creating…":"Create customer"}</button></div></form></div></div>}
 
      {pack.processingError&&<div className="reprocess-error-banner"><div><b>Re-processing failed</b><span>{pack.processingError}</span></div><button type="button" className="secondary" onClick={()=>reprocessPack?.(pack)}>Try again</button></div>}
-     <div ref={chatHistoryRef} className="chat-history chat-review-history">
+     <div ref={chatHistoryRef} className="chat-history chat-review-history" onScroll={()=>{if(autoScrollChatRef.current&&!isChatNearBottom())autoScrollChatRef.current=false;}}>
        {canCreateCustomer&&!customerSetupDeclined&&<div className="chat-message-row agent customer-not-found-prompt" style={{flex:"0 0 auto"}}>
          <div className="chat-message-avatar"><Sparkles size={15}/></div>
          <div className="chat-message-content">
