@@ -1,4 +1,4 @@
-import handler from "../../../api/storage.js";
+import handler from "../../../src/server/api/storage.js";
 
 export const runtime = "nodejs";
 
