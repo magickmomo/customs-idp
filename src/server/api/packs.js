@@ -1,0 +1,172 @@
+import { requireAuth } from "./authGuard.js";
+
+const DEFAULT_ORGANISATION_ID="demo-organisation";
+const DEFAULT_ORGANISATION_NAME="Customs IDP Demo Organisation";
+
+export default async function handler(req,res){
+  const auth=requireAuth(req,res);
+  if(!auth)return;
+
+  const organisationId=auth.organisationId;
+
+  if(req.method==="GET"){
+    try{
+      const rows=await supabaseFetch(
+        `document_packs?organisation_id=eq.${encodeURIComponent(organisationId)}&select=*&order=created_at.desc`
+      );
+      return res.status(200).json({packs:rows.map(normalizePack)});
+    }catch(error){return res.status(503).json({error:error.message});}
+  }
+
+  if(req.method==="POST"){
+    try{
+      const pack=req.body||{};
+      if(!pack.id) return res.status(400).json({error:"Pack id is required"});
+
+      const requestedOrganisationId=String(pack.organisationId||organisationId).trim()||organisationId;
+      if(requestedOrganisationId!==organisationId){
+        return res.status(403).json({error:"Pack organisation does not match the active organisation."});
+      }
+
+      const organisation=await getOrganisation(organisationId);
+      if(!organisation){
+        return res.status(403).json({error:"Organisation is not configured."});
+      }
+
+      const extractedData=pack.extractedData?{...pack.extractedData}:{};
+      extractedData._tenant={
+        organisationId:organisation.id,
+        organisationName:organisation.name
+      };
+
+      const managerMeta={
+        processingStartedAt:pack.processingStartedAt||null,
+        processingCompletedAt:pack.processingCompletedAt||null,
+        uploadedFiles:Array.isArray(pack.uploadedFiles)?pack.uploadedFiles:[]
+      };
+      if(managerMeta.processingStartedAt||managerMeta.processingCompletedAt||managerMeta.uploadedFiles.length) extractedData._manager=managerMeta;
+
+      const validationMeta={
+        validationStatus:pack.validationStatus||null,
+        validationChecks:Array.isArray(pack.validationChecks)?pack.validationChecks:null,
+        validationSummary:pack.validationSummary||null
+      };
+      if(validationMeta.validationStatus||validationMeta.validationChecks||validationMeta.validationSummary) extractedData._validation=validationMeta;
+
+      if(pack.workingRecord) extractedData._workingRecord=pack.workingRecord;
+      if(pack.email) extractedData.email=pack.email;
+
+      const row={
+        id:pack.id,
+        organisation_id:organisation.id,
+        customer:pack.customer||null,
+        customer_id:pack.customerId||pack.customer_id||null,
+        docs:Number(pack.docs)||0,
+        status:pack.status||"Processing",
+        confidence:Number(pack.confidence)||0,
+        received:pack.received||new Date().toISOString(),
+        ticket:pack.ticket||null,
+        assigned_to:pack.assignedTo||"Unassigned",
+        extracted_data:Object.keys(extractedData).length?extractedData:null,
+        processing_error:pack.processingError||null,
+        updated_at:new Date().toISOString()
+      };
+
+      await supabaseFetch("document_packs",{
+        method:"POST",
+        body:JSON.stringify(row),
+        headers:{
+          "Prefer":"resolution=merge-duplicates,return=minimal"
+        }
+      });
+
+      return res.status(200).json({pack:normalizePack(row)});
+    }catch(error){return res.status(503).json({error:error.message});}
+  }
+
+  if(req.method==="DELETE"){
+    try{
+      const role=String(auth.role||"").toLowerCase();
+      if(!["manager","admin"].includes(role)) return res.status(403).json({error:"Only managers can delete packs"});
+
+      const id=String(req.query?.id||"").trim();
+      if(!id) return res.status(400).json({error:"Pack id is required"});
+
+      await supabaseFetch(
+        `document_packs?id=eq.${encodeURIComponent(id)}&organisation_id=eq.${encodeURIComponent(organisationId)}`,
+        {method:"DELETE",headers:{"Prefer":"return=minimal"}}
+      );
+
+      return res.status(200).json({deleted:id,organisationId});
+    }catch(error){return res.status(503).json({error:error.message});}
+  }
+
+  return res.status(405).json({error:"Method not allowed"});
+}
+
+async function getOrganisation(id){
+  const rows=await supabaseFetch(
+    `organisations?id=eq.${encodeURIComponent(id)}&select=id,name,status&limit=1`
+  );
+  const organisation=rows?.[0];
+  if(!organisation||organisation.status!=="active")return null;
+  return organisation;
+}
+
+async function supabaseFetch(path,options={}){
+  const url=process.env.SUPABASE_URL, key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if(!url||!key) throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not configured in Vercel.");
+  const response=await fetch(`${url}/rest/v1/${path}`,{
+    ...options,
+    headers:{
+      "apikey":key,
+      "Authorization":`Bearer ${key}`,
+      "Content-Type":"application/json",
+      ...(options.headers||{})
+    }
+  });
+  if(!response.ok) throw new Error(await response.text());
+  const text=await response.text();
+  return text?JSON.parse(text):[];
+}
+
+function normalizePack(row){
+  const data=row.extracted_data||null;
+  const meta=data?._manager||{};
+  const validation=data?._validation||{};
+  const workingRecord=data?._workingRecord;
+  const email=data?.email||null;
+  const tenant=data?._tenant||{};
+  let extractedData=data;
+
+  if(data){
+    const rest={...data};
+    delete rest._manager;
+    delete rest._validation;
+    delete rest._workingRecord;
+    delete rest._tenant;
+    extractedData=Object.keys(rest).length?rest:undefined;
+  }
+
+  return {
+    ...row,
+    organisationId:row.organisation_id||tenant.organisationId||DEFAULT_ORGANISATION_ID,
+    organisationName:organisationName(row.organisation_id,tenant.organisationName),
+    assignedTo:row.assigned_to||"Unassigned",
+    extractedData,
+    workingRecord,
+    email,
+    validationStatus:validation.validationStatus||undefined,
+    validationChecks:Array.isArray(validation.validationChecks)?validation.validationChecks:undefined,
+    validationSummary:validation.validationSummary||undefined,
+    uploadedFiles:Array.isArray(meta.uploadedFiles)?meta.uploadedFiles:undefined,
+    processingStartedAt:meta.processingStartedAt||undefined,
+    processingCompletedAt:meta.processingCompletedAt||undefined,
+    processingError:row.processing_error||undefined
+  };
+}
+
+function organisationName(id,fallback){
+  if(id===DEFAULT_ORGANISATION_ID)return DEFAULT_ORGANISATION_NAME;
+  return String(fallback||id||DEFAULT_ORGANISATION_NAME);
+}
