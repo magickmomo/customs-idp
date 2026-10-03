@@ -49,7 +49,7 @@ const resolveCustomerContext=async customerName=>{
   return {customerId:match.id,customerName:match.name,strategy:{...DEFAULT_CUSTOMER_STRATEGY,...(match.strategy||{})},matched:true};
 };
 
-const extractDocument = async (source, uploaded, customerStrategy=DEFAULT_CUSTOMER_STRATEGY) =>
+const extractDocument = async (source, uploaded, customerStrategy=DEFAULT_CUSTOMER_STRATEGY) => {
   const mimeType = source.type || uploaded.type || "application/octet-stream";
   const fileData = await toDataUrl(source, mimeType);
   const response = await fetch("/api/extract", {
