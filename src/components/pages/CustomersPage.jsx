@@ -857,6 +857,32 @@ function DetailsSection({form,setForm,teams}){
   </div>;
 }
 
+function StrategyReadableCard({title,strategy}){
+  const requiredFields=Array.isArray(strategy?.requiredFields)?strategy.requiredFields:[];
+  const instructions=String(strategy?.instructions||"").trim();
+  const weightHandling={
+    ask_user:"Ask the user",
+    invoice:"Prefer invoice",
+    packing_list:"Prefer packing list"
+  }[strategy?.weightHandling||"ask_user"]||"Ask the user";
+
+  return (
+    <div className="strategy-v1-card">
+      <div className="strategy-v1-card-head">
+        <div>
+          <strong>{title}</strong>
+          <span>Summary of the strategy that will be used for this customer.</span>
+        </div>
+      </div>
+      <div className="strategy-v1-list">
+        <div><strong>Processing instructions</strong><span>{instructions||"No customer-specific instructions configured."}</span></div>
+        <div><strong>Required information</strong><span>{requiredFields.length?requiredFields.join(", "):"No additional required information configured."}</span></div>
+        <div><strong>Weight handling</strong><span>{weightHandling}</span></div>
+      </div>
+    </div>
+  );
+}
+
 function StrategySection({
   customer,
   strategy,
