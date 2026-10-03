@@ -1,4 +1,4 @@
-import handler from "../../../api/packs.js";
+import handler from "../../../src/server/api/packs.js";
 
 export const runtime = "nodejs";
 
