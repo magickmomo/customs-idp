@@ -3,16 +3,16 @@ import {
   Activity, AlertCircle, ArrowRight, Bot, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, FileText,
   Inbox, Mail, Menu, MoreHorizontal, Package, Plus, Search, Settings, ShieldCheck, Sparkles, Users, X, Zap
 } from "lucide-react";
-import { validateStandardCustomsRecord } from "../validation/standardEngine.js";
-import { DEFAULT_ORGANISATION } from "../tenant.js";
-import { supabase } from "../lib/supabase.js";
-import { customerStrategyStore, customers, getCustomerStrategy, normalizeCountryCode, sampleLines } from "../domain/packData.js";
-import { getUploadedDocument } from "../services/documentStorage.js";
-import { NavItem, SpreadsheetPreview, Status } from "../components/SharedComponents.jsx";
+import { validateStandardCustomsRecord } from "../../validation/standardEngine.js";
+import { DEFAULT_ORGANISATION } from "../../tenant.js";
+import { supabase } from "../../lib/supabase.js";
+import { customerStrategyStore, customers, getCustomerStrategy, normalizeCountryCode, sampleLines } from "../../domain/packData.js";
+import { getUploadedDocument } from "../../services/documentStorage.js";
+import { NavItem, SpreadsheetPreview, Status } from "../SharedComponents.jsx";
 import { Dashboard, ManagerPage } from "./DashboardPages.jsx";
 import { InboxPage } from "./InboxPage.jsx";
 import { Customers } from "./CustomersPage.jsx";
-import { formatReceivedDateTime, getPackColumnValue, getPackCustomerLabel, getPackDisplayName, reconcilePackDocuments } from "../domain/packView.js";
+import { formatReceivedDateTime, getPackColumnValue, getPackCustomerLabel, getPackDisplayName, reconcilePackDocuments } from "../../domain/packView.js";
 
 
 

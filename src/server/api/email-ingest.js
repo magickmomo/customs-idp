@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
-import { extractDocument } from "../src/document-extraction.js";
-import { DEFAULT_ORGANISATION } from "../src/tenant.js";
+import { extractDocument } from "../../document-extraction.js";
+import { DEFAULT_ORGANISATION } from "../../tenant.js";
 
 const DEFAULT_STRATEGIES = {
   "Acme Components Ltd": { emailFields: [] },
@@ -34,10 +34,27 @@ export default async function handler(req,res){
     if(!to) return res.status(400).json({error:"to is required."});
 
     const routing=readJson(process.env.CUSTOMER_EMAIL_ROUTING_JSON,{});
-    const customer=routing[to]?.customer || String(body.customer||"").trim() || "Unassigned customer";
-    const strategy=readJson(process.env.CUSTOMER_EMAIL_STRATEGIES_JSON,{});
-    const configured=strategy[customer] || DEFAULT_STRATEGIES[customer] || {emailFields:[]};
-    const emailFields=Array.isArray(configured.emailFields)?configured.emailFields.filter(Boolean):[];
+    const routedCustomerName=String(routing[to]?.customer||"").trim();
+    const requestedCustomerName=String(body.customer||"").trim();
+
+    const customerContext=await resolveCustomerContext({
+      organisationId:DEFAULT_ORGANISATION.id,
+      to,
+      routedCustomerName,
+      requestedCustomerName
+    });
+
+    const customer=customerContext.customerName;
+    const customerId=customerContext.customerId;
+
+    const legacyStrategies=readJson(process.env.CUSTOMER_EMAIL_STRATEGIES_JSON,{});
+    const configured=customerId
+      ? (customerContext.strategy||legacyStrategies[customer]||DEFAULT_STRATEGIES[customer]||{emailFields:[]})
+      : {};
+
+    const emailFields=Array.isArray(configured.emailFields)
+      ? configured.emailFields.filter(Boolean)
+      : [];
 
     const ticket=ingestTicket||messageId||("EMAIL-"+Date.now().toString().slice(-6));
     let id="PK-EMAIL-"+Date.now().toString(36).toUpperCase();
@@ -80,6 +97,7 @@ export default async function handler(req,res){
       id,
       packUuid,
       customer,
+      customerId,
       docs:attachments.length,
       status:"Processing",
       confidence:0,
@@ -115,6 +133,7 @@ export default async function handler(req,res){
         pack_uuid:pack.packUuid,
         organisation_id:DEFAULT_ORGANISATION.id,
         customer:pack.customer,
+        customer_id:pack.customerId||null,
         docs:pack.docs,
         status:"Processing",
         confidence:0,
@@ -200,6 +219,7 @@ export default async function handler(req,res){
         pack_uuid:pack.packUuid,
         organisation_id:DEFAULT_ORGANISATION.id,
         customer:pack.customer,
+        customer_id:pack.customerId||null,
         docs:pack.docs,
         status:processingStatus,
         confidence:successfulExtractions.length?Math.round(successfulExtractions.reduce((sum,item)=>sum+Number(item.confidence||0),0)/successfulExtractions.length):0,
@@ -227,6 +247,79 @@ export default async function handler(req,res){
   }catch(error){
     return res.status(500).json({error:error.message||"Email ingestion failed."});
   }
+}
+
+async function resolveCustomerContext({organisationId,to,routedCustomerName,requestedCustomerName}){
+  const candidateNames=[routedCustomerName,requestedCustomerName].filter(Boolean);
+
+  let customers=[];
+  try{
+    customers=await supabaseFetch(
+      "customers?organisation_id=eq."+encodeURIComponent(organisationId)+"&select=id,name,status,team_id&order=name.asc"
+    );
+  }catch{
+    customers=[];
+  }
+
+  const normalise=value=>String(value||"").trim().toLowerCase();
+
+  let customer=null;
+
+  // Prefer an explicit routed/customer name when it matches an existing
+  // persistent customer. Do not create a customer when there is no match.
+  for(const candidate of candidateNames){
+    const match=customers.find(item=>
+      normalise(item.name)===normalise(candidate) &&
+      String(item.status||"active").toLowerCase()==="active"
+    );
+    if(match){
+      customer=match;
+      break;
+    }
+  }
+
+  // If the incoming mailbox already belongs to a persistent customer,
+  // use that relationship as a secondary matching mechanism.
+  if(!customer&&to){
+    try{
+      const mailboxes=await supabaseFetch(
+        "mailboxes?organisation_id=eq."+encodeURIComponent(organisationId)+
+        "&address=eq."+encodeURIComponent(to)+
+        "&select=customer_id,status&limit=1"
+      );
+      const mailbox=mailboxes?.[0];
+      if(mailbox?.customer_id){
+        customer=customers.find(item=>
+          String(item.id)===String(mailbox.customer_id) &&
+          String(item.status||"active").toLowerCase()==="active"
+        )||null;
+      }
+    }catch{}
+  }
+
+  if(!customer){
+    return {
+      customerId:null,
+      customerName:candidateNames[0]||null,
+      strategy:null
+    };
+  }
+
+  let strategy=null;
+  try{
+    const strategies=await supabaseFetch(
+      "customer_strategies?organisation_id=eq."+encodeURIComponent(organisationId)+
+      "&customer_id=eq."+encodeURIComponent(customer.id)+
+      "&status=eq.active&select=id,customer_id,version,status,config,updated_at&order=version.desc&limit=1"
+    );
+    strategy=strategies?.[0]||null;
+  }catch{}
+
+  return {
+    customerId:customer.id,
+    customerName:customer.name,
+    strategy:strategy?.config||null
+  };
 }
 
 function combineWorkingRecord(data){

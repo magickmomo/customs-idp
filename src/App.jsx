@@ -12,7 +12,7 @@ import { customerStrategyStore, getCustomerStrategy } from "./domain/packData.js
 import { NavItem, Status } from "./components/SharedComponents.jsx";
 import { useAuthSession } from "./hooks/useAuthSession.js";
 import { usePackWorkspace } from "./hooks/usePackWorkspace.js";
-import { LocalTestLogin, SupabaseLogin, SupabasePasswordSetup } from "./pages/AuthPages.jsx";
+import { LocalTestLogin, SupabaseLogin, SupabasePasswordSetup } from "./components/pages/AuthPages.jsx";
 import { UploadConfirmModal } from "./components/UploadConfirmModal.jsx";
 import { usePackActions } from "./hooks/usePackActions.js";
 import { findPackByUuid, packRoute, packUuidFromPath } from "./domain/routes.js";

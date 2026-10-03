@@ -1,22 +1,23 @@
-import handler from "../../../src/server/api/agent.js";
+import handler from "../../../src/server/api/email-ingest.js";
 import { runLegacyHandler } from "../../../src/server/nextLegacyAdapter.js";
 
 export const runtime = "nodejs";
 
 function createLegacyRequest(request, body) {
-  const headers = Object.fromEntries(request.headers.entries());
-
   return {
     method: request.method,
-    headers,
+    headers: Object.fromEntries(request.headers.entries()),
     body,
   };
 }
 
-export async function POST(request) {
+async function handle(request) {
   const body = await request.json().catch(() => ({}));
-  const legacyRequest = createLegacyRequest(request, body);
-  return runLegacyHandler(handler, legacyRequest);
+  return runLegacyHandler(handler, createLegacyRequest(request, body));
+}
+
+export async function POST(request) {
+  return handle(request);
 }
 
 export async function GET() {

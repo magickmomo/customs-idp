@@ -6,8 +6,8 @@ import { Customers } from "./CustomersPage.jsx";
 import { ManagerPage } from "./DashboardPages.jsx";
 import { InboxPage } from "./InboxPage.jsx";
 import { Review, SettingsPage } from "./Pages.jsx";
-import { ProcessingReviewGuard } from "../components/ProcessingReviewGuard.jsx";
-import { useWorkspace } from "../App.jsx";
+import { ProcessingReviewGuard } from "../ProcessingReviewGuard.jsx";
+import { useWorkspace } from "../../App.jsx";
 
 function InboxRoute(){
   const { livePacks, currentUser, currentUserName, openPack, handleUpload, assignPack, deletePack, emailSyncStatus, packLoadError }=useWorkspace();

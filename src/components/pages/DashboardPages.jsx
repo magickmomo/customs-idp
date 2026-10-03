@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Activity, AlertCircle, ArrowRight, FileText, Package, ShieldCheck, Sparkles, Users } from "lucide-react";
-import { Metric, PackTable, Queue } from "../components/SharedComponents.jsx";
+import { Metric, PackTable, Queue } from "../SharedComponents.jsx";
 
 function Dashboard({navigate,notify,livePacks}){
  const totalPacks=livePacks.length;

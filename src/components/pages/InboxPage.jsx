@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Plus, Search, SlidersHorizontal } from "lucide-react";
-import { PackTable } from "../components/SharedComponents.jsx";
-import { DEFAULT_INBOX_COLUMNS, DEFAULT_INBOX_COLUMN_KEYS, normaliseInboxColumnSelection } from "../domain/packData.js";
+import { PackTable } from "../SharedComponents.jsx";
+import { DEFAULT_INBOX_COLUMNS, DEFAULT_INBOX_COLUMN_KEYS, normaliseInboxColumnSelection } from "../../domain/packData.js";
 
 const INBOX_COLUMNS_STORAGE_KEY="customs-idp-inbox-columns";
 const INBOX_COLUMNS_STORAGE_VERSION=2;

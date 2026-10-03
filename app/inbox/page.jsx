@@ -1,4 +1,4 @@
-import { InboxRoute } from "../../src/pages/RoutePages.jsx";
+import { InboxRoute } from "../../src/components/pages/RoutePages.jsx";
 
 export default function InboxPageRoute(){
   return <InboxRoute/>;
