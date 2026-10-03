@@ -1,4 +1,4 @@
-import handler from "../../../api/agent.js";
+import handler from "../../../src/server/api/agent.js";
 
 export const runtime = "nodejs";
 
