@@ -33,7 +33,7 @@ async function supabaseFetch(path,options={}){
   return text?JSON.parse(text):[];
 }
 
-async function handler(req,res){
+export default async function handler(req,res){
   const auth=requireAuth(req,res);
   if(!auth)return;
   try{
