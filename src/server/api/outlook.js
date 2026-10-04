@@ -12,6 +12,7 @@ export default async function handler(req,res){
   if(action==="status")return status(req,res);
   if(action==="sync")return sync(req,res);
   if(action==="sync-status")return syncStatus(req,res);
+  if(action==="renew-subscription")return renewSubscription(req,res);
   if(action==="disconnect")return disconnect(req,res);
   if(action==="process-webhook")return processWebhook(req,res);
   if(action==="renew")return renew(req,res);
@@ -75,6 +76,24 @@ async function syncStatus(req,res){
     if(!run)return res.status(404).json({error:"Sync run not found."});
     return res.status(200).json({ok:true,run});
   }catch(error){return res.status(503).json({error:error.message||"Unable to load sync status."});}
+}
+
+async function renewSubscription(req,res){
+  if(req.method!=="POST")return res.status(405).json({error:"Method not allowed"});
+  const context=requireAuth(req,res);
+  if(!context)return;
+  let connection;
+  try{
+    const rows=await supabaseFetch("outlook_connections?organisation_id=eq."+encodeURIComponent(context.organisationId)+"&status=eq.connected&select=*&limit=1");
+    connection=Array.isArray(rows)?rows[0]:null;
+    if(!connection)return res.status(409).json({ok:false,error:"No Outlook inbox is connected."});
+    const result=await renewConnection(connection);
+    return res.status(200).json({ok:true,subscriptionId:result.subscriptionId,expiresAt:result.expiresAt});
+  }catch(error){
+    const message=error.message||"Unable to renew Outlook subscription.";
+    if(connection)await supabaseFetch("outlook_connections?id=eq."+encodeURIComponent(connection.id),{method:"PATCH",body:JSON.stringify({last_renewal_error:message,updated_at:new Date().toISOString()})}).catch(()=>{});
+    return res.status(502).json({ok:false,error:message});
+  }
 }
 
 async function disconnect(req,res){
@@ -163,7 +182,18 @@ async function renew(req,res){
 async function renewConnection(connection){
   const accessToken=await getAccessToken(connection);
   const clientState=connection.client_state||crypto.randomBytes(24).toString("hex");
-  const subscription=await graphPost("/subscriptions",accessToken,{changeType:"created",notificationUrl:getWebhookUrl(),resource:"me/mailFolders('Inbox')/messages",expirationDateTime:new Date(Date.now()+2*24*60*60*1000).toISOString(),clientState});
+  const expirationDateTime=new Date(Date.now()+2*24*60*60*1000).toISOString();
+  const notificationUrl=getWebhookUrl();
+  let subscription=null;
+  if(connection.subscription_id){
+    try{
+      subscription=await graphPatch("/subscriptions/"+encodeURIComponent(connection.subscription_id),accessToken,{expirationDateTime,notificationUrl});
+    }catch(error){
+      // Microsoft Graph returns 404 after it removes an expired subscription.
+      if(error.status!==404)throw error;
+    }
+  }
+  if(!subscription)subscription=await graphPost("/subscriptions",accessToken,{changeType:"created",notificationUrl,resource:"me/mailFolders('Inbox')/messages",expirationDateTime,clientState});
   const renewedAt=new Date().toISOString();
   try{
     await supabaseFetch("outlook_connections?id=eq."+encodeURIComponent(connection.id),{method:"PATCH",body:JSON.stringify({subscription_id:subscription.id,subscription_expires_at:subscription.expirationDateTime,client_state:clientState,last_renewed_at:renewedAt,last_renewal_error:null,updated_at:renewedAt})});
@@ -277,7 +307,7 @@ async function processWebhookEvent(event){
 
 async function enqueueWebhookEvent({connection,subscriptionId,graphMessageId,notification,syncRunId=null}){
   if(!graphMessageId)throw new Error("Outlook notification is missing the message id.");
-  const rows=await supabaseFetch("outlook_webhook_events",{method:"POST",body:JSON.stringify({organisation_id:connection.organisation_id||"demo-organisation",connection_id:connection.id,subscription_id:subscriptionId,graph_message_id:graphMessageId,sync_run_id:syncRunId,notification,status:"pending"}),headers:{Prefer:"resolution=ignore-duplicates,return=representation"}});
+  const rows=await supabaseFetch("outlook_webhook_events?on_conflict=connection_id,graph_message_id",{method:"POST",body:JSON.stringify({organisation_id:connection.organisation_id||"demo-organisation",connection_id:connection.id,subscription_id:subscriptionId,graph_message_id:graphMessageId,sync_run_id:syncRunId,notification,status:"pending"}),headers:{Prefer:"resolution=ignore-duplicates,return=representation"}});
   return Array.isArray(rows)&&rows.length>0;
 }
 
@@ -423,6 +453,16 @@ async function graphPost(path,token,body){
   const response=await fetch(GRAPH+path,{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(body)});
   const data=await response.json();
   if(!response.ok)throw new Error(data?.error?.message||"Graph subscription failed.");
+  return data;
+}
+async function graphPatch(path,token,body){
+  const response=await fetch(GRAPH+path,{method:"PATCH",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const data=await response.json();
+  if(!response.ok){
+    const error=new Error(data?.error?.message||"Graph subscription renewal failed.");
+    error.status=response.status;
+    throw error;
+  }
   return data;
 }
 async function graphDelete(path,token){

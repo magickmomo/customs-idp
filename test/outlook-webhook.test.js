@@ -96,7 +96,7 @@ test("Outlook webhook validates and queues without doing Graph or ingestion work
   globalThis.fetch=async(url,options={})=>{
     const target=String(url);
     if(target.startsWith(process.env.SUPABASE_URL+"/rest/v1/outlook_connections?subscription_id="))return new Response(JSON.stringify([connection]),{status:200});
-    if(target===process.env.SUPABASE_URL+"/rest/v1/outlook_webhook_events")return new Response(JSON.stringify([{id:"event-1",status:"pending"}]),{status:201});
+    if(target===process.env.SUPABASE_URL+"/rest/v1/outlook_webhook_events?on_conflict=connection_id,graph_message_id")return new Response(JSON.stringify([{id:"event-1",status:"pending"}]),{status:201});
     externalCalls.push({target,options});
     throw new Error("Unexpected fetch: "+target);
   };
@@ -194,7 +194,7 @@ test("queue worker schedules a failed event for retry before the limit",async()=
   }finally{globalThis.fetch=originalFetch;}
 });
 
-test("manual sync follows Graph pagination and records aggregate progress",async()=>{
+test("manual sync follows pagination and counts existing messages as duplicates",async()=>{
   const connection={id:"connection-1",organisation_id:"org-1",subscription_id:"subscription-1",refresh_token:encryptRefreshToken("refresh-token")};
   let inserted=0;
   let progress=null;
@@ -207,7 +207,11 @@ test("manual sync follows Graph pagination and records aggregate progress",async
     if(target==="https://login.microsoftonline.com/common/oauth2/v2.0/token")return new Response(JSON.stringify({access_token:"graph-token"}),{status:200});
     if(target.includes("graph.microsoft.com/v1.0/me/mailFolders('Inbox')/messages?"))return new Response(JSON.stringify({value:[{id:"message-1",subject:"CUSTOMS-IDP first"}],"@odata.nextLink":"https://graph.microsoft.com/v1.0/next-page"}),{status:200});
     if(target==="https://graph.microsoft.com/v1.0/next-page")return new Response(JSON.stringify({value:[{id:"message-2",subject:"ordinary email"},{id:"message-3",subject:"CUSTOMS-IDP second"}]}),{status:200});
-    if(target.endsWith("/outlook_webhook_events")){inserted++;return new Response(JSON.stringify([{id:"event-"+inserted}]),{status:201});}
+    if(target.includes("/outlook_webhook_events?on_conflict=connection_id,graph_message_id")){
+      assert.equal(options.headers.Prefer,"resolution=ignore-duplicates,return=representation");
+      if(JSON.parse(options.body).graph_message_id==="message-1")return new Response("[]",{status:201});
+      inserted++;return new Response(JSON.stringify([{id:"event-"+inserted}]),{status:201});
+    }
     if(target.includes("/outlook_sync_runs?id=eq.run-1")&&options.method==="PATCH"){progress=JSON.parse(options.body);return new Response(null,{status:204});}
     if(target.includes("/outlook_connections?id=eq.connection-1")&&options.method==="PATCH")return new Response(null,{status:204});
     if(target.endsWith("/rpc/claim_outlook_webhook_events"))return new Response("[]",{status:200});
@@ -218,13 +222,14 @@ test("manual sync follows Graph pagination and records aggregate progress",async
     const res=response();
     await handler({method:"POST",url:"/api/outlook?action=process-webhook",query:{action:"process-webhook"},headers:cronHeaders},res);
     assert.equal(res.statusCode,200);
-    assert.equal(inserted,2);
+    assert.equal(inserted,1);
     assert.equal(progress.checked,3);
-    assert.equal(progress.queued,2);
+    assert.equal(progress.queued,1);
+    assert.equal(progress.duplicates,1);
   }finally{globalThis.fetch=originalFetch;}
 });
 
-test("renewal persists the replacement before deleting the old subscription",async()=>{
+test("renewal updates the existing Graph subscription",async()=>{
   const connection={id:"connection-1",email:"inbox@example.test",subscription_id:"old-subscription",client_state:"state-1",refresh_token:encryptRefreshToken("refresh-token")};
   const order=[];
   const originalFetch=globalThis.fetch;
@@ -232,16 +237,15 @@ test("renewal persists the replacement before deleting the old subscription",asy
     const target=String(url);
     if(target.includes("/outlook_connections?select=*&status=eq.connected"))return new Response(JSON.stringify([connection]),{status:200});
     if(target==="https://login.microsoftonline.com/common/oauth2/v2.0/token")return new Response(JSON.stringify({access_token:"graph-token"}),{status:200});
-    if(target==="https://graph.microsoft.com/v1.0/subscriptions"&&options.method==="POST"){order.push("create");return new Response(JSON.stringify({id:"new-subscription",expirationDateTime:"2026-10-06T10:00:00.000Z"}),{status:201});}
+    if(target.endsWith("/subscriptions/old-subscription")&&options.method==="PATCH"){order.push("renew");return new Response(JSON.stringify({id:"old-subscription",expirationDateTime:"2026-10-06T10:00:00.000Z"}),{status:200});}
     if(target.includes("/outlook_connections?id=eq.connection-1")&&options.method==="PATCH"){order.push("persist");return new Response(null,{status:204});}
-    if(target.endsWith("/subscriptions/old-subscription")&&options.method==="DELETE"){order.push("delete-old");return new Response(null,{status:204});}
-    throw new Error("Unexpected fetch: "+target);
+        throw new Error("Unexpected fetch: "+target);
   };
   try{
     const {default:handler}=await import("../src/server/api/outlook.js");
     const res=response();
     await handler({method:"POST",url:"/api/outlook?action=renew",query:{action:"renew"},headers:cronHeaders},res);
     assert.equal(res.statusCode,200);
-    assert.deepEqual(order,["create","persist","delete-old"]);
+    assert.deepEqual(order,["renew","persist"]);
   }finally{globalThis.fetch=originalFetch;}
 });
