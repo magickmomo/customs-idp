@@ -358,7 +358,7 @@ function combineWorkingRecord(data){
 async function runAutomatedEmailAudit(pack){
   const secret=String(process.env.EMAIL_INGEST_SECRET||"");
   if(!secret)return {completed:false,error:"EMAIL_INGEST_SECRET is not configured."};
-  const base=(String(process.env.APP_URL||"").trim()||"https://customs-idp.vercel.app").replace(/\/+$/,"");
+  const base=(String(process.env.APP_URL||"").trim()||("https://"+String(process.env.VERCEL_URL||"customs-idp.vercel.app").trim())).replace(/\/+$/g,"");
   try{
     const response=await fetch(base+"/api/agent",{
       method:"POST",

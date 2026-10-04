@@ -1,13 +1,21 @@
-# Customs IDP Outlook.com setup
+# Customs IDP Outlook setup
 
 ## Microsoft app registration
 
 Use the existing **Customs IDP Email Intake** app registration.
 
 Configured values:
-- Account type: Personal Microsoft accounts
-- Redirect URI: https://customs-idp.vercel.app/api/outlook/callback
+- Account type: Personal Microsoft accounts and organisational accounts
+- Redirect URI: the value of `OUTLOOK_REDIRECT_URI` followed by `/api/outlook/callback`
 - Microsoft Graph delegated permissions: User.Read, Mail.Read
+
+The OAuth redirect and Graph webhook use different URLs. For local testing, keep the OAuth redirect local and configure the webhook URL to the deployed public endpoint:
+
+```text
+APP_URL=http://localhost:3000
+OUTLOOK_REDIRECT_URI=http://localhost:3000/api/outlook/callback
+OUTLOOK_WEBHOOK_URL=https://customs-idp.vercel.app/api/outlook/webhook
+```
 
 ## Vercel environment variables
 
@@ -15,8 +23,10 @@ Add these to the Customs IDP Vercel project:
 
 - OUTLOOK_CLIENT_ID = Microsoft Application (client) ID
 - OUTLOOK_CLIENT_SECRET = the client secret value created in Entra
-- OUTLOOK_REDIRECT_URI = https://customs-idp.vercel.app/api/outlook/callback
+- OUTLOOK_REDIRECT_URI = your configured deployment URL followed by `/api/outlook/callback`
+- OUTLOOK_WEBHOOK_URL = the public URL Microsoft Graph uses for notifications, followed by `/api/outlook/webhook`
 - OUTLOOK_TOKEN_ENCRYPTION_KEY = base64-encoded 32-byte random key
+- CRON_SECRET = a long random value used to authenticate renewal and queue-worker requests
 
 The encryption key protects the Microsoft refresh token stored in Supabase. Never commit it to GitHub.
 
@@ -77,10 +87,24 @@ After the code is deployed:
 
 1. Add `OUTLOOK_CLIENT_ID` using the Application (client) ID shown in Entra.
 2. Add `OUTLOOK_CLIENT_SECRET` using the secret **value** you just created. Never put this in GitHub.
-3. Add `OUTLOOK_REDIRECT_URI` as `https://customs-idp.vercel.app/api/outlook/callback`.
-4. Generate a random 32-byte value and base64-encode it for `OUTLOOK_TOKEN_ENCRYPTION_KEY`. For example, in a terminal:
+3. Add `OUTLOOK_REDIRECT_URI` as your configured deployment URL followed by `/api/outlook/callback`.
+4. Add `OUTLOOK_WEBHOOK_URL` as the public deployment URL followed by `/api/outlook/webhook`.
+5. Generate a random 32-byte value and base64-encode it for `OUTLOOK_TOKEN_ENCRYPTION_KEY`. For example, in a terminal:
    `openssl rand -base64 32`
-5. Keep the existing `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `EMAIL_INGEST_SECRET`, `IDP_AUTH_SECRET` and `OPENAI_API_KEY`.
-6. Redeploy after changing environment variables.
+6. Keep the existing `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `EMAIL_INGEST_SECRET`, `IDP_AUTH_SECRET` and `OPENAI_API_KEY`.
+7. Redeploy after changing environment variables.
 
 The Settings page will then show **Connect Outlook**. Authorise the Microsoft account once. The callback creates the Graph Inbox subscription automatically. The daily Vercel cron renews that subscription.
+
+## Queue worker schedule
+
+The durable queue worker is available at:
+
+```text
+POST {APP_URL}/api/outlook?action=process-webhook
+Authorization: Bearer {CRON_SECRET}
+```
+
+Invoke it once per minute from a trusted scheduler. Vercel Hobby only permits cron jobs once per day, so the minute worker is intentionally not included in `vercel.json`; use Supabase Cron, GitHub Actions, or another external scheduler. On Vercel Pro, the worker can instead be added to `vercel.json` with the schedule `* * * * *`.
+
+Manual Sync and webhook notifications both remain queued until this worker runs. Keep `APP_URL` set to the active deployment URL and use the same `CRON_SECRET` in the scheduler and Vercel environment.
