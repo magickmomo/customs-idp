@@ -58,6 +58,7 @@ async function sync(req,res){
     const runs=await supabaseFetch("outlook_sync_runs",{method:"POST",body:JSON.stringify({organisation_id:context.organisationId,connection_id:connection.id,status:"queued"}),headers:{Prefer:"return=representation"}});
     const run=Array.isArray(runs)?runs[0]:null;
     if(!run?.id)throw new Error("Unable to create Outlook sync run.");
+    await updateConnectionSync(connection.id,{last_sync_status:"queued",last_sync_error:null,last_sync_checked:0,last_sync_queued:0,last_sync_processed:0,last_sync_duplicates:0,last_sync_failed:0});
     return res.status(202).json({ok:true,connected:true,syncRunId:run.id,status:run.status});
   }catch(error){
     return res.status(500).json({ok:false,error:error.message||"Unable to start Outlook sync."});
