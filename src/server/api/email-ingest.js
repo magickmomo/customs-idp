@@ -37,7 +37,7 @@ export default async function handler(req,res){
     const routedCustomerName=String(routing[to]?.customer||"").trim();
     const requestedCustomerName=String(body.customer||"").trim();
 
-    const customerContext=await resolveCustomerContext({
+    let customerContext=await resolveCustomerContext({
       organisationId:DEFAULT_ORGANISATION.id,
       to,
       routedCustomerName,
