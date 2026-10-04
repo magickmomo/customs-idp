@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { extractDocument } from "../../document-extraction.js";
 import { DEFAULT_ORGANISATION } from "../../tenant.js";
+import { resolveCustomerMatch, normaliseCustomerName } from "../../domain/customerMatching.js";
 
 const DEFAULT_STRATEGIES = {
   "Acme Components Ltd": { emailFields: [] },
@@ -251,6 +252,7 @@ export default async function handler(req,res){
       matched:Boolean(customerContext.matched),
       matchedBy:customerContext.matchedBy||null,
       ambiguous:Boolean(customerContext.ambiguous),
+      possibleMatch:Boolean(customerContext.possibleMatch),
       candidates:customerContext.candidates||[],
       customerId:customerId||null,
       customerName:customer||null,
@@ -328,7 +330,7 @@ async function resolveCustomerContext({organisationId,to,routedCustomerName,requ
     customers=[];
   }
 
-  const normalise=value=>String(value||"").trim().toLowerCase();
+  const normalise=normaliseCustomerName;
 
   let customer=null;
 
@@ -365,35 +367,17 @@ async function resolveCustomerContext({organisationId,to,routedCustomerName,requ
     }catch{}
   }
 
-  // If no mailbox/routing relationship identified the customer, use the
-  // same exporter/importer exact-name matching used by manual uploads.
+  // If no mailbox/routing relationship identified the customer, use a confirmed memory/exact match first, then a cautious fuzzy match.
   if(!customer){
-    const exporter=normalise(exporterName);
-    const importer=normalise(importerName);
-    const activeCustomers=customers.filter(item=>String(item.status||"active").toLowerCase()==="active");
-    const exporterMatch=exporter
-      ? activeCustomers.find(item=>normalise(item.name)===exporter)
-      : null;
-    const importerMatch=importer
-      ? activeCustomers.find(item=>normalise(item.name)===importer)
-      : null;
-
-    if(exporterMatch&&importerMatch&&String(exporterMatch.id)!==String(importerMatch.id)){
-      return {
-        customerId:null,
-        customerName:null,
-        strategy:null,
-        matched:false,
-        ambiguous:true,
-        candidates:[
-          {id:exporterMatch.id,name:exporterMatch.name,matchedBy:"exporter"},
-          {id:importerMatch.id,name:importerMatch.name,matchedBy:"importer"}
-        ]
-      };
-    }
-
-    customer=exporterMatch||importerMatch||null;
-    if(customer)customer.__matchedBy=exporterMatch?"exporter":"importer";
+    try{
+      const memories=await supabaseFetch("customer_memory?organisation_id=eq."+encodeURIComponent(organisationId)+"&memory_type=eq.customer_alias&select=customer_id,source_value");
+      const memoryByCustomerId={};
+      for(const memory of memories){if(!memoryByCustomerId[memory.customer_id])memoryByCustomerId[memory.customer_id]=[];memoryByCustomerId[memory.customer_id].push(memory.source_value);}
+      customers=customers.map(item=>({...item,memoryAliases:memoryByCustomerId[item.id]||[]}));
+    }catch{}
+    const result=resolveCustomerMatch(customers,exporterName,importerName);
+    if(result.type==="possible")return {customerId:null,customerName:null,strategy:null,matched:false,ambiguous:false,possibleMatch:true,candidates:result.candidates,matchedBy:result.sourceType,sourceValue:result.sourceValue};
+    if(result.type==="match"){customer=customers.find(item=>String(item.id)===String(result.customer.id))||result.customer;customer.__matchedBy=result.matchedBy;}
   }
 
   if(!customer){
@@ -403,6 +387,7 @@ async function resolveCustomerContext({organisationId,to,routedCustomerName,requ
       strategy:null,
       matched:false,
       ambiguous:false,
+      possibleMatch:false,
       candidates:[]
     };
   }

@@ -437,12 +437,12 @@ export function usePackActions({
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Could not create storage upload URL");
 
-        const uploadResponse = await fetch(data.signedUrl, {
-          method: "PUT",
-          headers: { "Content-Type": file.type || "application/octet-stream" },
-          body: file
-        });
+        const uploadResponse = await fetch(data.signedUrl, { method: "PUT", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file });
         if (!uploadResponse.ok) throw new Error(`Could not upload ${file.name}`);
+
+        const accessResponse = await fetch("/api/storage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "signed-url", path: data.path, packId: id }) });
+        const accessData = await accessResponse.json().catch(() => ({}));
+        if (!accessResponse.ok) throw new Error(accessData.error || "Could not create document access URL");
 
         return {
           id: localId,
