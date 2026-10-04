@@ -117,7 +117,12 @@ function decrypt(value){
   decipher.setAuthTag(Buffer.from(tagRaw,"base64url"));
   return Buffer.concat([decipher.update(Buffer.from(dataRaw,"base64url")),decipher.final()]).toString("utf8");
 }
-function getWebhookUrl(){const appUrl=String(process.env.APP_URL||"").trim();const base=appUrl||("https://"+String(process.env.VERCEL_URL||"").trim());if(!base||base==="https://")throw new Error("APP_URL or VERCEL_URL is required for the Outlook webhook URL.");return base.replace(/\/+$/g,"")+"/api/outlook/webhook";}
+export function getWebhookUrl(){
+  const configured=String(process.env.OUTLOOK_WEBHOOK_URL||"").trim();
+  if(configured)return configured;
+  if(process.env.VERCEL_URL)return "https://"+String(process.env.VERCEL_URL).trim()+"/api/outlook/webhook";
+  throw new Error("OUTLOOK_WEBHOOK_URL is required for local Outlook testing.");
+}
 function escapeHtml(value){return String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 async function supabaseFetch(path,options={}){
   const url=process.env.SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;

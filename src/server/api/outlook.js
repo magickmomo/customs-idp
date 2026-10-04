@@ -313,11 +313,11 @@ async function updateConnectionSync(id,updates){
   await supabaseFetch("outlook_connections?id=eq."+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({...updates,updated_at:new Date().toISOString()})}).catch(error=>console.error("Unable to update Outlook sync status",error));
 }
 
-function getWebhookUrl(){
-  const appUrl=String(process.env.APP_URL||"").trim();
-  const base=appUrl||("https://"+String(process.env.VERCEL_URL||"").trim());
-  if(!base||base==="https://")throw new Error("APP_URL or VERCEL_URL is required for the Outlook webhook URL.");
-  return base.replace(/\/+$/g,"")+"/api/outlook/webhook";
+export function getWebhookUrl(){
+  const configured=String(process.env.OUTLOOK_WEBHOOK_URL||"").trim();
+  if(configured)return configured;
+  if(process.env.VERCEL_URL)return "https://"+String(process.env.VERCEL_URL).trim()+"/api/outlook/webhook";
+  throw new Error("OUTLOOK_WEBHOOK_URL is required for local Outlook testing.");
 }
 
 function getRedirectUri(){

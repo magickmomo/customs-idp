@@ -10,6 +10,7 @@ process.env.OUTLOOK_CLIENT_SECRET="secret-test";
 process.env.OUTLOOK_TOKEN_ENCRYPTION_KEY=encryptionKey.toString("base64");
 process.env.EMAIL_INGEST_SECRET="ingest-test";
 process.env.APP_URL="https://customs-idp.test";
+process.env.OUTLOOK_WEBHOOK_URL="https://customs-idp.test/api/outlook/webhook";
 process.env.CRON_SECRET="cron-test";
 
 function encryptRefreshToken(value){
@@ -21,6 +22,63 @@ function encryptRefreshToken(value){
 
 function response(){return {statusCode:200,body:null,headers:{},status(code){this.statusCode=code;return this;},setHeader(name,value){this.headers[name]=value;},json(value){this.body=value;return this;},send(value){this.body=value;return this;}};}
 const cronHeaders={authorization:"Bearer cron-test"};
+
+test("Outlook webhook URL prefers the explicit public URL",async()=>{
+  const [{getWebhookUrl:callbackWebhookUrl},{getWebhookUrl:apiWebhookUrl}]=await Promise.all([
+    import("../src/server/api/outlook/callback.js"),
+    import("../src/server/api/outlook.js")
+  ]);
+  const previousApp=process.env.APP_URL;
+  const previousWebhook=process.env.OUTLOOK_WEBHOOK_URL;
+  const previousVercel=process.env.VERCEL_URL;
+  try{
+    process.env.APP_URL="http://localhost:3000";
+    process.env.OUTLOOK_WEBHOOK_URL="https://customs-idp.vercel.app/api/outlook/webhook";
+    delete process.env.VERCEL_URL;
+    assert.equal(callbackWebhookUrl(),process.env.OUTLOOK_WEBHOOK_URL);
+    assert.equal(apiWebhookUrl(),process.env.OUTLOOK_WEBHOOK_URL);
+  }finally{
+    process.env.APP_URL=previousApp;
+    if(previousWebhook===undefined)delete process.env.OUTLOOK_WEBHOOK_URL;else process.env.OUTLOOK_WEBHOOK_URL=previousWebhook;
+    if(previousVercel===undefined)delete process.env.VERCEL_URL;else process.env.VERCEL_URL=previousVercel;
+  }
+});
+
+test("Outlook webhook URL falls back to the Vercel deployment URL",async()=>{
+  const [{getWebhookUrl:callbackWebhookUrl},{getWebhookUrl:apiWebhookUrl}]=await Promise.all([
+    import("../src/server/api/outlook/callback.js"),
+    import("../src/server/api/outlook.js")
+  ]);
+  const previousWebhook=process.env.OUTLOOK_WEBHOOK_URL;
+  const previousVercel=process.env.VERCEL_URL;
+  try{
+    delete process.env.OUTLOOK_WEBHOOK_URL;
+    process.env.VERCEL_URL="customs-idp.vercel.app";
+    assert.equal(callbackWebhookUrl(),"https://customs-idp.vercel.app/api/outlook/webhook");
+    assert.equal(apiWebhookUrl(),"https://customs-idp.vercel.app/api/outlook/webhook");
+  }finally{
+    if(previousWebhook===undefined)delete process.env.OUTLOOK_WEBHOOK_URL;else process.env.OUTLOOK_WEBHOOK_URL=previousWebhook;
+    if(previousVercel===undefined)delete process.env.VERCEL_URL;else process.env.VERCEL_URL=previousVercel;
+  }
+});
+
+test("Outlook webhook URL requires explicit configuration for local testing",async()=>{
+  const [{getWebhookUrl:callbackWebhookUrl},{getWebhookUrl:apiWebhookUrl}]=await Promise.all([
+    import("../src/server/api/outlook/callback.js"),
+    import("../src/server/api/outlook.js")
+  ]);
+  const previousWebhook=process.env.OUTLOOK_WEBHOOK_URL;
+  const previousVercel=process.env.VERCEL_URL;
+  try{
+    delete process.env.OUTLOOK_WEBHOOK_URL;
+    delete process.env.VERCEL_URL;
+    assert.throws(()=>callbackWebhookUrl(),/OUTLOOK_WEBHOOK_URL is required for local Outlook testing\./);
+    assert.throws(()=>apiWebhookUrl(),/OUTLOOK_WEBHOOK_URL is required for local Outlook testing\./);
+  }finally{
+    if(previousWebhook===undefined)delete process.env.OUTLOOK_WEBHOOK_URL;else process.env.OUTLOOK_WEBHOOK_URL=previousWebhook;
+    if(previousVercel===undefined)delete process.env.VERCEL_URL;else process.env.VERCEL_URL=previousVercel;
+  }
+});
 
 test("Outlook webhook echoes POST validation tokens as plain text",async()=>{
   const {webhook}=await import("../src/server/api/outlook.js");
