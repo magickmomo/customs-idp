@@ -449,7 +449,9 @@ export function usePackActions({
           name: file.name,
           size: file.size,
           type: file.type,
-          storagePath: data.path
+          storagePath: data.path,
+          accessUrl: data.accessUrl,
+          accessUrlExpiresAt: data.accessUrlExpiresAt
         };
       }));
     } catch (error) {
