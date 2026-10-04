@@ -124,7 +124,7 @@ Then schedule the existing worker. The named schedule can be updated by unschedu
 select cron.schedule(
   'outlook-queue-worker',
   '* * * * *',
-  $
+  $worker$
     select net.http_post(
       url := (select decrypted_secret from vault.decrypted_secrets where name = 'outlook_worker_app_url') || '/api/outlook?action=process-webhook',
       headers := jsonb_build_object(
@@ -134,7 +134,7 @@ select cron.schedule(
       body := '{}'::jsonb,
       timeout_milliseconds := 60000
     );
-  $
+  $worker$
 );
 ```
 
