@@ -14,11 +14,11 @@ const toDataUrl = async (source, mimeType) => {
   return `data:${mimeType};base64,${btoa(binary)}`;
 };
 
-const fetchStorageBlob = async (path, filename) => {
+const fetchStorageBlob = async (path, filename, packId = null) => {
   const response = await fetch("/api/storage", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "signed-url", path })
+    body: JSON.stringify({ action: "signed-url", path, packId })
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -348,7 +348,7 @@ export function usePackActions({
 
       for (const uploaded of files) {
         const source = uploaded.storagePath
-          ? await fetchStorageBlob(uploaded.storagePath, uploaded.name)
+          ? await fetchStorageBlob(uploaded.storagePath, uploaded.name, pack.id)
           : await getUploadedDocument(uploaded.id);
 
         if (!source) {
