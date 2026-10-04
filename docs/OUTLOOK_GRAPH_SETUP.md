@@ -1,12 +1,12 @@
-# Customs IDP Outlook.com setup
+# Customs IDP Outlook setup
 
 ## Microsoft app registration
 
 Use the existing **Customs IDP Email Intake** app registration.
 
 Configured values:
-- Account type: Personal Microsoft accounts
-- Redirect URI: https://customs-idp.vercel.app/api/outlook/callback
+- Account type: Personal Microsoft accounts and organisational accounts
+- Redirect URI: the value of `APP_URL` followed by `/api/outlook/callback`
 - Microsoft Graph delegated permissions: User.Read, Mail.Read
 
 ## Vercel environment variables
@@ -15,7 +15,7 @@ Add these to the Customs IDP Vercel project:
 
 - OUTLOOK_CLIENT_ID = Microsoft Application (client) ID
 - OUTLOOK_CLIENT_SECRET = the client secret value created in Entra
-- OUTLOOK_REDIRECT_URI = https://customs-idp.vercel.app/api/outlook/callback
+- OUTLOOK_REDIRECT_URI = your configured deployment URL followed by `/api/outlook/callback`
 - OUTLOOK_TOKEN_ENCRYPTION_KEY = base64-encoded 32-byte random key
 
 The encryption key protects the Microsoft refresh token stored in Supabase. Never commit it to GitHub.
@@ -77,10 +77,10 @@ After the code is deployed:
 
 1. Add `OUTLOOK_CLIENT_ID` using the Application (client) ID shown in Entra.
 2. Add `OUTLOOK_CLIENT_SECRET` using the secret **value** you just created. Never put this in GitHub.
-3. Add `OUTLOOK_REDIRECT_URI` as `https://customs-idp.vercel.app/api/outlook/callback`.
+3. Add `OUTLOOK_REDIRECT_URI` as your configured deployment URL followed by `/api/outlook/callback`.
 4. Generate a random 32-byte value and base64-encode it for `OUTLOOK_TOKEN_ENCRYPTION_KEY`. For example, in a terminal:
    `openssl rand -base64 32`
 5. Keep the existing `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `EMAIL_INGEST_SECRET`, `IDP_AUTH_SECRET` and `OPENAI_API_KEY`.
 6. Redeploy after changing environment variables.
 
-The Settings page will then show **Connect Outlook**. Authorise the Microsoft account once. The callback creates the Graph Inbox subscription automatically. The daily Vercel cron renews that subscription.
+The Settings page will then show **Connect Outlook**. Authorise the Microsoft account once. The callback creates the Graph Inbox subscription automatically. The daily Vercel cron renews that subscription, while the minute-level processor handles queued webhook notifications and manual sync runs.

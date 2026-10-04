@@ -24,6 +24,7 @@ test("Outlook webhook ingests a matching notification without an undefined repai
   globalThis.fetch=async(url,options={})=>{
     const target=String(url);
     if(target.startsWith(process.env.SUPABASE_URL+"/rest/v1/outlook_connections?subscription_id="))return new Response(JSON.stringify([connection]),{status:200});
+    if(target===process.env.SUPABASE_URL+"/rest/v1/outlook_webhook_events")return new Response(JSON.stringify([{id:"event-1",status:"pending"}]),{status:201});
     if(target.startsWith(process.env.SUPABASE_URL+"/rest/v1/document_packs?"))return new Response("[]",{status:200});
     if(target==="https://login.microsoftonline.com/consumers/oauth2/v2.0/token")return new Response(JSON.stringify({access_token:"graph-token"}),{status:200});
     if(target.startsWith("https://graph.microsoft.com/v1.0/me/messages/"))return new Response(JSON.stringify({id:"graph-message-1",internetMessageId:"internet-message-1",subject:"CUSTOMS-IDP invoice",body:{content:"Invoice attached",contentType:"text"},from:{emailAddress:{address:"sender@example.test"}},toRecipients:[{emailAddress:{address:"customs@example.test"}}],receivedDateTime:"2026-10-02T10:00:00.000Z",hasAttachments:false}),{status:200});
@@ -39,10 +40,9 @@ test("Outlook webhook ingests a matching notification without an undefined repai
     const response={statusCode:200,body:null,headers:{},status(code){this.statusCode=code;return this;},setHeader(name,value){this.headers[name]=value;},json(value){this.body=value;return this;}};
     await webhook({method:"POST",body:{value:[{subscriptionId:"subscription-1",clientState:"state-1",resourceData:{id:"graph-message-1"}}]},query:{}},response);
     assert.equal(response.statusCode,202);
-    assert.equal(response.body.processed,1);
-    assert.equal(response.body.failed,0);
-    assert.ok(ingestedPayload);
-    assert.equal(Object.hasOwn(ingestedPayload,"repair"),false);
+    assert.equal(response.body.queued,1);
+    assert.equal(response.body.duplicates,0);
+    assert.equal(ingestedPayload,null);
   } finally {
     globalThis.fetch=originalFetch;
   }

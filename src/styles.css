@@ -11,6 +11,8 @@ button{touch-action:manipulation}
 .agent-panel{align-self:start;position:sticky;top:76px}
 .agent-fab{z-index:50}
 .extraction-error{grid-column:1/-1;margin-bottom:12px;padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:7px;color:#9a3412;font-size:10px;line-height:1.5}
+.settings-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.setting-status-error{color:#b42318}
 
 @media(max-width:900px){
   .content{padding:22px}

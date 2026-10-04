@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-const TOKEN_URL="https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
+const TOKEN_URL="https://login.microsoftonline.com/common/oauth2/v2.0/token";
 const GRAPH="https://graph.microsoft.com/v1.0";
 
 export default async function handler(req,res){
@@ -11,7 +11,8 @@ export default async function handler(req,res){
     const code=String(req.query?.code||"");
     const state=String(req.query?.state||"");
     if(!code||!state) return res.status(400).send("Missing Outlook authorisation code or state.");
-    verifyState(state);
+    const statePayload=verifyState(state);
+    const organisationId=String(statePayload.organisationId||"demo-organisation");
     const clientId=String(process.env.OUTLOOK_CLIENT_ID||"").trim();
     const clientSecret=String(process.env.OUTLOOK_CLIENT_SECRET||"").trim();
     if(!clientId||!clientSecret) throw new Error("Outlook OAuth client credentials are not configured.");
@@ -33,17 +34,32 @@ export default async function handler(req,res){
     const email=String(me.mail||me.userPrincipalName||"").trim().toLowerCase();
     if(!email) throw new Error("Microsoft did not return the Outlook account address.");
     const encryptedRefreshToken=encrypt(refreshToken);
-    const connectionId="outlook-"+crypto.randomUUID();
+    const existingForEmail=(await supabaseFetch("outlook_connections?email=eq."+encodeURIComponent(email)+"&limit=1"))[0]||null;
+    if(existingForEmail?.organisation_id&&String(existingForEmail.organisation_id)!==organisationId)throw new Error("This Outlook account is already connected to another organisation.");
+    const existingForOrganisation=(await supabaseFetch("outlook_connections?organisation_id=eq."+encodeURIComponent(organisationId)+"&status=eq.connected&select=*&limit=1"))[0]||null;
+    if(existingForOrganisation?.subscription_id){
+      try{
+        const previousToken=await getAccessToken(existingForOrganisation);
+        await graphDelete("/subscriptions/"+encodeURIComponent(existingForOrganisation.subscription_id),previousToken);
+      }catch{}
+    }
+    if(existingForOrganisation?.id){
+      await supabaseFetch("outlook_connections?id=eq."+encodeURIComponent(existingForOrganisation.id),{method:"PATCH",body:JSON.stringify({status:"disconnected",updated_at:new Date().toISOString()})});
+    }
+    const connectionId=existingForEmail?.id||"outlook-"+crypto.randomUUID();
     const clientState=crypto.randomBytes(24).toString("hex");
-    await supabaseFetch("outlook_connections",{method:"POST",body:JSON.stringify({
+    const connectionBody={
       id:connectionId,
+      organisation_id:organisationId,
       email,
       display_name:me.displayName||null,
       refresh_token:encryptedRefreshToken,
       scopes:"openid profile offline_access User.Read Mail.Read",
       status:"connected",
-      updated_at:new Date().toISOString()
-    }),headers:{"Prefer":"resolution=merge-duplicates,return=minimal"}});
+      updated_at:new Date().toISOString(),
+      last_renewal_error:null
+    };
+    await supabaseFetch(existingForEmail?"outlook_connections?id=eq."+encodeURIComponent(connectionId):"outlook_connections",{method:existingForEmail?"PATCH":"POST",body:JSON.stringify(connectionBody),headers:{"Prefer":"resolution=merge-duplicates,return=minimal"}});
     const subscription=await graphPost("/subscriptions",accessToken,{
       changeType:"created",
       notificationUrl:getWebhookUrl(),
@@ -71,8 +87,9 @@ function verifyState(value){
   if(sig.length!==expected.length||!crypto.timingSafeEqual(Buffer.from(sig),Buffer.from(expected))) throw new Error("Invalid OAuth state signature.");
   const payload=JSON.parse(Buffer.from(raw,"base64url").toString("utf8"));
   if(!payload.createdAt||Date.now()-Number(payload.createdAt)>10*60*1000) throw new Error("OAuth state has expired.");
+  return payload;
 }
-function getRedirectUri(req){return String(process.env.OUTLOOK_REDIRECT_URI||"").trim()||("https://"+String(process.env.VERCEL_URL||"customs-idp.vercel.app").trim()+"/api/outlook/callback");}
+function getRedirectUri(req){const configured=String(process.env.OUTLOOK_REDIRECT_URI||"").trim();if(configured)return configured;const appUrl=String(process.env.APP_URL||"").trim();if(appUrl)return appUrl.replace(/\/+$/g,"")+"/api/outlook/callback";if(process.env.VERCEL_URL)return "https://"+String(process.env.VERCEL_URL).trim()+"/api/outlook/callback";return "http://localhost:3000/api/outlook/callback";}
 function encrypt(value){
   const key=Buffer.from(String(process.env.OUTLOOK_TOKEN_ENCRYPTION_KEY||""),"base64");
   if(key.length!==32) throw new Error("OUTLOOK_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key.");
@@ -84,7 +101,23 @@ function encrypt(value){
 }
 async function graphGet(path,headers){const r=await fetch(GRAPH+path,{headers});const d=await r.json();if(!r.ok)throw new Error(d?.error?.message||"Microsoft Graph request failed.");return d;}
 async function graphPost(path,token,body){const r=await fetch(GRAPH+path,{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d?.error?.message||"Graph subscription failed.");return d;}
-function getWebhookUrl(){return "https://customs-idp.vercel.app/api/outlook/webhook";}
+async function graphDelete(path,token){const r=await fetch(GRAPH+path,{method:"DELETE",headers:{Authorization:"Bearer "+token}});if(!r.ok)throw new Error(await r.text());}
+async function getAccessToken(connection){
+  const refresh=decrypt(connection.refresh_token);
+  const response=await fetch(TOKEN_URL,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({client_id:String(process.env.OUTLOOK_CLIENT_ID||"").trim(),client_secret:String(process.env.OUTLOOK_CLIENT_SECRET||"").trim(),refresh_token:refresh,grant_type:"refresh_token",scope:"openid profile offline_access User.Read Mail.Read"})});
+  const data=await response.json();
+  if(!response.ok)throw new Error(data?.error_description||"Unable to refresh Outlook access token.");
+  return data.access_token;
+}
+function decrypt(value){
+  const key=Buffer.from(String(process.env.OUTLOOK_TOKEN_ENCRYPTION_KEY||""),"base64");
+  if(key.length!==32)throw new Error("OUTLOOK_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key.");
+  const [ivRaw,tagRaw,dataRaw]=String(value||"").split(".");
+  const decipher=crypto.createDecipheriv("aes-256-gcm",key,Buffer.from(ivRaw,"base64url"));
+  decipher.setAuthTag(Buffer.from(tagRaw,"base64url"));
+  return Buffer.concat([decipher.update(Buffer.from(dataRaw,"base64url")),decipher.final()]).toString("utf8");
+}
+function getWebhookUrl(){const appUrl=String(process.env.APP_URL||"").trim();const base=appUrl||("https://"+String(process.env.VERCEL_URL||"").trim());if(!base||base==="https://")throw new Error("APP_URL or VERCEL_URL is required for the Outlook webhook URL.");return base.replace(/\/+$/g,"")+"/api/outlook/webhook";}
 function escapeHtml(value){return String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 async function supabaseFetch(path,options={}){
   const url=process.env.SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;

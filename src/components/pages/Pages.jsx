@@ -897,21 +897,48 @@ function AgentPage(){
 }
 function SettingsPage({currentUserRole="member"}){
   const canInviteUsers=currentUserRole==="manager"||currentUserRole==="admin";
-  const [outlook,setOutlook]=useState({loading:true,connected:false,connection:null});
+  const [outlook,setOutlook]=useState({loading:true,connected:false,connection:null,subscriptionHealth:null});
   const [connecting,setConnecting]=useState(false);
+  const [syncing,setSyncing]=useState(false);
+  const [syncRun,setSyncRun]=useState(null);
   const [error,setError]=useState("");
   const [invite,setInvite]=useState({name:"",email:"",role:"member"});
   const [inviting,setInviting]=useState(false);
   const [inviteMessage,setInviteMessage]=useState("");
 
+  const loadOutlook=async()=>{
+    const response=await fetch("/api/outlook?action=status",{credentials:"include"});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.error||"Unable to load Outlook status.");
+    setOutlook({loading:false,connected:Boolean(data.connected),connection:data.connection||null,subscriptionHealth:data.subscriptionHealth||null});
+  };
+
   useEffect(()=>{
     let active=true;
-    fetch("/api/outlook?action=status",{credentials:"include"})
-      .then(r=>r.json())
-      .then(data=>{if(active)setOutlook({loading:false,connected:Boolean(data.connected),connection:data.connection||null});})
-      .catch(()=>{if(active)setOutlook({loading:false,connected:false,connection:null});});
+    loadOutlook().catch(()=>{if(active)setOutlook({loading:false,connected:false,connection:null,subscriptionHealth:null});});
     return()=>{active=false;};
   },[]);
+
+  useEffect(()=>{
+    if(!syncRun?.id)return;
+    let active=true;
+    const poll=async()=>{
+      try{
+        const response=await fetch("/api/outlook?action=sync-status&id="+encodeURIComponent(syncRun.id),{credentials:"include"});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data.error||"Unable to load sync status.");
+        if(!active)return;
+        setSyncRun(data.run||null);
+        if(["completed","failed"].includes(data.run?.status)){
+          setSyncing(false);
+          await loadOutlook();
+        }
+      }catch(e){if(active){setSyncing(false);setError(e.message||"Unable to load sync status.");}}
+    };
+    void poll();
+    const timer=window.setInterval(poll,2000);
+    return()=>{active=false;window.clearInterval(timer);};
+  },[syncRun?.id]);
 
   const connectOutlook=async()=>{
     setError("");setConnecting(true);
@@ -921,6 +948,27 @@ function SettingsPage({currentUserRole="member"}){
       if(!response.ok)throw new Error(data.error||"Unable to start Outlook connection.");
       window.location.href=data.authorizationUrl;
     }catch(e){setError(e.message||"Unable to start Outlook connection.");setConnecting(false);}
+  };
+
+  const syncOutlook=async()=>{
+    setError("");setSyncing(true);setSyncRun(null);
+    try{
+      const response=await fetch("/api/outlook?action=sync",{method:"POST",credentials:"include"});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||"Unable to start Outlook sync.");
+      setSyncRun({id:data.syncRunId,status:data.status||"queued"});
+    }catch(e){setSyncing(false);setError(e.message||"Unable to start Outlook sync.");}
+  };
+
+  const disconnectOutlook=async()=>{
+    if(!window.confirm("Disconnect this Outlook inbox? New messages will stop arriving until another inbox is connected."))return;
+    setError("");
+    try{
+      const response=await fetch("/api/outlook?action=disconnect",{method:"POST",credentials:"include"});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||"Unable to disconnect Outlook.");
+      setSyncRun(null);setSyncing(false);await loadOutlook();
+    }catch(e){setError(e.message||"Unable to disconnect Outlook.");}
   };
 
   const sendInvite=async(e)=>{
@@ -959,8 +1007,18 @@ function SettingsPage({currentUserRole="member"}){
 
       <div className="panel settings-card">
         <h2>Outlook email intake</h2>
-        <p>Connect an Outlook.com mailbox so new customs emails and attachments can enter the IDP pipeline automatically.</p>
-        {outlook.loading ? <div className="setting-status">Checking connection…</div> : outlook.connected ? <div className="setting-status"><b>Connected</b><span>{outlook.connection?.email}</span></div> : <button className="primary-action" onClick={connectOutlook} disabled={connecting}>{connecting?"Opening Microsoft…":"Connect Outlook"}</button>}
+        <p>Connect an Outlook inbox so new customs emails and attachments can enter the IDP pipeline automatically.</p>
+        {outlook.loading ? <div className="setting-status">Checking connection…</div> : outlook.connected ? <>
+          <div className="setting-status"><b>{outlook.subscriptionHealth?.expired?"Connected, subscription expired":outlook.subscriptionHealth?.expiringSoon?"Connected, subscription expiring soon":"Connected"}</b><span>{outlook.connection?.email}</span></div>
+          <div className="setting-status"><span>Subscription expires</span><b>{formatReceivedDateTime(outlook.connection?.subscription_expires_at)}</b></div>
+          <div className="setting-status"><span>Last sync</span><b>{outlook.connection?.last_sync_completed_at?formatReceivedDateTime(outlook.connection.last_sync_completed_at):"Not run"}</b></div>
+          {outlook.connection?.last_sync_status&&<div className="setting-status"><span>Sync result</span><b>{outlook.connection.last_sync_status}{outlook.connection.last_sync_processed!=null?" · "+outlook.connection.last_sync_processed+" processed":""}</b></div>}
+          {outlook.connection?.last_sync_error&&<div className="password-login-error">{outlook.connection.last_sync_error}</div>}
+          {outlook.connection?.last_renewal_error&&<div className="password-login-error">Subscription renewal: {outlook.connection.last_renewal_error}</div>}
+          {syncRun?.status&&<div className={"setting-status "+(syncRun.status==="failed"?"setting-status-error":"")}><span>Manual sync</span><b>{syncRun.status}{syncRun.checked!=null?" · "+syncRun.checked+" checked":""}{syncRun.queued!=null?" · "+syncRun.queued+" queued":""}</b></div>}
+          {syncRun?.error&&<div className="password-login-error">{syncRun.error}</div>}
+          <div className="settings-actions"><button className="primary-action" onClick={syncOutlook} disabled={syncing}>{syncing?"Syncing…":"Sync now"}</button><button className="secondary-action" onClick={connectOutlook} disabled={connecting}>{connecting?"Opening Microsoft…":"Reconnect"}</button><button className="secondary-action" onClick={disconnectOutlook}>Disconnect</button></div>
+        </> : <button className="primary-action" onClick={connectOutlook} disabled={connecting}>{connecting?"Opening Microsoft…":"Connect Outlook"}</button>}
         {error&&<div className="password-login-error">{error}</div>}
         <small>Access is limited to Microsoft Graph Mail.Read. Customs IDP does not request permission to send or modify email.</small>
       </div>
