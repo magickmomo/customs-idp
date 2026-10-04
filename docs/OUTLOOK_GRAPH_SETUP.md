@@ -94,7 +94,7 @@ After the code is deployed:
 6. Keep the existing `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `EMAIL_INGEST_SECRET`, `IDP_AUTH_SECRET` and `OPENAI_API_KEY`.
 7. Redeploy after changing environment variables.
 
-The Settings page will then show **Connect Outlook**. Authorise the Microsoft account once. The callback creates the Graph Inbox subscription automatically. The daily Vercel cron renews that subscription.
+The Settings page will then show **Connect Outlook**. Authorise the Microsoft account once. The callback creates the Graph Inbox subscription automatically. The daily Vercel cron renews that subscription. If renewal fails, use **Renew subscription** in Settings to renew the existing Graph subscription, or recreate it if Graph has already removed it. This uses the stored Outlook connection and does not require Microsoft sign-in. **Scan existing emails** queues a mailbox scan and is separate from renewal; **Sign in again** repeats Microsoft authorisation if the stored token no longer works.
 
 ## Queue worker schedule
 
