@@ -307,7 +307,7 @@ async function processWebhookEvent(event){
 
 async function enqueueWebhookEvent({connection,subscriptionId,graphMessageId,notification,syncRunId=null}){
   if(!graphMessageId)throw new Error("Outlook notification is missing the message id.");
-  const rows=await supabaseFetch("outlook_webhook_events",{method:"POST",body:JSON.stringify({organisation_id:connection.organisation_id||"demo-organisation",connection_id:connection.id,subscription_id:subscriptionId,graph_message_id:graphMessageId,sync_run_id:syncRunId,notification,status:"pending"}),headers:{Prefer:"resolution=ignore-duplicates,return=representation"}});
+  const rows=await supabaseFetch("outlook_webhook_events?on_conflict=connection_id,graph_message_id",{method:"POST",body:JSON.stringify({organisation_id:connection.organisation_id||"demo-organisation",connection_id:connection.id,subscription_id:subscriptionId,graph_message_id:graphMessageId,sync_run_id:syncRunId,notification,status:"pending"}),headers:{Prefer:"resolution=ignore-duplicates,return=representation"}});
   return Array.isArray(rows)&&rows.length>0;
 }
 
