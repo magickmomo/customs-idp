@@ -14,7 +14,7 @@ The OAuth redirect and Graph webhook use different URLs. For local testing, keep
 ```text
 APP_URL=http://localhost:3000
 OUTLOOK_REDIRECT_URI=http://localhost:3000/api/outlook/callback
-OUTLOOK_WEBHOOK_URL=https://customs-idp.vercel.app/api/outlook/webhook
+OUTLOOK_WEBHOOK_URL=https://customs-idp-rosy.vercel.app/api/outlook/webhook
 ```
 
 ## Vercel environment variables
