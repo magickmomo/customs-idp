@@ -16,7 +16,7 @@ function cleanSegment(value){
   return String(value||"").replace(/[^a-zA-Z0-9._-]+/g,"-").replace(/^-+|-+$/g,"")||"document";
 }
 
-export default async function supabaseFetch(path,options={}){
+async function supabaseFetch(path,options={}){
   const url=process.env.SUPABASE_URL, key=process.env.SUPABASE_SERVICE_ROLE_KEY;
   if(!url||!key) throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not configured in Vercel.");
   const response=await fetch(`${url}/rest/v1/${path}`,{
@@ -34,7 +34,8 @@ export default async function supabaseFetch(path,options={}){
 }
 
 async function handler(req,res){
-  if(!requireAuth(req,res))return;
+  const auth=requireAuth(req,res);
+  if(!auth)return;
   try{
     const supabase=getClient();
 
