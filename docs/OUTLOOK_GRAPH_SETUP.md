@@ -17,6 +17,7 @@ Add these to the Customs IDP Vercel project:
 - OUTLOOK_CLIENT_SECRET = the client secret value created in Entra
 - OUTLOOK_REDIRECT_URI = your configured deployment URL followed by `/api/outlook/callback`
 - OUTLOOK_TOKEN_ENCRYPTION_KEY = base64-encoded 32-byte random key
+- CRON_SECRET = a long random value used to authenticate renewal and queue-worker requests
 
 The encryption key protects the Microsoft refresh token stored in Supabase. Never commit it to GitHub.
 
@@ -83,4 +84,17 @@ After the code is deployed:
 5. Keep the existing `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `EMAIL_INGEST_SECRET`, `IDP_AUTH_SECRET` and `OPENAI_API_KEY`.
 6. Redeploy after changing environment variables.
 
-The Settings page will then show **Connect Outlook**. Authorise the Microsoft account once. The callback creates the Graph Inbox subscription automatically. The daily Vercel cron renews that subscription, while the minute-level processor handles queued webhook notifications and manual sync runs.
+The Settings page will then show **Connect Outlook**. Authorise the Microsoft account once. The callback creates the Graph Inbox subscription automatically. The daily Vercel cron renews that subscription.
+
+## Queue worker schedule
+
+The durable queue worker is available at:
+
+```text
+POST {APP_URL}/api/outlook?action=process-webhook
+Authorization: Bearer {CRON_SECRET}
+```
+
+Invoke it once per minute from a trusted scheduler. Vercel Hobby only permits cron jobs once per day, so the minute worker is intentionally not included in `vercel.json`; use Supabase Cron, GitHub Actions, or another external scheduler. On Vercel Pro, the worker can instead be added to `vercel.json` with the schedule `* * * * *`.
+
+Manual Sync and webhook notifications both remain queued until this worker runs. Keep `APP_URL` set to the active deployment URL and use the same `CRON_SECRET` in the scheduler and Vercel environment.

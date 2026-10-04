@@ -99,9 +99,8 @@ async function disconnect(req,res){
 export async function webhook(req,res){
   // Microsoft Graph validates a notification endpoint with a validationToken
   // query parameter before it starts delivering change notifications.
-  if(req.method==="GET"){
-    const validationToken=String(req.query?.validationToken||"");
-    if(!validationToken)return res.status(400).send("validationToken is required.");
+  const validationToken=String(req.query?.validationToken||"");
+  if(validationToken){
     res.setHeader("Content-Type","text/plain; charset=utf-8");
     return res.status(200).send(validationToken);
   }
@@ -140,9 +139,7 @@ export async function webhook(req,res){
 
 async function renew(req,res){
   if(req.method!=="GET"&&req.method!=="POST")return res.status(405).json({error:"Method not allowed"});
-  const cronSecret=String(process.env.CRON_SECRET||"").trim();
-  const supplied=String(req.headers?.authorization||"").replace(/^Bearer\s+/i,"").trim();
-  if(cronSecret&&supplied!==cronSecret)return res.status(401).json({error:"Unauthorized"});
+  if(!authorizeCron(req,res))return;
   try{
     const rows=await supabaseFetch("outlook_connections?select=*&status=eq.connected&order=updated_at.asc");
     if(!rows.length)return res.status(200).json({ok:true,renewed:0,message:"No Outlook connections configured."});
@@ -166,19 +163,24 @@ async function renew(req,res){
 async function renewConnection(connection){
   const accessToken=await getAccessToken(connection);
   const clientState=connection.client_state||crypto.randomBytes(24).toString("hex");
-  if(connection.subscription_id)await graphDelete("/subscriptions/"+encodeURIComponent(connection.subscription_id),accessToken).catch(()=>{});
   const subscription=await graphPost("/subscriptions",accessToken,{changeType:"created",notificationUrl:getWebhookUrl(),resource:"me/mailFolders('Inbox')/messages",expirationDateTime:new Date(Date.now()+2*24*60*60*1000).toISOString(),clientState});
   const renewedAt=new Date().toISOString();
-  await supabaseFetch("outlook_connections?id=eq."+encodeURIComponent(connection.id),{method:"PATCH",body:JSON.stringify({subscription_id:subscription.id,subscription_expires_at:subscription.expirationDateTime,client_state:clientState,last_renewed_at:renewedAt,last_renewal_error:null,updated_at:renewedAt})});
+  try{
+    await supabaseFetch("outlook_connections?id=eq."+encodeURIComponent(connection.id),{method:"PATCH",body:JSON.stringify({subscription_id:subscription.id,subscription_expires_at:subscription.expirationDateTime,client_state:clientState,last_renewed_at:renewedAt,last_renewal_error:null,updated_at:renewedAt})});
+  }catch(error){
+    await graphDelete("/subscriptions/"+encodeURIComponent(subscription.id),accessToken).catch(()=>{});
+    throw error;
+  }
+  if(connection.subscription_id&&connection.subscription_id!==subscription.id){
+    await graphDelete("/subscriptions/"+encodeURIComponent(connection.subscription_id),accessToken).catch(error=>console.warn("Unable to remove replaced Outlook subscription",error));
+  }
   console.info("Outlook subscription renewed", {email:connection.email,subscriptionId:subscription.id,expiresAt:subscription.expirationDateTime});
   return {email:connection.email,ok:true,subscriptionId:subscription.id,expiresAt:subscription.expirationDateTime};
 }
 
 async function processWebhook(req,res){
   if(req.method!=="GET"&&req.method!=="POST")return res.status(405).json({error:"Method not allowed"});
-  const cronSecret=String(process.env.CRON_SECRET||"").trim();
-  const supplied=String(req.headers?.authorization||"").replace(/^Bearer\s+/i,"").trim();
-  if(cronSecret&&supplied!==cronSecret)return res.status(401).json({error:"Unauthorized"});
+  if(!authorizeCron(req,res))return;
 
   const summary={syncRuns:0,queued:0,processed:0,failed:0};
   try{
@@ -201,6 +203,14 @@ async function processWebhook(req,res){
   }
 }
 
+function authorizeCron(req,res){
+  const cronSecret=String(process.env.CRON_SECRET||"").trim();
+  if(!cronSecret){res.status(503).json({error:"CRON_SECRET is not configured."});return false;}
+  const supplied=String(req.headers?.authorization||"").replace(/^Bearer\s+/i,"").trim();
+  if(supplied.length!==cronSecret.length||!crypto.timingSafeEqual(Buffer.from(supplied),Buffer.from(cronSecret))){res.status(401).json({error:"Unauthorized"});return false;}
+  return true;
+}
+
 async function startQueuedSyncRuns(summary){
   const runs=await supabaseFetch("outlook_sync_runs?status=eq.queued&order=created_at.asc&limit=5");
   let started=0;
@@ -213,8 +223,7 @@ async function startQueuedSyncRuns(summary){
       const connection=connections[0];
       if(!connection)throw new Error("The connected Outlook inbox is no longer available.");
       const token=await getAccessToken(connection);
-      const data=await graphGet("/me/messages?$top=50&$orderby=receivedDateTime%20desc&$select=id,internetMessageId,subject,body,from,toRecipients,receivedDateTime,hasAttachments",token);
-      const messages=Array.isArray(data.value)?data.value:[];
+      const messages=await getInboxMessages(token);
       let queued=0,duplicates=0;
       for(const message of messages.filter(item=>/CUSTOMS-IDP/i.test(String(item.subject||"")))){
         const inserted=await enqueueWebhookEvent({connection,subscriptionId:connection.subscription_id||("manual:"+connection.id),graphMessageId:String(message.id||""),notification:{source:"manual",messageId:message.id,receivedDateTime:message.receivedDateTime||null},syncRunId:run.id});
@@ -394,10 +403,21 @@ async function postToIngest(payload){
   if(!response.ok)throw new Error("Email ingestion returned HTTP "+response.status+": "+await response.text());
 }
 async function graphGet(path,token){
-  const response=await fetch(GRAPH+path,{headers:{Authorization:"Bearer "+token}});
+  const target=/^https:\/\//i.test(String(path))?String(path):GRAPH+path;
+  const response=await fetch(target,{headers:{Authorization:"Bearer "+token}});
   const data=await response.json();
   if(!response.ok)throw new Error(data?.error?.message||"Microsoft Graph request failed.");
   return data;
+}
+async function getInboxMessages(token){
+  const messages=[];
+  let next="/me/mailFolders('Inbox')/messages?$top=50&$orderby=receivedDateTime%20desc&$select=id,internetMessageId,subject,receivedDateTime";
+  while(next){
+    const page=await graphGet(next,token);
+    if(Array.isArray(page.value))messages.push(...page.value);
+    next=String(page["@odata.nextLink"]||"").trim()||null;
+  }
+  return messages;
 }
 async function graphPost(path,token,body){
   const response=await fetch(GRAPH+path,{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(body)});

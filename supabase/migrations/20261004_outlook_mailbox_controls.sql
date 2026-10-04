@@ -73,6 +73,21 @@ create index if not exists outlook_webhook_events_pending_idx
 create index if not exists outlook_webhook_events_sync_run_idx
   on public.outlook_webhook_events(sync_run_id);
 
+-- These tables contain OAuth connection metadata and raw Graph notification
+-- payloads. They are server-only: browser clients must not access them through
+-- the Supabase Data API.
+alter table public.outlook_connections enable row level security;
+alter table public.outlook_sync_runs enable row level security;
+alter table public.outlook_webhook_events enable row level security;
+
+revoke all on table public.outlook_connections from anon, authenticated;
+revoke all on table public.outlook_sync_runs from anon, authenticated;
+revoke all on table public.outlook_webhook_events from anon, authenticated;
+
+grant select, insert, update, delete on table public.outlook_connections to service_role;
+grant select, insert, update, delete on table public.outlook_sync_runs to service_role;
+grant select, insert, update, delete on table public.outlook_webhook_events to service_role;
+
 create or replace function public.claim_outlook_webhook_events(p_limit integer default 10)
 returns setof public.outlook_webhook_events
 language plpgsql
@@ -109,4 +124,5 @@ end;
 $$;
 
 revoke all on function public.claim_outlook_webhook_events(integer) from public;
+revoke all on function public.claim_outlook_webhook_events(integer) from anon, authenticated;
 grant execute on function public.claim_outlook_webhook_events(integer) to service_role;
