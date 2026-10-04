@@ -56,7 +56,34 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
  const [customerSetupDeclined,setCustomerSetupDeclined]=useState(false);
  const emailAuditStartedRef=useRef(null);
 
- useEffect(()=>{let active=true;(async()=>{const entries=await Promise.all((pack.uploadedFiles||[]).map(async f=>{try{if(f.storagePath){const response=await fetch("/api/storage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"signed-url",path:f.storagePath})});const data=await response.json();if(response.ok&&data.signedUrl)return [f.id,data.signedUrl];}const file=await getUploadedDocument(f.id);return file?[f.id,URL.createObjectURL(file)]:null;}catch{return null;}}));if(active)setDocUrls(Object.fromEntries(entries.filter(Boolean)));})();return()=>{active=false;};},[pack.id,pack.uploadedFiles]);
+ useEffect(()=>{
+  let active=true;
+  (async()=>{
+    const entries=await Promise.all((pack.uploadedFiles||[]).map(async f=>{
+      try{
+        if(f.storagePath){
+          const cachedExpiry=Date.parse(f.accessUrlExpiresAt||"");
+          const cachedIsUsable=f.accessUrl && Number.isFinite(cachedExpiry) && cachedExpiry-Date.now()>5*60*1000;
+          if(cachedIsUsable)return [f.id,f.accessUrl];
+
+          const response=await fetch("/api/storage",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({action:"signed-url",path:f.storagePath,packId:pack.id})
+          });
+          const data=await response.json();
+          if(response.ok&&data.accessUrl){
+            return [f.id,data.accessUrl];
+          }
+        }
+        const file=await getUploadedDocument(f.id);
+        return file?[f.id,URL.createObjectURL(file)]:null;
+      }catch{return null;}
+    }));
+    if(active)setDocUrls(Object.fromEntries(entries.filter(Boolean)));
+  })();
+  return()=>{active=false;};
+},[pack.id,pack.uploadedFiles]);
 
  const documentRows=pack.uploadedFiles?.length?pack.uploadedFiles:[
    {id:"sample-1",name:"Commercial Invoice 88421.pdf"},{id:"sample-2",name:"Packing List 88421.pdf"},
