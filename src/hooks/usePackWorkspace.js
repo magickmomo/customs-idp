@@ -71,9 +71,6 @@ const localPacksRef=useRef([]);
       void runMailboxRecoveryScan();
       syncTimer=window.setInterval(runMailboxRecoveryScan,15*60*1000);
     },recoveryScanDelay);
-    const inboxRefreshTimer=window.setInterval(async()=>{
-      try{ if(active) await loadDatabasePacks(); }catch(error){ if(active) setPackLoadError(error?.message||"Unable to refresh organisation packs."); }
-    },5000);
     (async()=>{
       try {
         // Load the active organisation's customers and strategy configuration.
@@ -117,7 +114,7 @@ const localPacksRef=useRef([]);
         if(active)setPacksLoading(false);
       }
     })();
-    return()=>{active=false;window.clearTimeout(recoveryScanTimer);if(syncTimer)window.clearInterval(syncTimer);if(inboxRefreshTimer)window.clearInterval(inboxRefreshTimer);};
+    return()=>{active=false;window.clearTimeout(recoveryScanTimer);if(syncTimer)window.clearInterval(syncTimer);};
   },[authenticated]);
   // Supabase Realtime keeps an open inbox current as soon as the database changes.
   // RLS on document_packs limits each authenticated user to their organisation.
