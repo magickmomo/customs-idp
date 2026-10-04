@@ -94,7 +94,7 @@ After the code is deployed:
 6. Keep the existing `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `EMAIL_INGEST_SECRET`, `IDP_AUTH_SECRET` and `OPENAI_API_KEY`.
 7. Redeploy after changing environment variables.
 
-The Settings page will then show **Connect Outlook**. Authorise the Microsoft account once. The callback creates the Graph Inbox subscription automatically. The daily Vercel cron renews that subscription.
+The Settings page will then show **Connect Outlook**. Authorise the Microsoft account once. The callback creates the Graph Inbox subscription automatically. The daily Vercel cron renews that subscription. If renewal fails, use **Renew subscription** in Settings to renew the existing Graph subscription, or recreate it if Graph has already removed it. This uses the stored Outlook connection and does not require Microsoft sign-in. **Scan existing emails** queues a mailbox scan and is separate from renewal; **Sign in again** repeats Microsoft authorisation if the stored token no longer works.
 
 ## Queue worker schedule
 
@@ -108,3 +108,34 @@ Authorization: Bearer {CRON_SECRET}
 Invoke it once per minute from a trusted scheduler. Vercel Hobby only permits cron jobs once per day, so the minute worker is intentionally not included in `vercel.json`; use Supabase Cron, GitHub Actions, or another external scheduler. On Vercel Pro, the worker can instead be added to `vercel.json` with the schedule `* * * * *`.
 
 Manual Sync and webhook notifications both remain queued until this worker runs. Keep `APP_URL` set to the active deployment URL and use the same `CRON_SECRET` in the scheduler and Vercel environment.
+
+### Restore the worker on Vercel Hobby with Supabase Cron
+
+Enable the `pg_cron`, `pg_net`, and Vault extensions in the Supabase project. Set `CRON_SECRET` in the production Vercel project and redeploy. In the Supabase SQL Editor, replace the secret placeholder below and run these commands once. The example app URL is the production deployment; do not use localhost or another project's URL.
+
+```sql
+select vault.create_secret('https://customs-idp.vercel.app', 'outlook_worker_app_url');
+select vault.create_secret('REPLACE_WITH_THE_SAME_VALUE_AS_VERCEL_CRON_SECRET', 'CRON_SECRET');
+```
+
+Then schedule the existing worker. The named schedule can be updated by unscheduling it before recreating it.
+
+```sql
+select cron.schedule(
+  'outlook-queue-worker',
+  '* * * * *',
+  $worker$
+    select net.http_post(
+      url := (select decrypted_secret from vault.decrypted_secrets where name = 'outlook_worker_app_url') || '/api/outlook?action=process-webhook',
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'CRON_SECRET')
+      ),
+      body := '{}'::jsonb,
+      timeout_milliseconds := 60000
+    );
+  $worker$
+);
+```
+
+Verify the schedule and its executions in the Supabase Cron dashboard or query `cron.job` and `cron.job_run_details`. A successful HTTP request is only the first check: click **Scan existing emails** in Settings and confirm its status progresses from **queued** to **running** to **completed**. Inspect Vercel logs for `/api/outlook?action=process-webhook` and the `outlook_sync_runs` and `outlook_webhook_events` rows if it fails. This worker processes events sequentially, so a large mailbox or slow document extraction may exceed the Vercel function duration; test with one matching email first.
