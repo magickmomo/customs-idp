@@ -115,7 +115,7 @@ Enable the `pg_cron`, `pg_net`, and Vault extensions in the Supabase project. Se
 
 ```sql
 select vault.create_secret('https://customs-idp.vercel.app', 'outlook_worker_app_url');
-select vault.create_secret('REPLACE_WITH_THE_SAME_VALUE_AS_VERCEL_CRON_SECRET', 'outlook_worker_cron_secret');
+select vault.create_secret('REPLACE_WITH_THE_SAME_VALUE_AS_VERCEL_CRON_SECRET', 'CRON_SECRET');
 ```
 
 Then schedule the existing worker. The named schedule can be updated by unscheduling it before recreating it.
@@ -129,7 +129,7 @@ select cron.schedule(
       url := (select decrypted_secret from vault.decrypted_secrets where name = 'outlook_worker_app_url') || '/api/outlook?action=process-webhook',
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'outlook_worker_cron_secret')
+        'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'CRON_SECRET')
       ),
       body := '{}'::jsonb,
       timeout_milliseconds := 60000
