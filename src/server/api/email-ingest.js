@@ -44,8 +44,8 @@ export default async function handler(req,res){
       requestedCustomerName
     });
 
-    const customer=customerContext.customerName;
-    const customerId=customerContext.customerId;
+    let customer=customerContext.customerName;
+    let customerId=customerContext.customerId;
 
     const legacyStrategies=readJson(process.env.CUSTOMER_EMAIL_STRATEGIES_JSON,{});
     const configured=customerId
@@ -185,10 +185,77 @@ export default async function handler(req,res){
         attachmentResults.push({filename,mimeType,error:formatExtractionError(error)});
       }
     }
-    const successfulExtractions=attachmentResults.filter(item=>item.extraction).map(item=>item.extraction);
+    let successfulExtractions=attachmentResults.filter(item=>item.extraction).map(item=>item.extraction);
+
+    // Email intake must use the same extracted-party customer identification
+    // as browser uploads. Start with any mailbox/routing match, then inspect
+    // the extracted exporter/importer before the pack is finalised.
+    const initialCustomerId=customerId;
+    const primaryBeforeIdentification=successfulExtractions.find(item=>item.documentType==="commercial_invoice")||successfulExtractions[0]||null;
+    const extractedExporter=primaryBeforeIdentification?.exporter||primaryBeforeIdentification?.exporterName||"";
+    const extractedImporter=primaryBeforeIdentification?.consignee||primaryBeforeIdentification?.importer||primaryBeforeIdentification?.importerName||"";
+
+    customerContext=await resolveCustomerContext({
+      organisationId:DEFAULT_ORGANISATION.id,
+      to,
+      routedCustomerName,
+      requestedCustomerName,
+      exporterName:extractedExporter,
+      importerName:extractedImporter
+    });
+
+    if(customerContext.matched){
+      customer=customerContext.customerName;
+      customerId=customerContext.customerId;
+
+      // If the customer was identified from the documents rather than the
+      // mailbox/routing metadata, re-run extraction with that customer's
+      // active strategy so the same strategy context is used for email packs.
+      if(String(initialCustomerId||"")!==String(customerId||"")){
+        for(let index=0;index<attachments.length;index+=1){
+          const attachment=attachments[index];
+          const current=attachmentResults[index];
+          const fileData=normaliseAttachmentData(attachment);
+          if(!fileData)continue;
+          try{
+            const extraction=await extractAttachment({
+              fileData,
+              filename:String(attachment.filename||attachment.name||("attachment-"+(index+1))),
+              mimeType:String(attachment.mimeType||attachment.contentType||"application/octet-stream"),
+              customerStrategy:customerContext.strategy||{instructions:"",requiredFields:[],weightHandling:"ask_user"}
+            });
+            attachmentResults[index]={...current,extraction:extraction.extraction,source:extraction.source};
+          }catch(error){
+            // Preserve the first successful extraction if a strategy-context
+            // retry fails; identification itself remains valid.
+          }
+        }
+        successfulExtractions=attachmentResults.filter(item=>item.extraction).map(item=>item.extraction);
+      }
+    }else if(customerContext.ambiguous){
+      customer=null;
+      customerId=null;
+    }else{
+      customer=null;
+      customerId=null;
+    }
+
     const primaryExtraction=successfulExtractions.find(item=>item.documentType==="commercial_invoice")||successfulExtractions[0]||null;
     const extractionWarnings=[...(emailExtraction.warnings||[]),...attachmentResults.filter(item=>item.error).map(item=>item.filename+": "+formatExtractionError(item.error))];
-    const extractedData={...(primaryExtraction||{}),_tenant:{organisationId:DEFAULT_ORGANISATION.id,organisationName:DEFAULT_ORGANISATION.name},documentType:primaryExtraction?.documentType||"email",email:pack.email,documents:attachmentResults,documentCount:attachmentResults.length,sourceDocuments:attachmentResults.map(item=>({name:item.filename,type:item.extraction?.documentType||item.mimeType,extraction:item.extraction||null,error:item.error||null})),emailFields:emailExtraction.fields,warnings:extractionWarnings,agentMessages:[]};
+    pack.customer=customer;
+    pack.customerId=customerId;
+
+    const extractedData={...(primaryExtraction||{}),_tenant:{organisationId:DEFAULT_ORGANISATION.id,organisationName:DEFAULT_ORGANISATION.name},documentType:primaryExtraction?.documentType||"email",email:pack.email,documents:attachmentResults,documentCount:attachmentResults.length,sourceDocuments:attachmentResults.map(item=>({name:item.filename,type:item.extraction?.documentType||item.mimeType,extraction:item.extraction||null,error:item.error||null})),emailFields:emailExtraction.fields,warnings:extractionWarnings,agentMessages:[],customerIdentification:{
+      exporterName:extractedExporter||null,
+      importerName:extractedImporter||null,
+      matched:Boolean(customerContext.matched),
+      matchedBy:customerContext.matchedBy||null,
+      ambiguous:Boolean(customerContext.ambiguous),
+      candidates:customerContext.candidates||[],
+      customerId:customerId||null,
+      customerName:customer||null,
+      method:customerContext.matchedBy==="mailbox"||customerContext.matchedBy==="routing"?"email-routing":"automatic"
+    }};
     // Build the combined customs record before the pack can leave Processing.
     // Supporting documents (especially Packing Lists) may fill missing invoice
     // fields and line-level weights, but never overwrite populated invoice data.
@@ -249,7 +316,7 @@ export default async function handler(req,res){
   }
 }
 
-async function resolveCustomerContext({organisationId,to,routedCustomerName,requestedCustomerName}){
+async function resolveCustomerContext({organisationId,to,routedCustomerName,requestedCustomerName,exporterName="",importerName=""}){
   const candidateNames=[routedCustomerName,requestedCustomerName].filter(Boolean);
 
   let customers=[];
@@ -293,15 +360,50 @@ async function resolveCustomerContext({organisationId,to,routedCustomerName,requ
           String(item.id)===String(mailbox.customer_id) &&
           String(item.status||"active").toLowerCase()==="active"
         )||null;
+        if(customer)customer.__matchedBy="mailbox";
       }
     }catch{}
+  }
+
+  // If no mailbox/routing relationship identified the customer, use the
+  // same exporter/importer exact-name matching used by manual uploads.
+  if(!customer){
+    const exporter=normalise(exporterName);
+    const importer=normalise(importerName);
+    const activeCustomers=customers.filter(item=>String(item.status||"active").toLowerCase()==="active");
+    const exporterMatch=exporter
+      ? activeCustomers.find(item=>normalise(item.name)===exporter)
+      : null;
+    const importerMatch=importer
+      ? activeCustomers.find(item=>normalise(item.name)===importer)
+      : null;
+
+    if(exporterMatch&&importerMatch&&String(exporterMatch.id)!==String(importerMatch.id)){
+      return {
+        customerId:null,
+        customerName:null,
+        strategy:null,
+        matched:false,
+        ambiguous:true,
+        candidates:[
+          {id:exporterMatch.id,name:exporterMatch.name,matchedBy:"exporter"},
+          {id:importerMatch.id,name:importerMatch.name,matchedBy:"importer"}
+        ]
+      };
+    }
+
+    customer=exporterMatch||importerMatch||null;
+    if(customer)customer.__matchedBy=exporterMatch?"exporter":"importer";
   }
 
   if(!customer){
     return {
       customerId:null,
-      customerName:candidateNames[0]||null,
-      strategy:null
+      customerName:null,
+      strategy:null,
+      matched:false,
+      ambiguous:false,
+      candidates:[]
     };
   }
 
@@ -318,7 +420,11 @@ async function resolveCustomerContext({organisationId,to,routedCustomerName,requ
   return {
     customerId:customer.id,
     customerName:customer.name,
-    strategy:strategy?.config||null
+    strategy:strategy?.config||null,
+    matched:true,
+    ambiguous:false,
+    candidates:[],
+    matchedBy:customer.__matchedBy||null
   };
 }
 
