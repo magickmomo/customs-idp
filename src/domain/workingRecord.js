@@ -64,16 +64,6 @@ export function buildWorkingCustomsRecord(pack){
 
     // Apply deterministic customer strategy flags to the working customs record.
     // These are explicit configuration values, not AI guesses.
-    if(strategy?.totalInvoiceFromLines===true){
-      const linesForTotal=Array.isArray(merged.lines)?merged.lines:[];
-      const lineAmounts=linesForTotal.map(line=>Number(String(line?.totalValue??line?.lineValue??"").replace(/,/g,"").trim()));
-      if(lineAmounts.length&&lineAmounts.every(Number.isFinite)){
-        const total=lineAmounts.reduce((sum,value)=>sum+value,0);
-        merged.totalInvoiceValue=Math.round(total*100)/100;
-        if(merged.invoiceTotal!==undefined)merged.invoiceTotal=merged.totalInvoiceValue;
-      }
-    }
-
     if(strategy?.exporterAddress){
       merged.exporterAddress=strategy.exporterAddress;
     }
@@ -182,6 +172,16 @@ export function buildWorkingCustomsRecord(pack){
       const headerCurrency=merged.currency||merged.invoiceCurrency||merged.headerCurrency||merged.currencyCode||"";
       if(headerCurrency){
         merged.lines=merged.lines.map(line=>({...line,currency:headerCurrency}));
+      }
+    }
+
+    if(strategy?.totalInvoiceFromLines===true){
+      const linesForTotal=Array.isArray(merged.lines)?merged.lines:[];
+      const lineAmounts=linesForTotal.map(line=>Number(String(line?.totalValue??line?.lineValue??"").replace(/,/g,"").trim()));
+      if(lineAmounts.length&&lineAmounts.every(Number.isFinite)){
+        const total=lineAmounts.reduce((sum,value)=>sum+value,0);
+        merged.totalInvoiceValue=Math.round(total*100)/100;
+        if(merged.invoiceTotal!==undefined)merged.invoiceTotal=merged.totalInvoiceValue;
       }
     }
 
