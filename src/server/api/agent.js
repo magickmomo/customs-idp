@@ -20,7 +20,7 @@ export default async function handler(req,res){
         target:null
       });
     }
-    const strategyRequest=pack?.type==="customer_strategy";
+    const strategyRequest=pack?.type==="customer_strategy" || /\b(customer\s+strategy|customer\s+rule|record\s+(this|the)\s+strategy|save\s+(this|the)\s+strategy|create\s+(the\s+)?customer)\b/i.test(String(message||""));
     const context={
       packId:pack.id,customer:pack.customer,ticket:pack.ticket,
       customerId:pack.customerId||null,
