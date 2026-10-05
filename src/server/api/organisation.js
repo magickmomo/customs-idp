@@ -431,7 +431,11 @@ function createDefaultStrategy(){
     extractionRules:[],
     fieldRules:[],
     customValidations:[],
-    autoApplyWeightApportionment:false
+    autoApplyWeightApportionment:false,
+    lineCurrencyFromHeader:false,
+    totalInvoiceFromLines:false,
+    exporterAddress:"",
+    importerAddress:""
   };
 }
 
@@ -450,7 +454,11 @@ function normaliseStrategyConfig(value){
     requiredFields:Array.isArray(config.requiredFields)?config.requiredFields:[],
     fieldRules:Array.isArray(config.fieldRules)?config.fieldRules:[],
     customValidations:Array.isArray(config.customValidations)?config.customValidations:[],
-    autoApplyWeightApportionment:config.autoApplyWeightApportionment===true
+    autoApplyWeightApportionment:config.autoApplyWeightApportionment===true,
+    lineCurrencyFromHeader:config.lineCurrencyFromHeader===true,
+    totalInvoiceFromLines:config.totalInvoiceFromLines===true,
+    exporterAddress:typeof config.exporterAddress==="string"?config.exporterAddress:"",
+    importerAddress:typeof config.importerAddress==="string"?config.importerAddress:""
   };
 }
 
