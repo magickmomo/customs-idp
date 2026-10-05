@@ -54,7 +54,6 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
  const [createCustomerError,setCreateCustomerError]=useState("");
  const [creatingCustomer,setCreatingCustomer]=useState(false);
  const [customerSetupDeclined,setCustomerSetupDeclined]=useState(false);
- const emailAuditStartedRef=useRef(null);
 
  useEffect(()=>{
   let active=true;
@@ -280,33 +279,6 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
    setMessages([...buildSummary().filter(message=>message.type!=="customsEntrySummary"),...cleanedSaved.filter(saved=>saved.type!=="customsEntrySummary")]);
  },[pack.id,pack.extractedData,pack.workingRecord,pack.validationStatus,pack.validationChecks,extractedDocuments]);
  useEffect(()=>{if(!documentRows.length){setSelectedDocumentId(null);return;}setSelectedDocumentId(current=>documentRows.some(d=>(d.id||d.name)===current)?current:(documentRows[0].id||documentRows[0].name));},[pack.id,pack.uploadedFiles?.length]);
- useEffect(()=>{
-   if(!pack?.email||!pack?.extractedData)return;
-   if(pack.extractedData?.agentAuditCompleted)return;
-   if(emailAuditStartedRef.current===pack.id)return;
-   const savedMessages=Array.isArray(pack.extractedData?.agentMessages)?pack.extractedData.agentMessages:[];
-   if(savedMessages.some(m=>m?.type==="fieldSuggestion"))return;
-   emailAuditStartedRef.current=pack.id;
-   let active=true;
-   (async()=>{
-     try{
-       const response=await fetch("/api/agent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-         message:"[AUTOMATED EMAIL AUDIT] Review the associated email against the extracted document data before the user asks a question. Identify clear customs-relevant information present in the email but missing from the extracted data. Do not change the pack; return suggestions requiring human confirmation.",
-         pack:{...pack,customerStrategy:getCustomerStrategy(pack.customer),conversation:[],extractedData:{...(pack.extractedData||{}),agentMessages:undefined}}
-       })});
-       const result=await response.json();
-       if(!active||!response.ok||result.action!=="suggest_field_updates"||!Array.isArray(result.suggestions)||!result.suggestions.length)return;
-       const suggestionMessage={type:"fieldSuggestion",text:result.reply||"I found additional customs information in the email that is missing from the document extraction. Review the suggestions below and confirm whether to add them.",suggestions:result.suggestions,handled:null,persist:true};
-       setMessages(current=>current.some(m=>m.type==="fieldSuggestion")?current:[...current,suggestionMessage]);
-       const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
-       data.agentMessages=[...(Array.isArray(data.agentMessages)?data.agentMessages:[]),serialiseMessage(suggestionMessage)];
-       updatePack?.({...pack,extractedData:data});
-     }catch{}
-   })();
-   return()=>{active=false;};
- },[pack?.id,pack?.email,pack?.extractedData?.documents,pack?.extractedData?.agentAuditCompleted]);
-
-
  const selectedDocument=documentRows.find(d=>(d.id||d.name)===selectedDocumentId)||documentRows[0];
  const selectedDocumentUrl=selectedDocument?docUrls[selectedDocument.id]:null;
  const selectedDocumentIsPdf=/\.pdf$/i.test(selectedDocument?.name||"");

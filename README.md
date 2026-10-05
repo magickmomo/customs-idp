@@ -34,10 +34,11 @@ npm run dev:vercel
 ```
 
 Add `OPENAI_API_KEY=...` to `.env` before starting Vercel Dev. The extraction flow
-posts the selected document as base64 to `/api/extract`; that function sends the file
-to the OpenAI Responses API with a structured JSON schema, then the UI saves the
-result through `/api/packs`. Supabase variables are only needed for persistent pack
-storage; without them the UI keeps its local browser fallback.
+uploads source documents to persistent storage, creates the pack, and calls
+`POST /api/packs/process` with the pack ID. The server then loads the persisted
+sources and performs extraction, customer resolution, validation, optional email
+audit, final persistence, and processing history. The endpoint accepts `initial`
+and `reprocess` reasons and derives the organisation and actor from authentication.
 
 Pack deletion is currently restricted to the manager/admin test role in the UI and
 API. This is a prototype guard only; production deletion must use server-validated

@@ -1,6 +1,6 @@
 import { getCustomerStrategy, normalizeCountryCode } from "./packData.js";
 
-export function buildWorkingCustomsRecord(pack){
+export function buildWorkingCustomsRecord(pack, customerStrategy=null){
     const primary={...(pack?.extractedData||{})};
     const docs=Array.isArray(primary.documents)?primary.documents:[];
     const invoiceDoc=docs.find(d=>d?.extraction?.documentType==="commercial_invoice")||docs[0];
@@ -54,7 +54,7 @@ export function buildWorkingCustomsRecord(pack){
         if(!isMissing(value)){merged[target]=value;break;}
       }
     });
-    const strategy=getCustomerStrategy(pack?.customer),eo=strategy?.customsSummaryExportField||strategy?.customsSummary?.exportField,di=strategy?.customsSummaryDestinationField||strategy?.customsSummary?.destinationField;
+    const strategy=customerStrategy||getCustomerStrategy(pack?.customer),eo=strategy?.customsSummaryExportField||strategy?.customsSummary?.exportField,di=strategy?.customsSummaryDestinationField||strategy?.customsSummary?.destinationField;
     if(eo&&!isMissing(merged[eo]))merged.countryOfExport=normalizeCountryCode(merged[eo]);else if(isMissing(merged.countryOfExport)&&!isMissing(merged.exporterCountryIso))merged.countryOfExport=normalizeCountryCode(merged.exporterCountryIso);
     if(di&&!isMissing(merged[di]))merged.sourceCountryOfDestination=normalizeCountryCode(merged[di]);else if(isMissing(merged.sourceCountryOfDestination)&&!isMissing(merged.consigneeCountryIso))merged.sourceCountryOfDestination=normalizeCountryCode(merged.consigneeCountryIso);
 
@@ -116,7 +116,7 @@ export function buildWorkingCustomsRecord(pack){
         : mergedLines.map(()=>1);
     const basisTotal=basis.reduce((sum,v)=>sum+(v||0),0);
 
-    const weightApportionmentApproved = pack?.extractedData?.weightApportionmentDecision?.status==="approved" || getCustomerStrategy(pack?.customer).autoApplyWeightApportionment===true;
+    const weightApportionmentApproved = pack?.extractedData?.weightApportionmentDecision?.status==="approved" || strategy?.autoApplyWeightApportionment===true;
     if(weightApportionmentApproved && ((allNetMissing&&totalNetForApportion!==null&&basisTotal>0)||(allGrossMissing&&totalGrossForApportion!==null&&basisTotal>0))){
       const apportioned=mergedLines.map(line=>({...line}));
 

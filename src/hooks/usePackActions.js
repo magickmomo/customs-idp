@@ -1,47 +1,10 @@
 import { useState } from "react";
-import { validateStandardCustomsRecord } from "../validation/standardEngine.js";
 import { DEFAULT_ORGANISATION } from "../tenant.js";
 import { buildWorkingCustomsRecord } from "../domain/workingRecord.js";
-import { runAutomatedEmailAudit } from "../services/agentService.js";
-import { deleteUploadedDocument, getUploadedDocument, saveUploadedDocument } from "../services/documentStorage.js";
-
-const toDataUrl = async (source, mimeType) => {
-  const bytes = new Uint8Array(await source.arrayBuffer());
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + 0x8000, bytes.length)));
-  }
-  return `data:${mimeType};base64,${btoa(binary)}`;
-};
-
-const fetchStorageBlob = async (path, filename, packId = null) => {
-  const response = await fetch("/api/storage", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "signed-url", path, packId })
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error("Storage access failed for " + filename + ": " + (data.error || ("HTTP " + response.status)));
-  }
-  if (!data.signedUrl) {
-    throw new Error("Storage access failed for " + filename + ": no signed URL was returned");
-  }
-
-  const fileResponse = await fetch(data.signedUrl);
-  if (!fileResponse.ok) {
-    throw new Error("Document download failed for " + filename + ": HTTP " + fileResponse.status);
-  }
-  return fileResponse.blob();
-};
+import { buildValidatedPack } from "../domain/packValidation.js";
+import { deleteUploadedDocument, saveUploadedDocument } from "../services/documentStorage.js";
 
 const DEFAULT_CUSTOMER_STRATEGY={instructions:"",requiredFields:[],weightHandling:"ask_user"};
-
-const normaliseCustomerName = value =>
-  String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\\s+/g, " ");
 
 const loadCustomers = async () => {
   const response = await fetch("/api/organisation?action=customers", {
@@ -93,119 +56,6 @@ const buildCustomerContext = (customers, customerId) => {
   };
 };
 
-const resolveExtractedCustomer = (customers, exporterName, importerName) => {
-  const exporter = normaliseCustomerName(exporterName);
-  const importer = normaliseCustomerName(importerName);
-
-  const activeCustomers = customers.filter(customer =>
-    String(customer.status || "active").toLowerCase() === "active"
-  );
-
-  const exporterMatch = exporter
-    ? activeCustomers.find(customer => normaliseCustomerName(customer.name) === exporter)
-    : null;
-
-  const importerMatch = importer
-    ? activeCustomers.find(customer => normaliseCustomerName(customer.name) === importer)
-    : null;
-
-  if (
-    exporterMatch &&
-    importerMatch &&
-    String(exporterMatch.id) !== String(importerMatch.id)
-  ) {
-    return {
-      customerId: null,
-      customerName: null,
-      strategy: DEFAULT_CUSTOMER_STRATEGY,
-      matched: false,
-      ambiguous: true,
-      candidates: [
-        { id: exporterMatch.id, name: exporterMatch.name, matchedBy: "exporter" },
-        { id: importerMatch.id, name: importerMatch.name, matchedBy: "importer" }
-      ]
-    };
-  }
-
-  const match = exporterMatch || importerMatch;
-
-  if (!match) {
-    return {
-      customerId: null,
-      customerName: null,
-      strategy: DEFAULT_CUSTOMER_STRATEGY,
-      matched: false,
-      ambiguous: false,
-      candidates: []
-    };
-  }
-
-  return {
-    customerId: match.id,
-    customerName: match.name,
-    strategy: {
-      ...DEFAULT_CUSTOMER_STRATEGY,
-      ...(match.strategy || {})
-    },
-    matched: true,
-    matchedBy: exporterMatch ? "exporter" : "importer",
-    ambiguous: false,
-    candidates: []
-  };
-};
-
-const extractDocument = async (source, uploaded, customerStrategy=DEFAULT_CUSTOMER_STRATEGY) => {
-  const mimeType = source.type || uploaded.type || "application/octet-stream";
-  const fileData = await toDataUrl(source, mimeType);
-  const response = await fetch("/api/extract", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      fileData,
-      filename: uploaded.name,
-      mimeType,
-      customerStrategy
-    })
-  });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error("Extraction failed for " + uploaded.name + ": " + (result.error || ("HTTP " + response.status)));
-  }
-  if (!result.extraction) {
-    throw new Error("Extraction failed for " + uploaded.name + ": no extraction result was returned");
-  }
-
-  return {
-    id: uploaded.id,
-    filename: uploaded.name,
-    mimeType,
-    extraction: result.extraction
-  };
-};
-
-const buildExtractedPack = (pack, extractedDocuments) => {
-  const primaryDoc =
-    extractedDocuments.find(document => document.extraction?.documentType === "commercial_invoice") ||
-    extractedDocuments[0];
-
-  return {
-    ...pack,
-    status: "Needs review",
-    extractedData: {
-      ...(primaryDoc?.extraction || {}),
-      documents: extractedDocuments,
-      documentCount: extractedDocuments.length,
-      sourceDocuments: extractedDocuments.map(document => ({
-        id: document.id,
-        filename: document.filename,
-        mimeType: document.mimeType,
-        documentType: document.extraction?.documentType || "unknown",
-        confidence: document.extraction?.confidence || 0
-      }))
-    }
-  };
-};
-
 export function usePackActions({
   currentUserName,
   livePacks,
@@ -219,24 +69,6 @@ export function usePackActions({
   const [pendingUploadFiles, setPendingUploadFiles] = useState([]);
   const [uploadCustomer,setUploadCustomer] = useState("Auto-detect customer");
   const [showUploadConfirm, setShowUploadConfirm] = useState(false);
-
-  const buildValidatedPack = pack => {
-    if (!pack) return pack;
-    const data = buildWorkingCustomsRecord(pack);
-    const standard = validateStandardCustomsRecord(data);
-    const checks = standard.checks;
-    const hasFail = checks.some(check => check.status === "fail");
-    const hasReview = checks.some(check => check.status === "review");
-
-    return {
-      ...pack,
-      workingRecord: data,
-      status: hasFail || hasReview ? "Needs review" : "Ready",
-      validationStatus: hasFail || hasReview ? "Failed" : "Validated",
-      validationChecks: checks,
-      validationSummary: standard.summary
-    };
-  };
 
   const persistValidatedPack = async (pack, showToast = false) => {
     if (!pack) return pack;
@@ -274,9 +106,7 @@ export function usePackActions({
 
   const reprocessPack = async pack => {
     if (!pack) return;
-
     let files = Array.isArray(pack.uploadedFiles) ? [...pack.uploadedFiles] : [];
-
     if (!files.length) {
       try {
         const response = await fetch("/api/storage", {
@@ -322,73 +152,24 @@ export function usePackActions({
         }
       } catch {}
     }
-
     if (!files.length) {
       notify("No uploaded documents are available to reprocess");
       return;
     }
-
-    const processing = {
-      ...pack,
-      uploadedFiles: files,
-      status: "Processing",
-      processingError: undefined,
-      validationStatus: undefined,
-      validationChecks: undefined,
-      postedToLCAAt: undefined
-    };
-
+    const processing={...pack,uploadedFiles:files,status:"Processing",processingError:undefined};
     setLivePacks(previous => previous.map(item => item.id === pack.id ? processing : item));
-    await persistPack(processing);
     navigate("inbox");
     notify("Re-processing all documents — AI extraction started");
-
     try {
-      const extractedDocuments = [];
-
-      for (const uploaded of files) {
-        const source = uploaded.storagePath
-          ? await fetchStorageBlob(uploaded.storagePath, uploaded.name, pack.id)
-          : await getUploadedDocument(uploaded.id);
-
-        if (!source) {
-          throw new Error("Uploaded document is unavailable: " + uploaded.name);
-        }
-
-        extractedDocuments.push(
-          await extractDocument(source, uploaded, DEFAULT_CUSTOMER_STRATEGY)
-        );
-      }
-
-      const processed = {
-        ...buildExtractedPack(processing, extractedDocuments),
-        extractedData: {
-          ...buildExtractedPack(processing, extractedDocuments).extractedData,
-          agentMessages: [],
-          extractionRunId: new Date().toISOString()
-        }
-      };
-
-      let completedPack = buildValidatedPack(processed);
-      completedPack = await runAutomatedEmailAudit(completedPack);
+      const response=await fetch("/api/packs/process",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({packId:pack.id,reason:"reprocess"})});
+      const data=await response.json().catch(()=>({}));
+      if(data.pack)setLivePacks(previous=>previous.map(item=>item.id===data.pack.id?data.pack:item));
+      if(!response.ok)throw new Error(data.error||"Pack re-processing failed");
+      const completedPack=data.pack;
       setLivePacks(previous => previous.map(item => item.id === completedPack.id ? completedPack : item));
-
-      const saved = await persistPack(completedPack);
-      if (!saved) throw new Error("Database save failed after re-processing completed");
-
-      await recordHistory(
-        completedPack,
-        "reprocessed",
-        "Pack reprocessed and extraction completed",
-        null,
-        { documentCount: extractedDocuments.length }
-      );
-      notify("Re-processing complete — " + extractedDocuments.length + " documents extracted and validation completed");
+      notify("Re-processing complete — " + (completedPack.extractedData?.documents?.filter(document=>document.extraction).length||0) + " documents extracted and validation completed");
     } catch (error) {
       const message = error?.message || "Unknown re-processing error";
-      const failed = { ...processing, status: "Needs review", processingError: message };
-      setLivePacks(previous => previous.map(item => item.id === failed.id ? failed : item));
-      await persistPack(failed);
       notify("Re-processing failed: " + message);
     }
   };
@@ -480,7 +261,6 @@ export function usePackActions({
       uploadCustomerContext = buildCustomerContext(customers, selected.id);
     }
 
-    const strategy = uploadCustomerContext.strategy;
     const strategyApplied = uploadCustomerContext.matched;
 
     const newPack = {
@@ -555,142 +335,19 @@ export function usePackActions({
     notify("Document pack confirmed — AI extraction started");
 
     try {
-      const extractedDocuments = [];
-      for (const uploaded of uploadedFiles) {
-        let source = selected.find(file => file.name === uploaded.name && file.size === uploaded.size)
-          || selected.find(file => file.name === uploaded.name);
-
-        if (!source && uploaded.storagePath) {
-          source = await fetchStorageBlob(uploaded.storagePath, uploaded.name);
-        }
-        if (!source) throw new Error("Document " + uploaded.name + " is unavailable");
-
-        extractedDocuments.push(await extractDocument(source, uploaded, strategy));
-      }
-
-      const processed = buildExtractedPack(newPack, extractedDocuments);
-
-      const extractedExporter =
-        processed.extractedData?.exporter ||
-        processed.extractedData?.exporterName ||
-        "";
-
-      const extractedImporter =
-        processed.extractedData?.consignee ||
-        processed.extractedData?.importer ||
-        processed.extractedData?.importerName ||
-        "";
-
-      let customerContext;
-
-      if (uploadCustomerContext.matched) {
-        customerContext = {
-          ...uploadCustomerContext,
-          matchedBy: "manual",
-          ambiguous: false,
-          candidates: []
-        };
-      } else {
-        const customers = await loadCustomers();
-        customerContext = resolveExtractedCustomer(
-          customers,
-          extractedExporter,
-          extractedImporter
-        );
-      }
-
-      const identifiedPack = {
-        ...processed,
-        customer: customerContext.customerName,
-        customerId: customerContext.customerId,
-        customerStrategyApplied: customerContext.matched,
-        customerIdentification: {
-          exporterName: extractedExporter || null,
-          importerName: extractedImporter || null,
-          matched: customerContext.matched,
-          matchedBy: customerContext.matchedBy || null,
-          ambiguous: customerContext.ambiguous || false,
-          candidates: customerContext.candidates || [],
-          customerId: customerContext.customerId,
-          customerName: customerContext.customerName,
-          method: uploadCustomerContext.matched ? "manual" : "automatic"
-        }
-      };
-
-      let completed = buildValidatedPack(identifiedPack);
-      completed = await runAutomatedEmailAudit(completed);
-
+      const response=await fetch("/api/packs/process",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({packId:id,reason:"initial"})});
+      const data=await response.json().catch(()=>({}));
+      if(data.pack)setLivePacks(previous=>previous.map(pack=>pack.id===id?data.pack:pack));
+      if(!response.ok)throw new Error(data.error||"Pack processing failed");
+      const completed=data.pack;
       setLivePacks(previous => previous.map(pack => pack.id === id ? completed : pack));
-      await persistPack(completed);
-      await recordHistory(
-        completed,
-        "customer_identified",
-        customerContext.ambiguous
-          ? "Customer identification requires confirmation"
-          : customerContext.matched
-            ? `Customer identified: ${customerContext.customerName}`
-            : "No customer identified — standard strategy used",
-        null,
-        {
-          method: uploadCustomerContext.matched ? "manual" : "automatic",
-          matchedBy: customerContext.matchedBy || null,
-          customerId: customerContext.customerId,
-          customerName: customerContext.customerName,
-          exporterName: extractedExporter || null,
-          importerName: extractedImporter || null,
-          matched: customerContext.matched,
-          ambiguous: customerContext.ambiguous || false,
-          candidates: customerContext.candidates || []
-        },
-        null,
-        "system",
-        "Customs IDP System"
-      );
-
-      await recordHistory(
-        completed,
-        "extracted",
-        "Document Extraction Agent completed extraction",
-        null,
-        { documentCount: extractedDocuments.length },
-        null,
-        "agent",
-        "Document Extraction Agent"
-      );
-
-      if (strategyApplied) {
-        await recordHistory(
-          completed,
-          "strategy_applied",
-          `Applied customer strategy for ${customerContext.customerName}`,
-          null,
-          { customer: customerContext.customerName, customerId: customerContext.customerId, matchedBy: customerContext.matchedBy || null },
-          null,
-          "system",
-          "Customs IDP System"
-        );
-      }
-
       notify(
-        extractedDocuments.length +
+        (completed.extractedData?.documents?.filter(document=>document.extraction).length||0) +
         " document" +
-        (extractedDocuments.length === 1 ? "" : "s") +
+        ((completed.extractedData?.documents?.filter(document=>document.extraction).length||0) === 1 ? "" : "s") +
         " extracted and validation completed"
       );
     } catch (error) {
-      const failed = { ...newPack, status: "Needs review", processingError: error.message };
-      setLivePacks(previous => previous.map(pack => pack.id === id ? failed : pack));
-      await persistPack(failed);
-      await recordHistory(
-        failed,
-        "processing_error",
-        "Document processing failed",
-        null,
-        { error: error.message },
-        null,
-        "system",
-        "Customs IDP System"
-      );
       notify("Extraction failed — check the pack for details");
     }
   };
