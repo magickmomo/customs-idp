@@ -161,7 +161,11 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
    };
 
    const weightApportionmentDecision=pack.extractedData?.weightApportionmentDecision?.status||null;
-   const customerStrategy=getCustomerStrategy(pack.customer);
+   const customerStrategy=pack.customerStrategy&&typeof pack.customerStrategy==="object"
+     ? pack.customerStrategy
+     : pack.extractedData?.customerStrategy&&typeof pack.extractedData.customerStrategy==="object"
+       ? pack.extractedData.customerStrategy
+       : getCustomerStrategy(pack.customer);
    const hasDocumentLevelWeights=hasValue(invoice.totalNetWeight)||hasValue(invoice.totalGrossWeight);
    const hasMissingLineWeights=lines.length>0&&lines.some(line=>!hasValue(line.netMassKg)&&!hasValue(line.netWeight)&&!hasValue(line.netMass));
    const shouldAskWeightApportionment=hasDocumentLevelWeights&&hasMissingLineWeights&&!weightApportionmentDecision&&!customerStrategy.autoApplyWeightApportionment;
@@ -293,7 +297,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
      try{
        const response=await fetch("/api/agent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
          message:"[AUTOMATED EMAIL AUDIT] Review the associated email against the extracted document data before the user asks a question. Identify clear customs-relevant information present in the email but missing from the extracted data. Do not change the pack; return suggestions requiring human confirmation.",
-         pack:{...pack,customerStrategy:getCustomerStrategy(pack.customer),conversation:[],extractedData:{...(pack.extractedData||{}),agentMessages:undefined}}
+         pack:{...pack,customerStrategy:pack.customerStrategy||pack.extractedData?.customerStrategy||getCustomerStrategy(pack.customer),conversation:[],extractedData:{...(pack.extractedData||{}),agentMessages:undefined}}
        })});
        const result=await response.json();
        if(!active||!response.ok||result.action!=="suggest_field_updates"||!Array.isArray(result.suggestions)||!result.suggestions.length)return;
