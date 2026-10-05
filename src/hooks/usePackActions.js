@@ -676,6 +676,17 @@ export function usePackActions({
         }
       };
 
+      if(customerContext.matched){
+        identifiedPack.extractedData={
+          ...(identifiedPack.extractedData||{}),
+          agentMessages:[{
+            type:"agent",
+            text:"I identified "+customerContext.customerName+" and automatically applied its customer strategy. I applied the configured line currency, line-value/total-invoice rule, weight apportionment, and customer addresses to the working customs record. I have kept any source discrepancies visible for review.",
+            persist:true
+          }]
+        };
+      }
+
       let completed = buildValidatedPack(identifiedPack);
       completed = await runAutomatedEmailAudit(completed);
 
