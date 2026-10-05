@@ -323,6 +323,18 @@ export function usePackActions({
     notify("Re-processing all documents — AI extraction started");
 
     try {
+      const customers = await loadCustomers();
+      const existingCustomer = pack.customerId
+        ? customers.find(item=>String(item.id)===String(pack.customerId)&&String(item.status||"active").toLowerCase()==="active")
+        : customers.find(item=>String(item.name||"").trim().toLowerCase()===String(pack.customer||"").trim().toLowerCase()&&String(item.status||"active").toLowerCase()==="active");
+
+      const initialStrategy = existingCustomer
+        ? {
+            ...DEFAULT_CUSTOMER_STRATEGY,
+            ...(pack.customerStrategy||existingCustomer.strategy||{})
+          }
+        : DEFAULT_CUSTOMER_STRATEGY;
+
       const extractedDocuments = [];
 
       for (const uploaded of files) {
@@ -335,11 +347,11 @@ export function usePackActions({
         }
 
         extractedDocuments.push(
-          await extractDocument(source, uploaded, DEFAULT_CUSTOMER_STRATEGY)
+          await extractDocument(source, uploaded, initialStrategy)
         );
       }
 
-      const processed = {
+      let processed = {
         ...buildExtractedPack(processing, extractedDocuments),
         extractedData: {
           ...buildExtractedPack(processing, extractedDocuments).extractedData,
@@ -347,6 +359,38 @@ export function usePackActions({
           extractionRunId: new Date().toISOString()
         }
       };
+
+      // If the pack was previously unassigned, use the fresh extraction to
+      // identify the customer, then re-run with that customer's active strategy.
+      if(!existingCustomer){
+        const primary=processed.extractedData;
+        const exporterName=primary?.exporter||primary?.exporterName||"";
+        const importerName=primary?.consignee||primary?.importer||primary?.importerName||"";
+        const customerContext=resolveExtractedCustomer(customers,exporterName,importerName);
+
+        if(customerContext.matched){
+          const customerStrategy={
+            ...DEFAULT_CUSTOMER_STRATEGY,
+            ...(customerContext.strategy||{})
+          };
+          const strategyDocuments=[];
+          for(const uploaded of files){
+            const source=uploaded.storagePath
+              ? await fetchStorageBlob(uploaded.storagePath,uploaded.name,pack.id)
+              : await getUploadedDocument(uploaded.id);
+            if(!source)throw new Error("Uploaded document is unavailable: "+uploaded.name);
+            strategyDocuments.push(await extractDocument(source,uploaded,customerStrategy));
+          }
+          processed={
+            ...buildExtractedPack(processing,strategyDocuments),
+            extractedData:{
+              ...buildExtractedPack(processing,strategyDocuments).extractedData,
+              agentMessages:[],
+              extractionRunId:new Date().toISOString()
+            }
+          };
+        }
+      }
 
       let completedPack = buildValidatedPack(processed);
       completedPack = await runAutomatedEmailAudit(completedPack);
