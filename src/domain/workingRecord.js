@@ -62,6 +62,33 @@ export function buildWorkingCustomsRecord(pack){
     if(eo&&!isMissing(merged[eo]))merged.countryOfExport=normalizeCountryCode(merged[eo]);else if(isMissing(merged.countryOfExport)&&!isMissing(merged.exporterCountryIso))merged.countryOfExport=normalizeCountryCode(merged.exporterCountryIso);
     if(di&&!isMissing(merged[di]))merged.sourceCountryOfDestination=normalizeCountryCode(merged[di]);else if(isMissing(merged.sourceCountryOfDestination)&&!isMissing(merged.consigneeCountryIso))merged.sourceCountryOfDestination=normalizeCountryCode(merged.consigneeCountryIso);
 
+    // Apply deterministic customer strategy flags to the working customs record.
+    // These are explicit configuration values, not AI guesses.
+    if(strategy?.lineCurrencyFromHeader===true){
+      const headerCurrency=merged.currency||merged.invoiceCurrency||merged.headerCurrency||merged.currencyCode||"";
+      if(headerCurrency){
+        const existingLines=Array.isArray(merged.lines)?merged.lines:[];
+        merged.lines=existingLines.map(line=>({...line,currency:headerCurrency}));
+      }
+    }
+
+    if(strategy?.totalInvoiceFromLines===true){
+      const linesForTotal=Array.isArray(merged.lines)?merged.lines:[];
+      const lineAmounts=linesForTotal.map(line=>Number(String(line?.totalValue??line?.lineValue??"").replace(/,/g,"").trim()));
+      if(lineAmounts.length&&lineAmounts.every(Number.isFinite)){
+        const total=lineAmounts.reduce((sum,value)=>sum+value,0);
+        merged.totalInvoiceValue=Math.round(total*100)/100;
+        if(merged.invoiceTotal!==undefined)merged.invoiceTotal=merged.totalInvoiceValue;
+      }
+    }
+
+    if(strategy?.exporterAddress){
+      merged.exporterAddress=strategy.exporterAddress;
+    }
+    if(strategy?.importerAddress){
+      merged.importerAddress=strategy.importerAddress;
+    }
+
     const invoiceLines=Array.isArray(invoice.lines)?invoice.lines:[];
     const supportingLineSets=supportingDocs
       .map(doc=>({doc,lines:Array.isArray(doc?.extraction?.lines)?doc.extraction.lines:[]}))
