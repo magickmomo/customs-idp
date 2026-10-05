@@ -69,6 +69,7 @@ export function buildWorkingCustomsRecord(pack){
     }
     if(strategy?.importerAddress){
       merged.importerAddress=strategy.importerAddress;
+      merged.consigneeAddress=strategy.importerAddress;
     }
 
     const invoiceLines=Array.isArray(invoice.lines)?invoice.lines:[];
@@ -120,6 +121,16 @@ export function buildWorkingCustomsRecord(pack){
     const totalGrossForApportion=toNumber(merged.totalGrossWeight);
     const allNetMissing=mergedLines.length>0&&mergedLines.every(line=>isMissing(line.netMassKg)&&isMissing(line.netWeight)&&isMissing(line.netMass));
     const allGrossMissing=mergedLines.length>0&&mergedLines.every(line=>isMissing(line.grossMassKg)&&isMissing(line.grossWeight)&&isMissing(line.grossMass));
+    // Customer strategies may define "line value" as the extracted unit price.
+    // Materialise that value on the working line so both weight apportionment
+    // and total-invoice calculation use the configured rule consistently.
+    if(strategy?.totalInvoiceFromLines===true){
+      mergedLines.forEach(line=>{
+        if(isMissing(line.totalValue)&&!isMissing(line.unitValue)){
+          line.totalValue=line.unitValue;
+        }
+      });
+    }
     const allocationBasis=mergedLines.map(line=>toNumber(line.totalValue??line.lineValue??line.unitValue));
     const quantityBasis=mergedLines.map(line=>toNumber(line.quantity));
     const basis=allocationBasis.every(v=>v!==null&&v>=0)&&allocationBasis.some(v=>v>0)
@@ -177,7 +188,7 @@ export function buildWorkingCustomsRecord(pack){
 
     if(strategy?.totalInvoiceFromLines===true){
       const linesForTotal=Array.isArray(merged.lines)?merged.lines:[];
-      const lineAmounts=linesForTotal.map(line=>Number(String(line?.totalValue??line?.lineValue??"").replace(/,/g,"").trim()));
+      const lineAmounts=linesForTotal.map(line=>Number(String(line?.totalValue??line?.lineValue??line?.unitValue??"").replace(/,/g,"").trim()));
       if(lineAmounts.length&&lineAmounts.every(Number.isFinite)){
         const total=lineAmounts.reduce((sum,value)=>sum+value,0);
         merged.totalInvoiceValue=Math.round(total*100)/100;
