@@ -474,7 +474,6 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
        data.customerStrategy=null;
        savedPack={...pack,customer:customer.name,customerId:customer.id,customerStrategyApplied:false,customerStrategy:null,extractedData:data,status:"Needs review"};
        await persistPack(savedPack);
-       setLivePackForReview?.(savedPack);
        actionCompleted=true;
        reply="Customer "+customer.name+" has now been created and associated with this pack. The customer has no recorded strategy yet.";
      }
@@ -540,7 +539,6 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
            "Customs IDP System"
          );
        }
-       setLivePackForReview?.(savedPack);
        actionCompleted=true;
        reply="Confirmed. The customer strategy has been recorded as version "+String(saved.strategy.version||"1")+" for "+customer.name+" and is now available to future packs identified for this customer.";
      }
