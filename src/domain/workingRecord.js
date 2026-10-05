@@ -64,14 +64,6 @@ export function buildWorkingCustomsRecord(pack){
 
     // Apply deterministic customer strategy flags to the working customs record.
     // These are explicit configuration values, not AI guesses.
-    if(strategy?.lineCurrencyFromHeader===true){
-      const headerCurrency=merged.currency||merged.invoiceCurrency||merged.headerCurrency||merged.currencyCode||"";
-      if(headerCurrency){
-        const existingLines=Array.isArray(merged.lines)?merged.lines:[];
-        merged.lines=existingLines.map(line=>({...line,currency:headerCurrency}));
-      }
-    }
-
     if(strategy?.totalInvoiceFromLines===true){
       const linesForTotal=Array.isArray(merged.lines)?merged.lines:[];
       const lineAmounts=linesForTotal.map(line=>Number(String(line?.totalValue??line?.lineValue??"").replace(/,/g,"").trim()));
@@ -185,6 +177,14 @@ export function buildWorkingCustomsRecord(pack){
     }
 
     merged.lines=mergedLines;
+
+    if(strategy?.lineCurrencyFromHeader===true){
+      const headerCurrency=merged.currency||merged.invoiceCurrency||merged.headerCurrency||merged.currencyCode||"";
+      if(headerCurrency){
+        merged.lines=merged.lines.map(line=>({...line,currency:headerCurrency}));
+      }
+    }
+
     merged.workingRecordSource="primary invoice + supporting documents";
     merged.sourceDiscrepancies=sourceDiscrepancies;
     return merged;
