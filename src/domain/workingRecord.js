@@ -54,7 +54,11 @@ export function buildWorkingCustomsRecord(pack){
         if(!isMissing(value)){merged[target]=value;break;}
       }
     });
-    const strategy=getCustomerStrategy(pack?.customer),eo=strategy?.customsSummaryExportField||strategy?.customsSummary?.exportField,di=strategy?.customsSummaryDestinationField||strategy?.customsSummary?.destinationField;
+    // Prefer the strategy selected and persisted on this pack. Fall back to
+    // the legacy name-based store only for older packs that pre-date customer UUIDs.
+    const strategy=pack?.customerStrategy&&typeof pack.customerStrategy==="object"
+      ? pack.customerStrategy
+      : getCustomerStrategy(pack?.customer),eo=strategy?.customsSummaryExportField||strategy?.customsSummary?.exportField,di=strategy?.customsSummaryDestinationField||strategy?.customsSummary?.destinationField;
     if(eo&&!isMissing(merged[eo]))merged.countryOfExport=normalizeCountryCode(merged[eo]);else if(isMissing(merged.countryOfExport)&&!isMissing(merged.exporterCountryIso))merged.countryOfExport=normalizeCountryCode(merged.exporterCountryIso);
     if(di&&!isMissing(merged[di]))merged.sourceCountryOfDestination=normalizeCountryCode(merged[di]);else if(isMissing(merged.sourceCountryOfDestination)&&!isMissing(merged.consigneeCountryIso))merged.sourceCountryOfDestination=normalizeCountryCode(merged.consigneeCountryIso);
 
