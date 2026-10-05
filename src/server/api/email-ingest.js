@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { extractDocument } from "../../document-extraction.js";
 import { DEFAULT_ORGANISATION } from "../../tenant.js";
 import { resolveCustomerMatch, normaliseCustomerName } from "../../domain/customerMatching.js";
+import { buildWorkingCustomsRecord } from "../../domain/workingRecord.js";
 
 const DEFAULT_STRATEGIES = {
   "Acme Components Ltd": { emailFields: [] },
@@ -246,7 +247,11 @@ export default async function handler(req,res){
     pack.customer=customer;
     pack.customerId=customerId;
 
-    const extractedData={...(primaryExtraction||{}),_tenant:{organisationId:DEFAULT_ORGANISATION.id,organisationName:DEFAULT_ORGANISATION.name},documentType:primaryExtraction?.documentType||"email",email:pack.email,documents:attachmentResults,documentCount:attachmentResults.length,sourceDocuments:attachmentResults.map(item=>({name:item.filename,type:item.extraction?.documentType||item.mimeType,extraction:item.extraction||null,error:item.error||null})),emailFields:emailExtraction.fields,warnings:extractionWarnings,agentMessages:[],customerIdentification:{
+    const customerStrategy=customerContext.matched
+      ? (customerContext.strategy||{instructions:"",requiredFields:[],weightHandling:"ask_user"})
+      : {instructions:"",requiredFields:[],weightHandling:"ask_user"};
+    const customerStrategyApplied=Boolean(customerContext.matched);
+    const extractedData={...(primaryExtraction||{}),_tenant:{organisationId:DEFAULT_ORGANISATION.id,organisationName:DEFAULT_ORGANISATION.name},documentType:primaryExtraction?.documentType||"email",email:pack.email,documents:attachmentResults,documentCount:attachmentResults.length,sourceDocuments:attachmentResults.map(item=>({name:item.filename,type:item.extraction?.documentType||item.mimeType,extraction:item.extraction||null,error:item.error||null})),emailFields:emailExtraction.fields,warnings:extractionWarnings,agentMessages:[],customerStrategy,customerStrategyApplied,customerStrategyVersion:customerContext.strategyVersion||null,customerIdentification:{
       exporterName:extractedExporter||null,
       importerName:extractedImporter||null,
       matched:Boolean(customerContext.matched),
@@ -258,10 +263,16 @@ export default async function handler(req,res){
       customerName:customer||null,
       method:customerContext.matchedBy==="mailbox"||customerContext.matchedBy==="routing"?"email-routing":"automatic"
     }};
-    // Build the combined customs record before the pack can leave Processing.
-    // Supporting documents (especially Packing Lists) may fill missing invoice
-    // fields and line-level weights, but never overwrite populated invoice data.
-    extractedData._workingRecord=combineWorkingRecord(extractedData);
+    // Build the same deterministic working record used by browser uploads.
+    // Customer strategy is persisted on the pack before the working record is built,
+    // so automatic email intake can apply the saved customer rules.
+    extractedData._workingRecord=buildWorkingCustomsRecord({
+      ...pack,
+      customer:customer||null,
+      customerId:customerId||null,
+      customerStrategy,
+      extractedData
+    });
 
     const audit=await runAutomatedEmailAudit({
       ...pack,
@@ -406,6 +417,7 @@ async function resolveCustomerContext({organisationId,to,routedCustomerName,requ
     customerId:customer.id,
     customerName:customer.name,
     strategy:strategy?.config||null,
+    strategyVersion:strategy?.version||null,
     matched:true,
     ambiguous:false,
     candidates:[],
