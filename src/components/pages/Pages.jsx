@@ -8,6 +8,7 @@ import { DEFAULT_ORGANISATION } from "../../tenant.js";
 import { supabase } from "../../lib/supabase.js";
 import { customerStrategyStore, customers, getCustomerStrategy, normalizeCountryCode, sampleLines } from "../../domain/packData.js";
 import { getUploadedDocument } from "../../services/documentStorage.js";
+import { buildWorkingCustomsRecord } from "../../domain/workingRecord.js";
 import { NavItem, SpreadsheetPreview, Status } from "../SharedComponents.jsx";
 import { Dashboard, ManagerPage } from "./DashboardPages.jsx";
 import { InboxPage } from "./InboxPage.jsx";
@@ -522,7 +523,18 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
          customerStrategy:saved.strategy.config||strategy,
          customerStrategyVersion:saved.strategy.version||null,
          extractedData:data,
-         status:"Needs review"
+         status:"Needs review",
+         validationStatus:undefined,
+         validationChecks:undefined,
+         postedToLCAAt:undefined
+       };
+
+       // A newly recorded customer strategy must take effect on the current
+       // pack immediately. Rebuild the working record from the saved strategy
+       // instead of waiting for the user to ask the Agent to apply it.
+       savedPack={
+         ...savedPack,
+         workingRecord:buildWorkingCustomsRecord(savedPack)
        };
 
        const persisted=await persistPack(savedPack);
@@ -540,7 +552,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
          );
        }
        actionCompleted=true;
-       reply="Confirmed. The customer strategy has been recorded as version "+String(saved.strategy.version||"1")+" for "+customer.name+" and is now available to future packs identified for this customer.";
+       reply="Customer strategy for "+customer.name+" applied. The saved strategy is now active on this pack and will be used automatically for future packs identified for this customer.";
      }
 
      if(result.action==="suggest_field_updates"&&Array.isArray(result.suggestions)&&result.suggestions.length){
