@@ -394,15 +394,161 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
    const thinking={type:"agent",text:"I'm checking the uploaded documents and their source evidence...",persist:false};
    const conversationBefore=[...messages,userMessage];
    setIsSending(true);setMessages([...conversationBefore,thinking]);setChat("");
+
+   const loadOrganisationCustomers=async()=>{
+     const response=await fetch("/api/organisation?action=customers",{credentials:"include"});
+     const data=await response.json().catch(()=>({}));
+     if(!response.ok)throw new Error(data.error||"Unable to load customers.");
+     return Array.isArray(data.customers)?data.customers:[];
+   };
+
+   const createCustomerFromAgent=async customerName=>{
+     const name=String(customerName||"").trim();
+     if(!name)throw new Error("The agent did not provide a customer name.");
+     const response=await fetch("/api/organisation",{
+       method:"POST",
+       headers:{"Content-Type":"application/json"},
+       credentials:"include",
+       body:JSON.stringify({name})
+     });
+     const data=await response.json().catch(()=>({}));
+     if(!response.ok)throw new Error(data.error||"Unable to create customer.");
+     if(!data.customer?.id)throw new Error("Customer creation returned no customer ID.");
+     return data.customer;
+   };
+
+   const saveCustomerStrategy=async(customerId,strategy)=>{
+     if(!customerId)throw new Error("A customer ID is required before saving a strategy.");
+     const response=await fetch("/api/organisation",{
+       method:"PUT",
+       headers:{"Content-Type":"application/json"},
+       credentials:"include",
+       body:JSON.stringify({customerId,strategy})
+     });
+     const data=await response.json().catch(()=>({}));
+     if(!response.ok)throw new Error(data.error||"Unable to save customer strategy.");
+     if(!data.strategy?.id)throw new Error("Customer strategy was not saved.");
+     return data;
+   };
+
    try{
-     const response=await fetch("/api/agent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:q,pack:{...pack,customerStrategy:getCustomerStrategy(pack.customer),conversation:conversationBefore.slice(-12).map(m=>({type:m.type||"agent",text:m.text||""})),extractedData:{...(pack.extractedData||{}),agentMessages:undefined}}})});
+     const response=await fetch("/api/agent",{
+       method:"POST",
+       headers:{"Content-Type":"application/json"},
+       body:JSON.stringify({
+         message:q,
+         pack:{
+           ...pack,
+           customerStrategy:pack.customerStrategy||pack.extractedData?.customerStrategy||getCustomerStrategy(pack.customer),
+           conversation:conversationBefore.slice(-12).map(m=>({type:m.type||"agent",text:m.text||""})),
+           extractedData:{...(pack.extractedData||{}),agentMessages:undefined}
+         }
+       })
+     });
      const result=await response.json();
      if(!response.ok)throw new Error(result.error||"Agent request failed");
+
      let reply=result.reply||"I couldn't produce an answer from the supplied pack.";
      let savedPack=pack;
+     let actionCompleted=false;
+
+     if(result.action==="create_customer"){
+       const targetName=result.target?.customerName||pack.customer||pack.extractedData?.exporter||pack.extractedData?.exporterName||"";
+       const existingCustomers=await loadOrganisationCustomers();
+       let customer=existingCustomers.find(item=>String(item.name||"").trim().toLowerCase()===String(targetName).trim().toLowerCase()&&String(item.status||"active").toLowerCase()==="active");
+       if(!customer) customer=await createCustomerFromAgent(targetName);
+
+       const identification={
+         ...(pack.extractedData?.customerIdentification||{}),
+         matched:true,
+         matchedBy:"agent-created",
+         ambiguous:false,
+         possibleMatch:false,
+         customerId:customer.id,
+         customerName:customer.name,
+         method:"agent-created"
+       };
+       const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
+       data.customerIdentification=identification;
+       data.customerStrategyApplied=false;
+       data.customerStrategy=null;
+       savedPack={...pack,customer:customer.name,customerId:customer.id,customerStrategyApplied:false,customerStrategy:null,extractedData:data,status:"Needs review"};
+       await persistPack(savedPack);
+       setLivePackForReview?.(savedPack);
+       actionCompleted=true;
+       reply="Customer "+customer.name+" has now been created and associated with this pack. The customer has no recorded strategy yet.";
+     }
+
+     if(result.action==="save_customer_strategy"){
+       const strategy=result.strategyProposal?.resultingStrategy;
+       if(!strategy)throw new Error("The agent returned no complete strategy to save.");
+
+       let customerId=pack.customerId||pack.extractedData?.customerIdentification?.customerId||null;
+       let customerName=pack.customer||pack.extractedData?.customerIdentification?.customerName||result.target?.customerName||"";
+
+       const customers=await loadOrganisationCustomers();
+       let customer=customerId
+         ? customers.find(item=>String(item.id)===String(customerId))
+         : null;
+
+       if(!customer&&customerName){
+         customer=customers.find(item=>String(item.name||"").trim().toLowerCase()===String(customerName).trim().toLowerCase()&&String(item.status||"active").toLowerCase()==="active");
+       }
+
+       if(!customer){
+         const createName=customerName||pack.extractedData?.exporter||pack.extractedData?.exporterName||"";
+         customer=await createCustomerFromAgent(createName);
+       }
+
+       const saved=await saveCustomerStrategy(customer.id,strategy);
+       const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
+       data.customerStrategy=saved.strategy.config||strategy;
+       data.customerStrategyApplied=true;
+       data.customerStrategyVersion=saved.strategy.version||null;
+       data.customerIdentification={
+         ...(data.customerIdentification||{}),
+         matched:true,
+         matchedBy:data.customerIdentification?.matchedBy||"agent",
+         ambiguous:false,
+         possibleMatch:false,
+         customerId:customer.id,
+         customerName:customer.name
+       };
+
+       savedPack={
+         ...pack,
+         customer:customer.name,
+         customerId:customer.id,
+         customerStrategyApplied:true,
+         customerStrategy:saved.strategy.config||strategy,
+         customerStrategyVersion:saved.strategy.version||null,
+         extractedData:data,
+         status:"Needs review"
+       };
+
+       const persisted=await persistPack(savedPack);
+       if(!persisted)throw new Error("The strategy was saved to the customer but the current pack could not be updated.");
+       if(typeof recordHistory==="function"){
+         await recordHistory(
+           savedPack,
+           "strategy_applied",
+           "Customer strategy recorded and linked to future packs",
+           null,
+           {customer:customer.name,customerId:customer.id,version:saved.strategy.version||null},
+           null,
+           "system",
+           "Customs IDP System"
+         );
+       }
+       setLivePackForReview?.(savedPack);
+       actionCompleted=true;
+       reply="Confirmed. The customer strategy has been recorded as version "+String(saved.strategy.version||"1")+" for "+customer.name+" and is now available to future packs identified for this customer.";
+     }
+
      if(result.action==="suggest_field_updates"&&Array.isArray(result.suggestions)&&result.suggestions.length){
        reply+=(/not changed|confirm/i.test(reply)?"":" I have not changed the extracted data. Please confirm below if you want these email-sourced values added.");
      }
+
      if(result.action==="approve_weight_apportionment"){
        const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
        data.weightApportionmentDecision={
@@ -416,22 +562,30 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
        savedPack=typeof persistValidatedPack==="function"?await persistValidatedPack(savedPack):savedPack;
        reply+=" I applied the configured weight apportionment method: net weight by line value, then gross weight by the resulting net-weight ratio, rounded to a maximum of 3 decimal places. The derived line weights have been applied and the pack has been revalidated.";
      }
+
      if(result.action==="update_field"&&result.target){
        const target={...result.target};
        if(target.scope==="line"){
          const aliases={grossWeight:"grossMassKg",grossMass:"grossMassKg",gross_mass:"grossMassKg",netWeight:"netMassKg",netMass:"netMassKg",net_mass:"netMassKg"};
          target.field=aliases[target.field]||target.field;
          const explicitLine=q.match(/\bline\s*(\d+)\b/i);
-         if(explicitLine) target.lineIndex=Number(explicitLine[1])-1;
+         if(explicitLine)target.lineIndex=Number(explicitLine[1])-1;
        }
        const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
-       if(target.scope==="line"&&Number.isInteger(target.lineIndex)&&data.lines?.[target.lineIndex]) data.lines[target.lineIndex][target.field]=target.value;
-       else if(target.scope==="primary"&&target.field) data[target.field]=target.value;
+       if(target.scope==="line"&&Number.isInteger(target.lineIndex)&&data.lines?.[target.lineIndex])data.lines[target.lineIndex][target.field]=target.value;
+       else if(target.scope==="primary"&&target.field)data[target.field]=target.value;
        else throw new Error("The agent returned an invalid correction target.");
        data.reviewOverrides=[...(data.reviewOverrides||[]),{scope:target.scope,field:target.field,lineIndex:target.lineIndex??null,oldValue:target.scope==="line"?pack.extractedData?.lines?.[target.lineIndex]?.[target.field]:pack.extractedData?.[target.field],newValue:target.value,sourceDocumentId:target.sourceDocumentId||null,sourcePage:target.sourcePage||null,createdAt:new Date().toISOString()}];
        savedPack={...pack,extractedData:data,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
        reply+=" I saved that correction to the pack and cleared the previous validation result. The affected data needs to be validated again.";
      }
+
+     if(result.action==="strategy_proposal"&&!actionCompleted&&result.strategyProposal?.resultingStrategy){
+       const proposed=result.strategyProposal.resultingStrategy;
+       const changes=Array.isArray(result.strategyProposal.changes)?result.strategyProposal.changes:[];
+       reply+=(changes.length?" ":"")+"This is a proposed customer strategy. I have not saved it yet. Confirm that you want me to record it.";
+     }
+
      const agentMessage={
        type:result.action==="suggest_field_updates"?"fieldSuggestion":"agent",
        text:reply,
@@ -441,17 +595,20 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
        handled:null,
        persist:true
      };
+
      const completed=[...conversationBefore,agentMessage];
      setMessages(completed);
+
      const data=JSON.parse(JSON.stringify(savedPack.extractedData||{}));
      data.agentMessages=completed.filter(m=>m.persist!==false).map(serialiseMessage);
      const finalPack={...savedPack,extractedData:data};
      updatePack?.(finalPack);
    }catch(error){
-     const failed={type:"agent",text:"I couldn't reach the review agent. "+error.message,persist:true};
+     const failed={type:"agent",text:"I couldn't complete that action. "+error.message,persist:true};
      const completed=[...conversationBefore,failed];
      setMessages(completed);
-     const data=JSON.parse(JSON.stringify(pack.extractedData||{}));data.agentMessages=completed.filter(m=>m.persist!==false).map(serialiseMessage);
+     const data=JSON.parse(JSON.stringify(pack.extractedData||{}));
+     data.agentMessages=completed.filter(m=>m.persist!==false).map(serialiseMessage);
      const finalPack={...pack,extractedData:data};
      updatePack?.(finalPack);
    }finally{setIsSending(false);}
