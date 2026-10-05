@@ -129,7 +129,7 @@ export function buildWorkingCustomsRecord(pack){
         : mergedLines.map(()=>1);
     const basisTotal=basis.reduce((sum,v)=>sum+(v||0),0);
 
-    const weightApportionmentApproved = pack?.extractedData?.weightApportionmentDecision?.status==="approved" || getCustomerStrategy(pack?.customer).autoApplyWeightApportionment===true;
+    const weightApportionmentApproved = pack?.extractedData?.weightApportionmentDecision?.status==="approved" || strategy?.autoApplyWeightApportionment===true;
     if(weightApportionmentApproved && ((allNetMissing&&totalNetForApportion!==null&&basisTotal>0)||(allGrossMissing&&totalGrossForApportion!==null&&basisTotal>0))){
       const apportioned=mergedLines.map(line=>({...line}));
 
