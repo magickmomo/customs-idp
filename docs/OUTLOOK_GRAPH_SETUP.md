@@ -111,10 +111,10 @@ Manual Sync and webhook notifications both remain queued until this worker runs.
 
 ### Restore the worker on Vercel Hobby with Supabase Cron
 
-Enable the `pg_cron`, `pg_net`, and Vault extensions in the Supabase project. Set `CRON_SECRET` in the Vercel project for this fork's test deployment and redeploy. In the Supabase SQL Editor, replace the secret placeholder below and run these commands once. The example app URL is this fork's rosy test deployment; do not use localhost or another project's URL.
+Enable the `pg_cron`, `pg_net`, and Vault extensions in the Supabase project. Set `CRON_SECRET` in the production Vercel project and redeploy. In the Supabase SQL Editor, replace the secret placeholder below and run these commands once. The example app URL is the production deployment; do not use localhost or another project's URL.
 
 ```sql
-select vault.create_secret('https://customs-idp-rosy.vercel.app', 'outlook_worker_app_url');
+select vault.create_secret('https://customs-idp.vercel.app', 'outlook_worker_app_url');
 select vault.create_secret('REPLACE_WITH_THE_SAME_VALUE_AS_VERCEL_CRON_SECRET', 'CRON_SECRET');
 ```
 

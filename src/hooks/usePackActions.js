@@ -437,11 +437,7 @@ export function usePackActions({
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Could not create storage upload URL");
 
-        const uploadResponse = await fetch(data.signedUrl, {
-          method: "PUT",
-          headers: { "Content-Type": file.type || "application/octet-stream" },
-          body: file
-        });
+        const uploadResponse = await fetch(data.signedUrl, { method: "PUT", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file });
         if (!uploadResponse.ok) throw new Error(`Could not upload ${file.name}`);
 
         return {
@@ -449,9 +445,7 @@ export function usePackActions({
           name: file.name,
           size: file.size,
           type: file.type,
-          storagePath: data.path,
-          accessUrl: data.accessUrl,
-          accessUrlExpiresAt: data.accessUrlExpiresAt
+          storagePath: data.path
         };
       }));
     } catch (error) {
@@ -511,6 +505,36 @@ export function usePackActions({
 
     setLivePacks(previous => [newPack, ...previous]);
     await persistPack(newPack);
+
+    try {
+      const filesWithAccess = await Promise.all(uploadedFiles.map(async file => {
+        const accessResponse = await fetch("/api/storage", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "signed-url", path: file.storagePath, packId: id })
+        });
+        const accessData = await accessResponse.json().catch(() => ({}));
+        if (!accessResponse.ok) {
+          throw new Error(accessData.error || "Could not create document access URL");
+        }
+        return {
+          ...file,
+          accessUrl: accessData.accessUrl || accessData.signedUrl,
+          accessUrlExpiresAt: accessData.accessUrlExpiresAt
+        };
+      }));
+
+      uploadedFiles = filesWithAccess;
+      const withAccessUrls = { ...newPack, uploadedFiles };
+      setLivePacks(previous => previous.map(pack => pack.id === id ? withAccessUrls : pack));
+      await persistPack(withAccessUrls);
+    } catch (error) {
+      notify("Document access setup failed: " + (error?.message || "Unknown storage error"));
+      return;
+    }
+
+    newPack.uploadedFiles = uploadedFiles;
+
     await recordHistory(
       newPack,
       "uploaded",

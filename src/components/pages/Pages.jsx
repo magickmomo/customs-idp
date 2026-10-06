@@ -653,19 +653,26 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
  const customerIdentification=pack.customerIdentification||{};
  const identificationAmbiguous=customerIdentification.ambiguous===true;
  const identificationMatched=customerIdentification.matched===true;
- const identificationStatus=identificationMatched?"Matched":identificationAmbiguous?"Confirmation required":"Unassigned";
+ const identificationPossible=customerIdentification.possibleMatch===true;
+ const identificationStatus=identificationMatched?"Matched":identificationAmbiguous||identificationPossible?"Confirmation required":"Unassigned";
  const identificationCustomer=identificationMatched
    ? customerIdentification.customerName||"Customer identified"
    : identificationAmbiguous
      ? "Customer identification requires confirmation"
-     : "No customer identified";
+     : identificationPossible
+       ? "Possible customer match"
+       : "No customer identified";
  const identificationNote=identificationMatched
    ? `Customer strategy selected: ${customerIdentification.customerName||"the matched customer"}`
    : identificationAmbiguous
      ? "More than one customer matched the extracted party information. Review the candidates before assigning the pack."
-     : "No active customer matched the extracted party information. The standard strategy is being used.";
- const canCreateCustomer=!identificationMatched&&!identificationAmbiguous;
+     : identificationPossible
+       ? "I found a customer with a very similar name. Confirm the match and I will remember this name variation for future packs."
+       : "No active customer matched the extracted party information. The standard strategy is being used.";
+ const canConfirmCustomer=identificationPossible&&!identificationMatched&&!identificationAmbiguous&&Array.isArray(customerIdentification.candidates)&&customerIdentification.candidates.length>0;
+ const canCreateCustomer=!identificationMatched&&!identificationAmbiguous&&!identificationPossible;
  const suggestedCustomerName=customerIdentification.exporterName||customerIdentification.importerName||"this customer";
+ const confirmCustomerMatch=async candidate=>{if(!candidate?.id)return;const sourceValue=candidate.sourceValue||customerIdentification.exporterName||customerIdentification.importerName||"";const sourceType=candidate.matchedBy||"exporter";try{const response=await fetch("/api/organisation",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"confirm-customer-memory",customerId:candidate.id,sourceValue,sourceType})});const data=await response.json().catch(()=>({}));if(!response.ok||!data.customer?.id)throw new Error(data.error||"Unable to save customer memory.");const updatedPack={...pack,customer:data.customer.name,customerId:data.customer.id,customerStrategyApplied:false,customerIdentification:{...customerIdentification,matched:true,possibleMatch:false,ambiguous:false,customerId:data.customer.id,customerName:data.customer.name,matchedBy:"memory-confirmed",memoryConfirmed:true}};updatePack?.(updatedPack);await persistPack?.(updatedPack);await recordHistory?.(updatedPack,"customer_memory_confirmed","Customer match confirmed and saved to memory.",null,{customerId:data.customer.id,sourceValue,sourceType},null,"user",currentUserName||null);}catch(error){notify?.(error.message||"Unable to confirm customer match.");}};
  const openCreateCustomer=()=>{
    setCreateCustomerForm({name:customerIdentification.exporterName||customerIdentification.importerName||""});
    setCreateCustomerError("");
@@ -723,13 +730,13 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
 
      {pack.processingError&&<div className="reprocess-error-banner"><div><b>Re-processing failed</b><span>{pack.processingError}</span></div><button type="button" className="secondary" onClick={()=>reprocessPack?.(pack)}>Try again</button></div>}
      <div ref={chatHistoryRef} className="chat-history chat-review-history" onScroll={()=>{if(autoScrollChatRef.current&&!isChatNearBottom())autoScrollChatRef.current=false;}}>
-       {canCreateCustomer&&!customerSetupDeclined&&<div className="chat-message-row agent customer-not-found-prompt" style={{flex:"0 0 auto"}}>
+       {canConfirmCustomer&&!customerSetupDeclined&&<div className="chat-message-row agent customer-not-found-prompt" style={{flex:"0 0 auto"}}>
          <div className="chat-message-avatar"><Sparkles size={15}/></div>
          <div className="chat-message-content">
-           <div className="chat-message-text"><strong>Customer not found</strong><br/>I couldn't find an existing customer matching {suggestedCustomerName}. Would you like to set this customer up?</div>
+           <div className="chat-message-text"><strong>Possible customer match</strong><br/>I found an existing customer that looks like a match. Is {customerIdentification.candidates[0]?.name||"this customer"} the same customer as {customerIdentification.exporterName||customerIdentification.importerName||"the extracted party"}?</div>
            <div className="customer-not-found-actions">
-             <button type="button" className="primary" onClick={openCreateCustomer}><Plus size={14}/> Set up customer</button>
-             <button type="button" className="secondary" onClick={async()=>{setCustomerSetupDeclined(true);await recordHistory?.(pack,"customer_setup_declined","Customer setup declined — pack remains unassigned.",null,null,{customerId:null,identificationSource:customerIdentification.matchedBy||null},"user",currentUserName||null);}}>Keep unassigned</button>
+             <button type="button" className="primary" onClick={()=>confirmCustomerMatch(customerIdentification.candidates[0])}><CheckCircle2 size={14}/> Yes, this is the customer</button>
+             <button type="button" className="secondary" onClick={async()=>{setCustomerSetupDeclined(true);await recordHistory?.(pack,"customer_match_declined","Possible customer match declined — pack remains unassigned.",null,{candidate:customerIdentification.candidates[0]||null},{customerId:null,identificationSource:customerIdentification.matchedBy||null},"user",currentUserName||null);}}>No, keep unassigned</button>
            </div>
          </div>
        </div>}

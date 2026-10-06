@@ -5,6 +5,8 @@ export default async function handler(req,res){
   if(!auth)return;
 
   if(req.method==="POST"){
+    const action=String(req.body?.action||"").toLowerCase();
+    if(action==="confirm-customer-memory")return confirmCustomerMemory(req,res,auth);
     return createCustomer(req,res,auth);
   }
 
@@ -118,6 +120,8 @@ export default async function handler(req,res){
     });
   }
 }
+
+async function confirmCustomerMemory(req,res,auth){try{const body=parseBody(req);const customerId=String(body.customerId||"").trim();const sourceValue=String(body.sourceValue||"").trim();const sourceType=String(body.sourceType||"exporter").trim();if(!customerId||!sourceValue)return res.status(400).json({error:"Customer ID and source value are required."});const rows=await supabaseFetch("customers?organisation_id=eq."+encodeURIComponent(auth.organisationId)+"&id=eq."+encodeURIComponent(customerId)+"&status=eq.active&select=id,name,code,status&limit=1");const customer=rows?.[0];if(!customer)return res.status(404).json({error:"Customer not found."});const normalise=value=>String(value||"").trim().toLowerCase().replace(/&/g," and ").replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim();const memory=await supabaseFetch("customer_memory",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=representation"},body:JSON.stringify({organisation_id:auth.organisationId,customer_id:customer.id,memory_type:"customer_alias",source_value:sourceValue,normalized_value:normalise(sourceValue),created_by:auth.userId||auth.email||null,metadata:{sourceType}})});return res.status(200).json({ok:true,memory:memory?.[0]||null,customer:{id:customer.id,name:customer.name,code:customer.code,status:customer.status}});}catch(error){return res.status(503).json({error:error.message||"Unable to save customer memory."});}}
 
 async function createCustomer(req,res,auth){
   try{

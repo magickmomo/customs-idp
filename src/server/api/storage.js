@@ -49,14 +49,10 @@ export default async function handler(req,res){
         const storagePath=`${safePackId}/${Date.now()}-${safeName}`;
         const {data,error}=await supabase.storage.from(BUCKET).createSignedUploadUrl(storagePath,{upsert:false});
         if(error) return res.status(500).json({error:error.message});
-        const {data:accessData,error:accessError}=await supabase.storage.from(BUCKET).createSignedUrl(storagePath,SIGNED_URL_TTL_SECONDS);
-        if(accessError) return res.status(500).json({error:accessError.message});
         return res.status(200).json({
           bucket:BUCKET,
           path:storagePath,
           signedUrl:data.signedUrl,
-          accessUrl:accessData.signedUrl,
-          accessUrlExpiresAt:new Date(Date.now()+SIGNED_URL_TTL_SECONDS*1000).toISOString()
         });
       }
 
