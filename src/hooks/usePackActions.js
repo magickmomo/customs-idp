@@ -3,6 +3,7 @@ import { validateStandardCustomsRecord } from "../validation/standardEngine.js";
 import { DEFAULT_ORGANISATION } from "../tenant.js";
 import { buildWorkingCustomsRecord } from "../domain/workingRecord.js";
 import { runAutomatedEmailAudit } from "../services/agentService.js";
+import { resolveCustomerMatch, normaliseCustomerName as sharedNormaliseCustomerName } from "../domain/customerMatching.js";
 import { deleteUploadedDocument, getUploadedDocument, saveUploadedDocument } from "../services/documentStorage.js";
 
 const toDataUrl = async (source, mimeType) => {
@@ -37,11 +38,7 @@ const fetchStorageBlob = async (path, filename, packId = null) => {
 
 const DEFAULT_CUSTOMER_STRATEGY={instructions:"",requiredFields:[],weightHandling:"ask_user"};
 
-const normaliseCustomerName = value =>
-  String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\\s+/g, " ");
+const normaliseCustomerName = sharedNormaliseCustomerName;
 
 const loadCustomers = async () => {
   const response = await fetch("/api/organisation?action=customers", {
@@ -94,63 +91,45 @@ const buildCustomerContext = (customers, customerId) => {
 };
 
 const resolveExtractedCustomer = (customers, exporterName, importerName) => {
-  const exporter = normaliseCustomerName(exporterName);
-  const importer = normaliseCustomerName(importerName);
+  const result=resolveCustomerMatch(customers,exporterName,importerName);
 
-  const activeCustomers = customers.filter(customer =>
-    String(customer.status || "active").toLowerCase() === "active"
-  );
-
-  const exporterMatch = exporter
-    ? activeCustomers.find(customer => normaliseCustomerName(customer.name) === exporter)
-    : null;
-
-  const importerMatch = importer
-    ? activeCustomers.find(customer => normaliseCustomerName(customer.name) === importer)
-    : null;
-
-  if (
-    exporterMatch &&
-    importerMatch &&
-    String(exporterMatch.id) !== String(importerMatch.id)
-  ) {
+  if(result.type==="possible"){
     return {
-      customerId: null,
-      customerName: null,
-      strategy: DEFAULT_CUSTOMER_STRATEGY,
-      matched: false,
-      ambiguous: true,
-      candidates: [
-        { id: exporterMatch.id, name: exporterMatch.name, matchedBy: "exporter" },
-        { id: importerMatch.id, name: importerMatch.name, matchedBy: "importer" }
-      ]
+      customerId:null,
+      customerName:null,
+      strategy:DEFAULT_CUSTOMER_STRATEGY,
+      matched:false,
+      ambiguous:false,
+      possibleMatch:true,
+      matchedBy:result.sourceType||null,
+      candidates:result.candidates||[]
     };
   }
 
-  const match = exporterMatch || importerMatch;
-
-  if (!match) {
+  if(result.type!=="match"||!result.customer){
     return {
-      customerId: null,
-      customerName: null,
-      strategy: DEFAULT_CUSTOMER_STRATEGY,
-      matched: false,
-      ambiguous: false,
-      candidates: []
+      customerId:null,
+      customerName:null,
+      strategy:DEFAULT_CUSTOMER_STRATEGY,
+      matched:false,
+      ambiguous:false,
+      possibleMatch:false,
+      candidates:[]
     };
   }
 
   return {
-    customerId: match.id,
-    customerName: match.name,
-    strategy: {
+    customerId:result.customer.id,
+    customerName:result.customer.name,
+    strategy:{
       ...DEFAULT_CUSTOMER_STRATEGY,
-      ...(match.strategy || {})
+      ...(result.customer.strategy||{})
     },
-    matched: true,
-    matchedBy: exporterMatch ? "exporter" : "importer",
-    ambiguous: false,
-    candidates: []
+    matched:true,
+    matchedBy:result.matchedBy||null,
+    ambiguous:false,
+    possibleMatch:false,
+    candidates:[]
   };
 };
 
@@ -344,6 +323,18 @@ export function usePackActions({
     notify("Re-processing all documents — AI extraction started");
 
     try {
+      const customers = await loadCustomers();
+      const existingCustomer = pack.customerId
+        ? customers.find(item=>String(item.id)===String(pack.customerId)&&String(item.status||"active").toLowerCase()==="active")
+        : customers.find(item=>String(item.name||"").trim().toLowerCase()===String(pack.customer||"").trim().toLowerCase()&&String(item.status||"active").toLowerCase()==="active");
+
+      const initialStrategy = existingCustomer
+        ? {
+            ...DEFAULT_CUSTOMER_STRATEGY,
+            ...(pack.customerStrategy||existingCustomer.strategy||{})
+          }
+        : DEFAULT_CUSTOMER_STRATEGY;
+
       const extractedDocuments = [];
 
       for (const uploaded of files) {
@@ -356,11 +347,11 @@ export function usePackActions({
         }
 
         extractedDocuments.push(
-          await extractDocument(source, uploaded, DEFAULT_CUSTOMER_STRATEGY)
+          await extractDocument(source, uploaded, initialStrategy)
         );
       }
 
-      const processed = {
+      let processed = {
         ...buildExtractedPack(processing, extractedDocuments),
         extractedData: {
           ...buildExtractedPack(processing, extractedDocuments).extractedData,
@@ -368,6 +359,38 @@ export function usePackActions({
           extractionRunId: new Date().toISOString()
         }
       };
+
+      // If the pack was previously unassigned, use the fresh extraction to
+      // identify the customer, then re-run with that customer's active strategy.
+      if(!existingCustomer){
+        const primary=processed.extractedData;
+        const exporterName=primary?.exporter||primary?.exporterName||"";
+        const importerName=primary?.consignee||primary?.importer||primary?.importerName||"";
+        const customerContext=resolveExtractedCustomer(customers,exporterName,importerName);
+
+        if(customerContext.matched){
+          const customerStrategy={
+            ...DEFAULT_CUSTOMER_STRATEGY,
+            ...(customerContext.strategy||{})
+          };
+          const strategyDocuments=[];
+          for(const uploaded of files){
+            const source=uploaded.storagePath
+              ? await fetchStorageBlob(uploaded.storagePath,uploaded.name,pack.id)
+              : await getUploadedDocument(uploaded.id);
+            if(!source)throw new Error("Uploaded document is unavailable: "+uploaded.name);
+            strategyDocuments.push(await extractDocument(source,uploaded,customerStrategy));
+          }
+          processed={
+            ...buildExtractedPack(processing,strategyDocuments),
+            extractedData:{
+              ...buildExtractedPack(processing,strategyDocuments).extractedData,
+              agentMessages:[],
+              extractionRunId:new Date().toISOString()
+            }
+          };
+        }
+      }
 
       let completedPack = buildValidatedPack(processed);
       completedPack = await runAutomatedEmailAudit(completedPack);
@@ -500,6 +523,7 @@ export function usePackActions({
       uploadedFiles,
       email: null,
       title: selected[0]?.name || id,
+      customerStrategy: strategy,
       customerStrategyApplied: strategyApplied
     };
 
@@ -568,7 +592,7 @@ export function usePackActions({
         extractedDocuments.push(await extractDocument(source, uploaded, strategy));
       }
 
-      const processed = buildExtractedPack(newPack, extractedDocuments);
+      let processed = buildExtractedPack(newPack, extractedDocuments);
 
       const extractedExporter =
         processed.extractedData?.exporter ||
@@ -582,16 +606,17 @@ export function usePackActions({
         "";
 
       let customerContext;
+      const customers = await loadCustomers();
 
       if (uploadCustomerContext.matched) {
         customerContext = {
           ...uploadCustomerContext,
           matchedBy: "manual",
           ambiguous: false,
+          possibleMatch: false,
           candidates: []
         };
       } else {
-        const customers = await loadCustomers();
         customerContext = resolveExtractedCustomer(
           customers,
           extractedExporter,
@@ -599,23 +624,68 @@ export function usePackActions({
         );
       }
 
+      // Auto-detection is intentionally two-stage: extract enough source data
+      // to identify the customer first, then run the documents again with the
+      // matched customer's active strategy. This prevents the first extraction
+      // from permanently using the standard strategy.
+      if (!uploadCustomerContext.matched && customerContext.matched) {
+        const customerStrategy = {
+          ...DEFAULT_CUSTOMER_STRATEGY,
+          ...(customerContext.strategy || {})
+        };
+        const strategyNeedsReprocess =
+          JSON.stringify(customerStrategy) !== JSON.stringify(DEFAULT_CUSTOMER_STRATEGY);
+
+        if (strategyNeedsReprocess) {
+          const strategyDocuments = [];
+          for (const uploaded of uploadedFiles) {
+            let source = selected.find(file => file.name === uploaded.name && file.size === uploaded.size)
+              || selected.find(file => file.name === uploaded.name);
+
+            if (!source && uploaded.storagePath) {
+              source = await fetchStorageBlob(uploaded.storagePath, uploaded.name, id);
+            }
+            if (!source) throw new Error("Document " + uploaded.name + " is unavailable");
+
+            strategyDocuments.push(
+              await extractDocument(source, uploaded, customerStrategy)
+            );
+          }
+          processed = buildExtractedPack(newPack, strategyDocuments);
+        }
+      }
+
+      const finalStrategyApplied = Boolean(customerContext.matched);
       const identifiedPack = {
         ...processed,
         customer: customerContext.customerName,
         customerId: customerContext.customerId,
-        customerStrategyApplied: customerContext.matched,
+        customerStrategy: customerContext.matched ? customerContext.strategy : DEFAULT_CUSTOMER_STRATEGY,
+        customerStrategyApplied: finalStrategyApplied,
         customerIdentification: {
           exporterName: extractedExporter || null,
           importerName: extractedImporter || null,
           matched: customerContext.matched,
           matchedBy: customerContext.matchedBy || null,
           ambiguous: customerContext.ambiguous || false,
+          possibleMatch: customerContext.possibleMatch || false,
           candidates: customerContext.candidates || [],
           customerId: customerContext.customerId,
           customerName: customerContext.customerName,
           method: uploadCustomerContext.matched ? "manual" : "automatic"
         }
       };
+
+      if(customerContext.matched){
+        identifiedPack.extractedData={
+          ...(identifiedPack.extractedData||{}),
+          agentMessages:[{
+            type:"agent",
+            text:"I identified "+customerContext.customerName+" and automatically applied its customer strategy. I applied the configured line currency, line-value/total-invoice rule, weight apportionment, and customer addresses to the working customs record. I have kept any source discrepancies visible for review.",
+            persist:true
+          }]
+        };
+      }
 
       let completed = buildValidatedPack(identifiedPack);
       completed = await runAutomatedEmailAudit(completed);

@@ -168,7 +168,10 @@ function normalizePack(row){
     uploadedFiles:Array.isArray(meta.uploadedFiles)?meta.uploadedFiles:undefined,
     processingStartedAt:meta.processingStartedAt||undefined,
     processingCompletedAt:meta.processingCompletedAt||undefined,
-    processingError:row.processing_error||undefined
+    processingError:row.processing_error||undefined,
+    customerStrategy:data?.customerStrategy||null,
+    customerStrategyApplied:data?.customerStrategyApplied===true,
+    customerStrategyVersion:data?.customerStrategyVersion||null
   };
 }
 

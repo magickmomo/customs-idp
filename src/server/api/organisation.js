@@ -37,7 +37,7 @@ export default async function handler(req,res){
       return res.status(403).json({error:"Organisation is not configured."});
     }
 
-    const [teams,customers,strategies,mailboxes,packs]=await Promise.all([
+    const [teams,customers,strategies,mailboxes,packs,memories]=await Promise.all([
       supabaseFetch(
         `teams?organisation_id=eq.${encodeURIComponent(organisationId)}&select=id,name,status&order=name.asc`
       ),
@@ -52,6 +52,9 @@ export default async function handler(req,res){
       ),
       supabaseFetch(
         `document_packs?organisation_id=eq.${encodeURIComponent(organisationId)}&select=id,customer,customer_id`
+      ),
+      supabaseFetch(
+        `customer_memory?organisation_id=eq.${encodeURIComponent(organisationId)}&memory_type=eq.customer_alias&select=customer_id,source_value,normalized_value&order=created_at.asc`
       )
     ]);
 
@@ -80,6 +83,14 @@ export default async function handler(req,res){
       }
     }
 
+    const memoryAliasesByCustomerId={};
+    for(const memory of memories){
+      if(!memoryAliasesByCustomerId[memory.customer_id]){
+        memoryAliasesByCustomerId[memory.customer_id]=[];
+      }
+      memoryAliasesByCustomerId[memory.customer_id].push(memory.source_value);
+    }
+
     const resultCustomers=customers.map(customer=>{
       const strategy=strategyByCustomerId[customer.id];
       const mailbox=mailboxByCustomerId[customer.id]||null;
@@ -98,6 +109,7 @@ export default async function handler(req,res){
         strategyVersion:strategy?.version||null,
         strategyStatus:strategy?.status||null,
         strategy:strategy?.config||{},
+        memoryAliases:memoryAliasesByCustomerId[customer.id]||[],
         rules:countStrategyRules(strategy?.config),
         processed:processedByCustomer[customer.id]||0
       };
@@ -419,7 +431,11 @@ function createDefaultStrategy(){
     extractionRules:[],
     fieldRules:[],
     customValidations:[],
-    autoApplyWeightApportionment:false
+    autoApplyWeightApportionment:false,
+    lineCurrencyFromHeader:false,
+    totalInvoiceFromLines:false,
+    exporterAddress:"",
+    importerAddress:""
   };
 }
 
@@ -438,7 +454,11 @@ function normaliseStrategyConfig(value){
     requiredFields:Array.isArray(config.requiredFields)?config.requiredFields:[],
     fieldRules:Array.isArray(config.fieldRules)?config.fieldRules:[],
     customValidations:Array.isArray(config.customValidations)?config.customValidations:[],
-    autoApplyWeightApportionment:config.autoApplyWeightApportionment===true
+    autoApplyWeightApportionment:config.autoApplyWeightApportionment===true,
+    lineCurrencyFromHeader:config.lineCurrencyFromHeader===true,
+    totalInvoiceFromLines:config.totalInvoiceFromLines===true,
+    exporterAddress:typeof config.exporterAddress==="string"?config.exporterAddress:"",
+    importerAddress:typeof config.importerAddress==="string"?config.importerAddress:""
   };
 }
 

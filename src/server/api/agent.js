@@ -20,7 +20,7 @@ export default async function handler(req,res){
         target:null
       });
     }
-    const strategyRequest=pack?.type==="customer_strategy";
+    const strategyRequest=pack?.type==="customer_strategy" || /\b(customer\s+strategy|customer\s+rule|record\s+(this|the)\s+strategy|save\s+(this|the)\s+strategy|create\s+(the\s+)?customer)\b/i.test(String(message||""));
     const context={
       packId:pack.id,customer:pack.customer,ticket:pack.ticket,
       customerId:pack.customerId||null,
@@ -53,7 +53,7 @@ export default async function handler(req,res){
       "For a correction, action must be update_field and target must identify a top-level primary extraction field or a line field. For line-level corrections, use grossMassKg for gross weight and netMassKg for net weight. If the user names a line number, use the zero-based lineIndex for that line. For a top-level gross-weight correction, use totalGrossWeight. Keep the old value and explain that the new value came from the user's instruction when applicable.",
       "Do not apply customer-specific rules unless they are present in the supplied context.",
       "When a customer context is supplied, treat it as the complete customer context available to you for this request. Use the supplied customer profile and current strategy; do not invent customer facts.",
-      strategyRequest?"This is a CUSTOMER STRATEGY request. The V1 strategy is intentionally simple. Interpret the requested change using the supplied customer context and current strategy. Return action strategy_proposal only when the change is concrete and unambiguous. Return a complete resultingStrategy object. V1 keys are instructions, requiredFields and weightHandling. Preserve existing legacy keys unchanged. weightHandling must be ask_user, invoice or packing_list. Never modify storage. If clarification is needed, return action strategy_clarification and strategyProposal null.":"",
+      strategyRequest?"This is a CUSTOMER STRATEGY request. Interpret the requested change using the supplied customer context and conversation. Return action strategy_proposal when the user is defining or confirming a strategy proposal. If the user explicitly asks to create the customer, return action create_customer and include the proposed customer name in target.customerName. If the user explicitly asks to record/save the confirmed strategy, return action save_customer_strategy and include a complete resultingStrategy plus target.customerName. The frontend will perform the database write and will only tell the user it was saved after the API confirms it. Return a complete resultingStrategy object. Preserve existing legacy keys unchanged. weightHandling must be ask_user, invoice or packing_list. When the user explicitly requires automatic weight apportionment, set autoApplyWeightApportionment=true. When the user explicitly says line currency always equals header currency, set lineCurrencyFromHeader=true. When the user explicitly says total invoice amount is the sum of item-line amounts, set totalInvoiceFromLines=true. When explicit exporter/importer address rules are given, store them in exporterAddress/importerAddress. Never claim that a strategy or customer has been created or saved unless the action is create_customer or save_customer_strategy. If clarification is needed, return action strategy_clarification and strategyProposal null.":"",
       "For document-level total weights with missing line-level weights, ask the user whether they want the configured apportionment method applied unless the supplied customer strategy explicitly enables automatic weight apportionment.",
       "If the recent conversation shows that you already asked the user to approve weight apportionment and the user responds with a clear approval such as \"yes\", \"yes apply\", \"apply it\", or \"do it\", return action approve_weight_apportionment. Also return approve_weight_apportionment when the user directly instructs you to apportion the document-level weights using the configured method. Do not require the user to repeat the method if it has already been established in the conversation. The configured method is: allocate total net weight by line value, then allocate total gross weight by the resulting net-weight ratio, with final values rounded to a maximum of 3 decimal places while preserving the document totals.",
       "Return concise, operational answers.",
@@ -64,7 +64,7 @@ export default async function handler(req,res){
       type:"object",additionalProperties:false,
       properties:{
         reply:{type:"string"},
-        action:{type:"string",enum:["none","update_field","approve_weight_apportionment","suggest_field_updates","strategy_proposal","strategy_clarification"]},
+        action:{type:"string",enum:["none","update_field","approve_weight_apportionment","suggest_field_updates","strategy_proposal","strategy_clarification","create_customer","save_customer_strategy"]},
         suggestions:{type:"array",items:{type:"object",additionalProperties:false,properties:{
           scope:{type:"string",enum:["line","primary"]},
           field:{type:"string"},
@@ -86,8 +86,12 @@ export default async function handler(req,res){
             fieldRules:{type:"array",items:{type:"string"}},
             customValidations:{type:"array",items:{type:"string"}},
             emailFields:{type:"array",items:{type:"string"}},
-            autoApplyWeightApportionment:{type:"boolean"}
-          },required:["instructions","requiredFields","weightHandling","extractionRules","validationRules","fieldRules","customValidations","emailFields","autoApplyWeightApportionment"]}
+            autoApplyWeightApportionment:{type:"boolean"},
+            lineCurrencyFromHeader:{type:"boolean"},
+            totalInvoiceFromLines:{type:"boolean"},
+            exporterAddress:{type:"string"},
+            importerAddress:{type:"string"}
+          },required:["instructions","requiredFields","weightHandling","extractionRules","validationRules","fieldRules","customValidations","emailFields","autoApplyWeightApportionment","lineCurrencyFromHeader","totalInvoiceFromLines","exporterAddress","importerAddress"]}
         },required:["changes","resultingStrategy"]},
         target:{type:["object","null"],additionalProperties:false,properties:{
           scope:{type:"string",enum:["primary","line"]},
@@ -95,8 +99,9 @@ export default async function handler(req,res){
           lineIndex:{type:["integer","null"]},
           value:{type:["string","number","boolean","null"]},
           sourceDocumentId:{type:["string","null"]},
-          sourcePage:{type:["integer","null"]}
-        },required:["scope","field","lineIndex","value","sourceDocumentId","sourcePage"]}
+          sourcePage:{type:["integer","null"]},
+          customerName:{type:["string","null"]}
+        },required:["scope","field","lineIndex","value","sourceDocumentId","sourcePage","customerName"]}
       },
       required:["reply","action","target","suggestions","strategyProposal"]
     };

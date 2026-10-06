@@ -54,9 +54,23 @@ export function buildWorkingCustomsRecord(pack){
         if(!isMissing(value)){merged[target]=value;break;}
       }
     });
-    const strategy=getCustomerStrategy(pack?.customer),eo=strategy?.customsSummaryExportField||strategy?.customsSummary?.exportField,di=strategy?.customsSummaryDestinationField||strategy?.customsSummary?.destinationField;
+    // Prefer the strategy selected and persisted on this pack. Fall back to
+    // the legacy name-based store only for older packs that pre-date customer UUIDs.
+    const strategy=pack?.customerStrategy&&typeof pack.customerStrategy==="object"
+      ? pack.customerStrategy
+      : getCustomerStrategy(pack?.customer),eo=strategy?.customsSummaryExportField||strategy?.customsSummary?.exportField,di=strategy?.customsSummaryDestinationField||strategy?.customsSummary?.destinationField;
     if(eo&&!isMissing(merged[eo]))merged.countryOfExport=normalizeCountryCode(merged[eo]);else if(isMissing(merged.countryOfExport)&&!isMissing(merged.exporterCountryIso))merged.countryOfExport=normalizeCountryCode(merged.exporterCountryIso);
     if(di&&!isMissing(merged[di]))merged.sourceCountryOfDestination=normalizeCountryCode(merged[di]);else if(isMissing(merged.sourceCountryOfDestination)&&!isMissing(merged.consigneeCountryIso))merged.sourceCountryOfDestination=normalizeCountryCode(merged.consigneeCountryIso);
+
+    // Apply deterministic customer strategy flags to the working customs record.
+    // These are explicit configuration values, not AI guesses.
+    if(strategy?.exporterAddress){
+      merged.exporterAddress=strategy.exporterAddress;
+    }
+    if(strategy?.importerAddress){
+      merged.importerAddress=strategy.importerAddress;
+      merged.consigneeAddress=strategy.importerAddress;
+    }
 
     const invoiceLines=Array.isArray(invoice.lines)?invoice.lines:[];
     const supportingLineSets=supportingDocs
@@ -107,6 +121,16 @@ export function buildWorkingCustomsRecord(pack){
     const totalGrossForApportion=toNumber(merged.totalGrossWeight);
     const allNetMissing=mergedLines.length>0&&mergedLines.every(line=>isMissing(line.netMassKg)&&isMissing(line.netWeight)&&isMissing(line.netMass));
     const allGrossMissing=mergedLines.length>0&&mergedLines.every(line=>isMissing(line.grossMassKg)&&isMissing(line.grossWeight)&&isMissing(line.grossMass));
+    // Customer strategies may define "line value" as the extracted unit price.
+    // Materialise that value on the working line so both weight apportionment
+    // and total-invoice calculation use the configured rule consistently.
+    if(strategy?.totalInvoiceFromLines===true){
+      mergedLines.forEach(line=>{
+        if(isMissing(line.totalValue)&&!isMissing(line.unitValue)){
+          line.totalValue=line.unitValue;
+        }
+      });
+    }
     const allocationBasis=mergedLines.map(line=>toNumber(line.totalValue??line.lineValue??line.unitValue));
     const quantityBasis=mergedLines.map(line=>toNumber(line.quantity));
     const basis=allocationBasis.every(v=>v!==null&&v>=0)&&allocationBasis.some(v=>v>0)
@@ -116,7 +140,7 @@ export function buildWorkingCustomsRecord(pack){
         : mergedLines.map(()=>1);
     const basisTotal=basis.reduce((sum,v)=>sum+(v||0),0);
 
-    const weightApportionmentApproved = pack?.extractedData?.weightApportionmentDecision?.status==="approved" || getCustomerStrategy(pack?.customer).autoApplyWeightApportionment===true;
+    const weightApportionmentApproved = pack?.extractedData?.weightApportionmentDecision?.status==="approved" || strategy?.autoApplyWeightApportionment===true;
     if(weightApportionmentApproved && ((allNetMissing&&totalNetForApportion!==null&&basisTotal>0)||(allGrossMissing&&totalGrossForApportion!==null&&basisTotal>0))){
       const apportioned=mergedLines.map(line=>({...line}));
 
@@ -154,6 +178,24 @@ export function buildWorkingCustomsRecord(pack){
     }
 
     merged.lines=mergedLines;
+
+    if(strategy?.lineCurrencyFromHeader===true){
+      const headerCurrency=merged.currency||merged.invoiceCurrency||merged.headerCurrency||merged.currencyCode||"";
+      if(headerCurrency){
+        merged.lines=merged.lines.map(line=>({...line,currency:headerCurrency}));
+      }
+    }
+
+    if(strategy?.totalInvoiceFromLines===true){
+      const linesForTotal=Array.isArray(merged.lines)?merged.lines:[];
+      const lineAmounts=linesForTotal.map(line=>Number(String(line?.totalValue??line?.lineValue??line?.unitValue??"").replace(/,/g,"").trim()));
+      if(lineAmounts.length&&lineAmounts.every(Number.isFinite)){
+        const total=lineAmounts.reduce((sum,value)=>sum+value,0);
+        merged.totalInvoiceValue=Math.round(total*100)/100;
+        if(merged.invoiceTotal!==undefined)merged.invoiceTotal=merged.totalInvoiceValue;
+      }
+    }
+
     merged.workingRecordSource="primary invoice + supporting documents";
     merged.sourceDiscrepancies=sourceDiscrepancies;
     return merged;
