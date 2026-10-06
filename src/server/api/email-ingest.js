@@ -1,9 +1,8 @@
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
-import { extractDocument } from "../../document-extraction.js";
 import { DEFAULT_ORGANISATION } from "../../tenant.js";
 import { resolveCustomerMatch, normaliseCustomerName } from "../../domain/customerMatching.js";
-import { buildWorkingCustomsRecord } from "../../domain/workingRecord.js";
+import { processPack } from "../services/processPack.js";
 
 const DEFAULT_STRATEGIES = {
   "Acme Components Ltd": { emailFields: [] },
@@ -128,8 +127,8 @@ export default async function handler(req,res){
 
     // Persist the pack immediately so the inbox can observe the webhook intake
     // while attachment storage/extraction is still running.
-    await supabaseFetch("document_packs?id=eq."+encodeURIComponent(pack.id),{
-      method:"PATCH",
+    await supabaseFetch("document_packs",{
+      method:"POST",
       body:JSON.stringify({
         id:pack.id,
         pack_uuid:pack.packUuid,
@@ -160,177 +159,42 @@ export default async function handler(req,res){
       headers:{"Prefer":"resolution=merge-duplicates,return=minimal"}
     });
 
-    const attachmentResults=[];
     const storedFiles=[];
-    for(const attachment of attachments){
+    for(let index=0;index<attachments.length;index++){
+      const attachment=attachments[index];
       const filename=String(attachment.filename||attachment.name||"attachment");
       const mimeType=String(attachment.mimeType||attachment.contentType||"application/octet-stream");
       const fileData=normaliseAttachmentData(attachment);
-      if(!fileData){attachmentResults.push({filename,mimeType,error:"Attachment content was not supplied by the email connector."});continue;}
-      try{
-        // Persist the original source document independently of extraction.
-        // A failed extraction must never make the source document unavailable
-        // for review or a later re-process.
-        let storagePath=null;
-        let storageError=null;
-        try{
-          storagePath=await storeAttachment({packId:id,filename,mimeType,fileData});
-          storedFiles.push({id:id+"-"+storedFiles.length,name:filename,size:Number(attachment.size)||0,type:mimeType,storagePath});
-        }catch(error){
-          storageError=formatExtractionError(error);
-          storedFiles.push({id:id+"-"+storedFiles.length,name:filename,size:Number(attachment.size)||0,type:mimeType,storagePath:null,storageError});
-        }
-
-        const extraction=await extractAttachment({fileData,filename,mimeType,customerStrategy:configured});
-        attachmentResults.push({filename,mimeType,extraction:extraction.extraction,source:extraction.source,storagePath,storageError});
-      }catch(error){
-        attachmentResults.push({filename,mimeType,error:formatExtractionError(error)});
-      }
+      let storagePath=null,storageError=null;
+      if(!fileData)storageError="Attachment content was not supplied by the email connector.";
+      else try{storagePath=await storeAttachment({packId:id,filename,mimeType,fileData});}catch(error){storageError=formatExtractionError(error);}
+      storedFiles.push({id:id+"-"+index,name:filename,size:Number(attachment.size)||0,type:mimeType,storagePath,...(storageError?{storageError}:{})});
     }
-    let successfulExtractions=attachmentResults.filter(item=>item.extraction).map(item=>item.extraction);
+    const storageWarnings=storedFiles.filter(file=>file.storageError).map(file=>file.name+": "+file.storageError);
+    await supabaseFetch("document_packs?id=eq."+encodeURIComponent(pack.id),{method:"PATCH",body:JSON.stringify({
+      extracted_data:{
+        _tenant:{organisationId:DEFAULT_ORGANISATION.id,organisationName:DEFAULT_ORGANISATION.name},
+        documentType:"email",email:pack.email,documents:[],documentCount:0,sourceDocuments:[],emailFields:emailExtraction.fields,
+        warnings:[...(emailExtraction.warnings||[]),...storageWarnings],agentMessages:[],
+        _manager:{processingStartedAt:new Date().toISOString(),processingCompletedAt:null,uploadedFiles:storedFiles}
+      },
+      processing_error:storageWarnings.length?storageWarnings.join(" | "):null,
+      updated_at:new Date().toISOString()
+    }),headers:{Prefer:"return=minimal"}});
 
-    // Email intake must use the same extracted-party customer identification
-    // as browser uploads. Start with any mailbox/routing match, then inspect
-    // the extracted exporter/importer before the pack is finalised.
-    const initialCustomerId=customerId;
-    const primaryBeforeIdentification=successfulExtractions.find(item=>item.documentType==="commercial_invoice")||successfulExtractions[0]||null;
-    const extractedExporter=primaryBeforeIdentification?.exporter||primaryBeforeIdentification?.exporterName||"";
-    const extractedImporter=primaryBeforeIdentification?.consignee||primaryBeforeIdentification?.importer||primaryBeforeIdentification?.importerName||"";
-
-    customerContext=await resolveCustomerContext({
-      organisationId:DEFAULT_ORGANISATION.id,
-      to,
-      routedCustomerName,
-      requestedCustomerName,
-      exporterName:extractedExporter,
-      importerName:extractedImporter
-    });
-
-    if(customerContext.matched){
-      customer=customerContext.customerName;
-      customerId=customerContext.customerId;
-
-      // If the customer was identified from the documents rather than the
-      // mailbox/routing metadata, re-run extraction with that customer's
-      // active strategy so the same strategy context is used for email packs.
-      if(String(initialCustomerId||"")!==String(customerId||"")){
-        for(let index=0;index<attachments.length;index+=1){
-          const attachment=attachments[index];
-          const current=attachmentResults[index];
-          const fileData=normaliseAttachmentData(attachment);
-          if(!fileData)continue;
-          try{
-            const extraction=await extractAttachment({
-              fileData,
-              filename:String(attachment.filename||attachment.name||("attachment-"+(index+1))),
-              mimeType:String(attachment.mimeType||attachment.contentType||"application/octet-stream"),
-              customerStrategy:customerContext.strategy||{instructions:"",requiredFields:[],weightHandling:"ask_user"}
-            });
-            attachmentResults[index]={...current,extraction:extraction.extraction,source:extraction.source};
-          }catch(error){
-            // Preserve the first successful extraction if a strategy-context
-            // retry fails; identification itself remains valid.
-          }
-        }
-        successfulExtractions=attachmentResults.filter(item=>item.extraction).map(item=>item.extraction);
-      }
-    }else if(customerContext.ambiguous){
-      customer=null;
-      customerId=null;
-    }else{
-      customer=null;
-      customerId=null;
-    }
-
-    const primaryExtraction=successfulExtractions.find(item=>item.documentType==="commercial_invoice")||successfulExtractions[0]||null;
-    const extractionWarnings=[...(emailExtraction.warnings||[]),...attachmentResults.filter(item=>item.error).map(item=>item.filename+": "+formatExtractionError(item.error))];
-    pack.customer=customer;
-    pack.customerId=customerId;
-
-    const customerStrategy=customerContext.matched
-      ? (customerContext.strategy||{instructions:"",requiredFields:[],weightHandling:"ask_user"})
-      : {instructions:"",requiredFields:[],weightHandling:"ask_user"};
-    const customerStrategyApplied=Boolean(customerContext.matched);
-    const extractedData={...(primaryExtraction||{}),_tenant:{organisationId:DEFAULT_ORGANISATION.id,organisationName:DEFAULT_ORGANISATION.name},documentType:primaryExtraction?.documentType||"email",email:pack.email,documents:attachmentResults,documentCount:attachmentResults.length,sourceDocuments:attachmentResults.map(item=>({name:item.filename,type:item.extraction?.documentType||item.mimeType,extraction:item.extraction||null,error:item.error||null})),emailFields:emailExtraction.fields,warnings:extractionWarnings,agentMessages:[],customerStrategy,customerStrategyApplied,customerStrategyVersion:customerContext.strategyVersion||null,customerIdentification:{
-      exporterName:extractedExporter||null,
-      importerName:extractedImporter||null,
-      matched:Boolean(customerContext.matched),
-      matchedBy:customerContext.matchedBy||null,
-      ambiguous:Boolean(customerContext.ambiguous),
-      possibleMatch:Boolean(customerContext.possibleMatch),
-      candidates:customerContext.candidates||[],
-      customerId:customerId||null,
-      customerName:customer||null,
-      method:customerContext.matchedBy==="mailbox"||customerContext.matchedBy==="routing"?"email-routing":"automatic"
-    }};
-    // Build the same deterministic working record used by browser uploads.
-    // Customer strategy is persisted on the pack before the working record is built,
-    // so automatic email intake can apply the saved customer rules.
-    extractedData._workingRecord=buildWorkingCustomsRecord({
-      ...pack,
-      customer:customer||null,
-      customerId:customerId||null,
-      customerStrategy,
-      extractedData
-    });
-
-    if(customerContext.matched){
-      extractedData.agentMessages=[{
-        type:"agent",
-        text:"I identified "+customerContext.customerName+" and automatically applied its customer strategy. I applied the configured line currency, line-value/total-invoice rule, weight apportionment, and customer addresses to the working customs record. I have kept any source discrepancies visible for review.",
-        persist:true
-      }];
-    }
-
-    const audit=await runAutomatedEmailAudit({
-      ...pack,
-      workingRecord:extractedData._workingRecord,
-      extractedData
-    });
-
-    if(audit.completed){
-      extractedData.agentAuditCompleted=true;
-      if(audit.suggestionMessage) extractedData.agentMessages=[audit.suggestionMessage];
-    }
-
-    const processingComplete=Boolean(audit.completed);
-    const processingStatus=processingComplete?"Needs review":"Processing";
-    const processingError=processingComplete
-      ? (extractionWarnings.length?extractionWarnings.join(" | "):null)
-      : (audit.error||"Automated Review Agent did not complete. The pack remains locked until the automated review finishes.");
-
-    extractedData._manager={processingStartedAt:receivedAt,processingCompletedAt:processingComplete?new Date().toISOString():null,uploadedFiles:storedFiles.length?storedFiles:pack.uploadedFiles};
-    await supabaseFetch("document_packs",{
-      method:"POST",
-      body:JSON.stringify({
-        id:pack.id,
-        pack_uuid:pack.packUuid,
-        organisation_id:DEFAULT_ORGANISATION.id,
-        customer:pack.customer,
-        customer_id:pack.customerId||null,
-        docs:pack.docs,
-        status:processingStatus,
-        confidence:successfulExtractions.length?Math.round(successfulExtractions.reduce((sum,item)=>sum+Number(item.confidence||0),0)/successfulExtractions.length):0,
-        received:pack.received,
-        ticket:pack.ticket,
-        assigned_to:pack.assignedTo,
-        extracted_data:extractedData,
-        processing_error:processingError,
-        updated_at:new Date().toISOString()
-      }),
-      headers:{"Prefer":"resolution=merge-duplicates,return=minimal"}
-    });
+    const completed=await processPack({organisationId:DEFAULT_ORGANISATION.id,packId:id,reason:repair?"reprocess":"initial",actor:{type:"system",name:"Email Ingestion"}});
+    const extractedAttachmentCount=completed.extractedData?.documents?.filter(document=>document.extraction).length||0;
 
     return res.status(200).json({
       ok:true,
       packId:id,
       packUuid,
-      customer,
-      status:processingStatus,
-      attachmentCount:attachmentResults.length,
-      extractedAttachmentCount:successfulExtractions.length,
+      customer:completed.customer,
+      status:completed.status,
+      attachmentCount:storedFiles.length,
+      extractedAttachmentCount,
       emailExtraction,
-      message:processingComplete?"Email processing and automated review completed.":"Email accepted but remains locked in Processing until automated review completes."
+      message:completed.status==="Processing"?"Email accepted but remains locked in Processing until automated review completes.":"Email processing and automated review completed."
     });
   }catch(error){
     return res.status(500).json({error:error.message||"Email ingestion failed."});
@@ -425,76 +289,11 @@ async function resolveCustomerContext({organisationId,to,routedCustomerName,requ
     customerId:customer.id,
     customerName:customer.name,
     strategy:strategy?.config||null,
-    strategyVersion:strategy?.version||null,
     matched:true,
     ambiguous:false,
     candidates:[],
     matchedBy:customer.__matchedBy||null
   };
-}
-
-function combineWorkingRecord(data){
-  const docs=Array.isArray(data?.documents)?data.documents:[];
-  const invoiceDoc=docs.find(d=>d?.extraction?.documentType==="commercial_invoice")||docs.find(Boolean);
-  if(!invoiceDoc?.extraction)return data||{};
-  const invoice={...invoiceDoc.extraction};
-  const supporting=docs.filter(d=>d&&d!==invoiceDoc);
-  const missing=v=>v===undefined||v===null||v==="";
-
-  for(const doc of supporting){
-    for(const [key,value] of Object.entries(doc?.extraction||{})){
-      if(["lines","documents","sourceDocuments","agentMessages"].includes(key))continue;
-      if(missing(invoice[key])&&!missing(value))invoice[key]=value;
-    }
-  }
-
-  const invoiceLines=Array.isArray(invoice.lines)?invoice.lines.map(line=>({...line})):[];
-  const key=line=>String(line?.hsCode||"")+"|"+String(line?.description||"").trim().toLowerCase();
-  for(const doc of supporting){
-    const sourceLines=Array.isArray(doc?.extraction?.lines)?doc.extraction.lines:[];
-    for(const source of sourceLines){
-      let target=invoiceLines.find(line=>key(line)===key(source));
-      if(!target)target=invoiceLines.find(line=>String(line?.description||"").trim().toLowerCase()===String(source?.description||"").trim().toLowerCase());
-      if(!target)continue;
-      for(const field of ["netMassKg","grossMassKg","quantity","sourceCountryCode","totalValue","hsCode"]){
-        if(missing(target[field])&&!missing(source?.[field]))target[field]=source[field];
-      }
-    }
-  }
-  invoice.lines=invoiceLines;
-  invoice.workingRecordSource="primary invoice + supporting documents";
-  return invoice;
-}
-
-async function runAutomatedEmailAudit(pack){
-  const secret=String(process.env.EMAIL_INGEST_SECRET||"");
-  if(!secret)return {completed:false,error:"EMAIL_INGEST_SECRET is not configured."};
-  const base=(String(process.env.APP_URL||"").trim()||("https://"+String(process.env.VERCEL_URL||"customs-idp.vercel.app").trim())).replace(/\/+$/g,"");
-  try{
-    const response=await fetch(base+"/api/agent",{
-      method:"POST",
-      headers:{"Content-Type":"application/json","x-email-ingest-secret":secret},
-      body:JSON.stringify({
-        message:"[AUTOMATED EMAIL AUDIT] Review the associated email against the extracted document data and the combined working customs record before the user opens the pack. Identify clear customs-relevant information present in the email but missing from the extracted/combined data, including any HS/commodity-code information. Do not change the pack; return suggestions requiring human confirmation. If there is no clear additional information, return no suggestions.",
-        pack:{...pack,conversation:[],extractedData:{...(pack.extractedData||{}),agentMessages:undefined}}
-      })
-    });
-    const result=await response.json().catch(()=>({}));
-    if(!response.ok)return {completed:false,error:result.error||("Review Agent returned HTTP "+response.status)};
-    if(result.action==="suggest_field_updates"&&Array.isArray(result.suggestions)&&result.suggestions.length){
-      return {completed:true,suggestionMessage:{
-        type:"fieldSuggestion",
-        text:result.reply||"I found additional customs information in the email that is missing from the document extraction. Review the suggestions below and confirm whether to add them.",
-        suggestions:result.suggestions,
-        handled:null,
-        persist:true
-      }};
-    }
-
-    return {completed:true};
-  }catch(error){
-    return {completed:false,error:error?.message||"Automated Review Agent failed."};
-  }
 }
 
 async function storeAttachment({packId,filename,mimeType,fileData}){
@@ -579,12 +378,6 @@ function normaliseAttachmentData(attachment){
   return value.startsWith("http")?value:null;
 }
 
-async function extractAttachment({fileData,filename,mimeType,customerStrategy}){
-  // Email ingestion uses the same extraction engine as browser uploads,
-  // but invokes it directly so Outlook intake does not depend on a second
-  // Vercel HTTP hop or authentication layer.
-  return await extractDocument({fileData,filename,mimeType,customerStrategy});
-}
 function formatExtractionError(error){if(error==null)return "Unknown extraction error.";if(typeof error==="string")return error;if(error instanceof Error&&error.message)return error.message;if(typeof error==="object"){if(typeof error.message==="string")return error.message;if(error.error?.message)return String(error.error.message);try{return JSON.stringify(error);}catch{return String(error);}}try{return String(error);}catch{return "Unknown extraction error.";}}
 function readJson(value,fallback){
   if(!value)return fallback;
