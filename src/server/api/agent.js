@@ -1,11 +1,8 @@
 import { requireAuth } from "./authGuard.js";
-export default async function handler(req,res){
-  if(!requireAuth(req,res))return;
-  if(req.method!=="POST")return res.status(405).json({error:"Method not allowed"});
-  if(!process.env.OPENAI_API_KEY)return res.status(500).json({error:"OPENAI_API_KEY is not configured in Vercel."});
+export async function runReviewAgent({message,pack}){
+  if(!process.env.OPENAI_API_KEY)throw new Error("OPENAI_API_KEY is not configured in Vercel.");
+  if(!message||!pack)throw new Error("message and pack are required");
   try{
-    const {message,pack}=req.body||{};
-    if(!message||!pack)return res.status(400).json({error:"message and pack are required"});
     const outOfScopePatterns=[
       /\b(recipe|recipes|cook|cooking|soup|meal|dinner|lunch|breakfast)\b/i,
       /\b(weather|forecast|temperature|football|soccer|sport|sports|betting|odds)\b/i,
@@ -14,11 +11,13 @@ export default async function handler(req,res){
       /\b(homework|essay|school|university|maths|mathematics)\b/i
     ];
     if(outOfScopePatterns.some(pattern=>pattern.test(message))){
-      return res.status(200).json({
+      return {
         reply:"I’m the Customs IDP Review Agent. I can only help with the current document pack, customs data, source evidence, validation, customer strategy, discrepancies and review decisions.",
         action:"none",
-        target:null
-      });
+        target:null,
+        suggestions:[],
+        strategyProposal:null
+      };
     }
     const strategyRequest=pack?.type==="customer_strategy" || /\b(customer\s+strategy|customer\s+rule|record\s+(this|the)\s+strategy|save\s+(this|the)\s+strategy|create\s+(the\s+)?customer)\b/i.test(String(message||""));
     const context={
@@ -116,12 +115,24 @@ export default async function handler(req,res){
       })});
     } finally { clearTimeout(timeout); }
     const data=await response.json();
-    if(!response.ok)return res.status(response.status).json({error:data?.error?.message||"Agent request failed"});
+    if(!response.ok)throw new Error(data?.error?.message||"Agent request failed");
     const text=data.output_text||data.output?.flatMap(x=>x.content||[]).find(x=>x.type==="output_text")?.text;
     if(!text)throw new Error("Agent returned no response");
-    return res.status(200).json(JSON.parse(text));
+    return JSON.parse(text);
   }catch(error){
     const message=error?.name==="AbortError"?"The review agent timed out after 30 seconds.":(error.message||"Agent failed");
-    return res.status(500).json({error:message});
+    throw new Error(message);
+  }
+}
+
+export default async function handler(req,res){
+  if(!requireAuth(req,res))return;
+  if(req.method!=="POST")return res.status(405).json({error:"Method not allowed"});
+  const {message,pack}=req.body||{};
+  if(!message||!pack)return res.status(400).json({error:"message and pack are required"});
+  try{
+    return res.status(200).json(await runReviewAgent({message,pack}));
+  }catch(error){
+    return res.status(500).json({error:error?.message||"Agent failed"});
   }
 }

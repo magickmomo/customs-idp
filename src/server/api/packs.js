@@ -1,7 +1,5 @@
 import { requireAuth } from "./authGuard.js";
-
-const DEFAULT_ORGANISATION_ID="demo-organisation";
-const DEFAULT_ORGANISATION_NAME="Customs IDP Demo Organisation";
+import { normalizePack, packToRow, supabaseFetch } from "../services/packRepository.js";
 
 export default async function handler(req,res){
   const auth=requireAuth(req,res);
@@ -33,46 +31,7 @@ export default async function handler(req,res){
         return res.status(403).json({error:"Organisation is not configured."});
       }
 
-      const extractedData=pack.extractedData?{...pack.extractedData}:{};
-      extractedData.customerIdentification=pack.customerIdentification||extractedData.customerIdentification||null;
-      extractedData._tenant={
-        organisationId:organisation.id,
-        organisationName:organisation.name
-      };
-
-      const managerMeta={
-        processingStartedAt:pack.processingStartedAt||null,
-        processingCompletedAt:pack.processingCompletedAt||null,
-        uploadedFiles:Array.isArray(pack.uploadedFiles)?pack.uploadedFiles:[]
-      };
-      if(managerMeta.processingStartedAt||managerMeta.processingCompletedAt||managerMeta.uploadedFiles.length) extractedData._manager=managerMeta;
-
-      const validationMeta={
-        validationStatus:pack.validationStatus||null,
-        validationChecks:Array.isArray(pack.validationChecks)?pack.validationChecks:null,
-        validationSummary:pack.validationSummary||null
-      };
-      if(validationMeta.validationStatus||validationMeta.validationChecks||validationMeta.validationSummary) extractedData._validation=validationMeta;
-
-      if(pack.workingRecord) extractedData._workingRecord=pack.workingRecord;
-      if(pack.email) extractedData.email=pack.email;
-
-      const row={
-        id:pack.id,
-        ...(pack.packUuid||pack.pack_uuid?{pack_uuid:pack.packUuid||pack.pack_uuid}:{}),
-        organisation_id:organisation.id,
-        customer:pack.customer||null,
-        customer_id:pack.customerId||pack.customer_id||null,
-        docs:Number(pack.docs)||0,
-        status:pack.status||"Processing",
-        confidence:Number(pack.confidence)||0,
-        received:pack.received||new Date().toISOString(),
-        ticket:pack.ticket||null,
-        assigned_to:pack.assignedTo||"Unassigned",
-        extracted_data:Object.keys(extractedData).length?extractedData:null,
-        processing_error:pack.processingError||null,
-        updated_at:new Date().toISOString()
-      };
+      const row=packToRow({...pack,organisationId:organisation.id,organisationName:organisation.name});
 
       await supabaseFetch("document_packs",{
         method:"POST",
@@ -113,69 +72,4 @@ async function getOrganisation(id){
   const organisation=rows?.[0];
   if(!organisation||organisation.status!=="active")return null;
   return organisation;
-}
-
-async function supabaseFetch(path,options={}){
-  const url=process.env.SUPABASE_URL, key=process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if(!url||!key) throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not configured in Vercel.");
-  const response=await fetch(`${url}/rest/v1/${path}`,{
-    ...options,
-    headers:{
-      "apikey":key,
-      "Authorization":`Bearer ${key}`,
-      "Content-Type":"application/json",
-      ...(options.headers||{})
-    }
-  });
-  if(!response.ok) throw new Error(await response.text());
-  const text=await response.text();
-  return text?JSON.parse(text):[];
-}
-
-function normalizePack(row){
-  const data=row.extracted_data||null;
-  const meta=data?._manager||{};
-  const validation=data?._validation||{};
-  const workingRecord=data?._workingRecord;
-  const customerIdentification=row.customerIdentification||data?.customerIdentification||null;
-  const email=data?.email||null;
-  const tenant=data?._tenant||{};
-  let extractedData=data;
-
-  if(data){
-    const rest={...data};
-    delete rest._manager;
-    delete rest._validation;
-    delete rest._workingRecord;
-    delete rest._tenant;
-    delete rest.customerIdentification;
-    extractedData=Object.keys(rest).length?rest:undefined;
-  }
-
-  return {
-    ...row,
-    packUuid:row.pack_uuid||row.packUuid,
-    organisationId:row.organisation_id||tenant.organisationId||DEFAULT_ORGANISATION_ID,
-    organisationName:organisationName(row.organisation_id,tenant.organisationName),
-    assignedTo:row.assigned_to||"Unassigned",
-    extractedData,
-    customerIdentification,
-    workingRecord,
-    email,
-    validationStatus:validation.validationStatus||undefined,
-    validationChecks:Array.isArray(validation.validationChecks)?validation.validationChecks:undefined,
-    validationSummary:validation.validationSummary||undefined,
-    uploadedFiles:Array.isArray(meta.uploadedFiles)?meta.uploadedFiles:undefined,
-    processingStartedAt:meta.processingStartedAt||undefined,
-    processingCompletedAt:meta.processingCompletedAt||undefined,
-    processingError:row.processing_error||undefined,
-    customerStrategy:data?.customerStrategy||null,
-    customerStrategyApplied:data?.customerStrategyApplied===true,
-    customerStrategyVersion:data?.customerStrategyVersion||null
-  };
-}
-
-function organisationName(id,fallback){
-  if(id===DEFAULT_ORGANISATION_ID)return DEFAULT_ORGANISATION_NAME;
-  return String(fallback||id||DEFAULT_ORGANISATION_NAME);
 }
