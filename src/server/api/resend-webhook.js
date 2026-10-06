@@ -6,7 +6,14 @@ const RESEND_API = "https://api.resend.com";
 const MAX_TIMESTAMP_AGE_MS = 5 * 60 * 1000;
 
 /** Handle Resend's email.received webhook and adapt it to email-ingest. */
-export async function handleResendWebhook({ method = "POST", headers = {}, rawBody = "", fetchImpl = fetch } = {}) {
+export async function handleResendWebhook({
+  method = "POST",
+  headers = {},
+  rawBody = "",
+  fetchImpl = fetch,
+  defer = null,
+  emailIngestHandler = emailIngest
+} = {}) {
   if (method !== "POST") return Response.json({ error: "Method not allowed" }, { status: 405 });
 
   const missing = requiredConfiguration();
@@ -48,6 +55,43 @@ export async function handleResendWebhook({ method = "POST", headers = {}, rawBo
     );
   }
 
+  const processReceivedEmail = () => processResendEmail({
+    event,
+    emailId,
+    fetchImpl,
+    emailIngestHandler
+  });
+
+  if (typeof defer === "function") {
+    defer(async () => {
+      try {
+        const response = await processReceivedEmail();
+        if (!response.ok) {
+          const body = await response.clone().text().catch(() => "");
+          console.error("Deferred Resend inbound processing failed", {
+            emailId,
+            status: response.status,
+            body: body.slice(0, 1000)
+          });
+        }
+      } catch (error) {
+        console.error("Deferred Resend inbound processing crashed", {
+          emailId,
+          error: error?.message || String(error)
+        });
+      }
+    });
+
+    return Response.json(
+      { ok: true, accepted: true, emailId },
+      { status: 200 }
+    );
+  }
+
+  return processReceivedEmail();
+}
+
+async function processResendEmail({ event, emailId, fetchImpl, emailIngestHandler }) {
   let email;
   try {
     email = await getReceivedEmail(emailId, fetchImpl);
@@ -65,7 +109,7 @@ export async function handleResendWebhook({ method = "POST", headers = {}, rawBo
   const body = toEmailIngestPayload(event, email, attachments);
 
   try {
-    const response = await runLegacyHandler(emailIngest, {
+    const response = await runLegacyHandler(emailIngestHandler, {
       method: "POST",
       headers: { "x-email-ingest-secret": process.env.EMAIL_INGEST_SECRET },
       body
