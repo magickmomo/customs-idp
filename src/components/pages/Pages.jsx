@@ -483,7 +483,7 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
      if(result.action==="update_field"){
        finalPack={...finalPack,workingRecord:buildWorkingCustomsRecord(finalPack)};
        finalPack=typeof persistValidatedPack==="function"?await persistValidatedPack(finalPack,false):finalPack;
-     }else if(result.action!=="save_customer_strategy"&&result.action!=="create_customer"){
+     }else{
        const persisted=await persistPack?.(finalPack);
        if(persisted===false)throw new Error("The pack change could not be saved.");
      }
