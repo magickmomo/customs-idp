@@ -13,7 +13,6 @@ import { Dashboard, ManagerPage } from "./DashboardPages.jsx";
 import { InboxPage } from "./InboxPage.jsx";
 import { Customers } from "./CustomersPage.jsx";
 import { formatReceivedDateTime, getPackColumnValue, getPackCustomerLabel, getPackDisplayName, reconcilePackDocuments } from "../../domain/packView.js";
-import { buildWorkingCustomsRecord } from "../../domain/workingRecord.js";
 
 
 
@@ -368,72 +367,50 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
    const conversationBefore=[...messages,userMessage];
    setIsSending(true);setMessages([...conversationBefore,thinking]);setChat("");
    try{
-     const response=await fetch("/api/agent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:q,pack:{...pack,customerStrategy:pack.customerStrategy||pack.extractedData?.customerStrategy||getCustomerStrategy(pack.customerId||pack.customer),conversation:conversationBefore.slice(-12).map(m=>({type:m.type||"agent",text:m.text||""})),extractedData:{...(pack.extractedData||{}),agentMessages:undefined},workingRecord:pack.workingRecord||(pack.extractedData?._workingRecord)||null}})});
+     const response=await fetch("/api/agent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:q,pack:{...pack,customerStrategy:pack.customerStrategy||pack.extractedData?.customerStrategy||getCustomerStrategy(pack.customerId||pack.customer),conversation:conversationBefore.slice(-12).map(m=>({type:m.type||"agent",text:m.text||""})),extractedData:{...(pack.extractedData||{}),agentMessages:undefined}}})});
      const result=await response.json();
      if(!response.ok)throw new Error(result.error||"Agent request failed");
      let reply=result.reply||"I couldn't produce an answer from the supplied pack.";
      let savedPack=pack;
-
-     const loadCustomersForAgent=async()=>{
-       const response=await fetch("/api/organisation?action=customers",{credentials:"include"});
-       const data=await response.json().catch(()=>({}));
-       if(!response.ok)throw new Error(data.error||"Unable to load customers.");
-       return Array.isArray(data.customers)?data.customers:[];
-     };
-
      if(result.action==="create_customer"){
-       const requestedName=String(result.target?.customerName||pack.extractedData?.customerIdentification?.exporterName||pack.extractedData?.customerIdentification?.importerName||"").trim();
-       if(!requestedName)throw new Error("The agent did not return a customer name to create.");
-       const response=await fetch("/api/organisation",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:requestedName})});
+       const name=String(result.target?.customerName||pack.customer||pack.extractedData?.exporter||pack.extractedData?.exporterName||"").trim();
+       if(!name)throw new Error("The agent did not return a customer name.");
+       const response=await fetch("/api/organisation",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});
        const data=await response.json().catch(()=>({}));
        if(!response.ok||!data.customer?.id)throw new Error(data.error||"Unable to create customer.");
-       const created=data.customer;
-       const createdStrategy=data.strategy?.config||{};
-       customerStrategyStore[created.id]=createdStrategy;
-       customerStrategyStore[created.name]=createdStrategy;
        const nextData=JSON.parse(JSON.stringify(pack.extractedData||{}));
-       nextData.customerIdentification={...(nextData.customerIdentification||{}),matched:true,ambiguous:false,possibleMatch:false,customerId:created.id,customerName:created.name,matchedBy:"agent-created"};
-       nextData.customerStrategy=createdStrategy;
-       nextData.customerStrategyApplied=false;
-       nextData.customerStrategyVersion=data.strategy?.version||null;
-       savedPack={...pack,customer:created.name,customerId:created.id,customerStrategy:createdStrategy,customerStrategyApplied:false,customerStrategyVersion:data.strategy?.version||null,extractedData:nextData,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
-       savedPack={...savedPack,workingRecord:buildWorkingCustomsRecord(savedPack)};
+       nextData.customerIdentification={...(nextData.customerIdentification||{}),matched:true,ambiguous:false,possibleMatch:false,customerId:data.customer.id,customerName:data.customer.name,matchedBy:"agent-created"};
+       savedPack={...pack,customer:data.customer.name,customerId:data.customer.id,customerStrategy:data.strategy?.config||{},customerStrategyApplied:false,customerStrategyVersion:data.strategy?.version||null,extractedData:nextData,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
        await persistPack?.(savedPack);
-       await recordHistory?.(savedPack,"customer_created_and_associated","Customer created by Review Agent and linked to current pack.",null,{customerId:created.id,customerName:created.name},null,"system","Customs IDP Agent");
-       if(typeof window!=="undefined")window.dispatchEvent(new CustomEvent("customers-updated"));
-       reply="Customer "+created.name+" was created and linked to this pack. The current pack is now associated with that customer.";
+       await recordHistory?.(savedPack,"customer_created_and_associated","Customer created by Review Agent and linked to current pack.",null,{customerId:data.customer.id,customerName:data.customer.name},null,"system","Customs IDP Agent");
+       reply="Customer "+data.customer.name+" was created and linked to this pack.";
      }
-
      if(result.action==="save_customer_strategy"){
        const strategy=result.strategyProposal?.resultingStrategy;
        if(!strategy)throw new Error("The agent returned no complete strategy to save.");
-       let customerId=pack.customerId||pack.extractedData?.customerIdentification?.customerId||null;
-       let customerName=pack.customer||pack.extractedData?.customerIdentification?.customerName||result.target?.customerName||"";
-       const customerRows=await loadCustomersForAgent();
-       let customer=customerId?customerRows.find(item=>String(item.id)===String(customerId)):null;
-       if(!customer&&customerName)customer=customerRows.find(item=>String(item.name||"").trim().toLowerCase()===customerName.trim().toLowerCase()&&String(item.status||"active").toLowerCase()==="active");
+       const customerId=pack.customerId||pack.extractedData?.customerIdentification?.customerId;
+       const customerName=pack.customer||pack.extractedData?.customerIdentification?.customerName||result.target?.customerName||"";
+       const response=await fetch("/api/organisation?action=customers",{credentials:"include"});
+       const customerData=await response.json().catch(()=>({}));
+       if(!response.ok)throw new Error(customerData.error||"Unable to load customers.");
+       let customer=Array.isArray(customerData.customers)&&customerId?customerData.customers.find(item=>String(item.id)===String(customerId)):null;
+       if(!customer&&Array.isArray(customerData.customers)&&customerName)customer=customerData.customers.find(item=>String(item.name||"").trim().toLowerCase()===customerName.trim().toLowerCase()&&String(item.status||"active").toLowerCase()==="active");
        if(!customer)throw new Error("I could not resolve the customer UUID required to save this strategy.");
-       const response=await fetch("/api/organisation",{method:"PUT",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({customerId:customer.id,strategy})});
-       const data=await response.json().catch(()=>({}));
-       if(!response.ok||!data.strategy?.id)throw new Error(data.error||"Unable to save customer strategy.");
-       const savedStrategy=data.strategy.config||strategy;
-       customerStrategyStore[customer.id]=savedStrategy;
-       customerStrategyStore[customer.name]=savedStrategy;
+       const saveResponse=await fetch("/api/organisation",{method:"PUT",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({customerId:customer.id,strategy})});
+       const saveData=await saveResponse.json().catch(()=>({}));
+       if(!saveResponse.ok||!saveData.strategy?.id)throw new Error(saveData.error||"Unable to save customer strategy.");
        const nextData=JSON.parse(JSON.stringify(pack.extractedData||{}));
-       nextData.customerStrategy=savedStrategy;
-       nextData.customerStrategyApplied=true;
-       nextData.customerStrategyVersion=data.strategy.version||null;
        nextData.customerIdentification={...(nextData.customerIdentification||{}),matched:true,ambiguous:false,possibleMatch:false,customerId:customer.id,customerName:customer.name,matchedBy:nextData.customerIdentification?.matchedBy||"agent"};
-       savedPack={...pack,customer:customer.name,customerId:customer.id,customerStrategy:savedStrategy,customerStrategyApplied:true,customerStrategyVersion:data.strategy.version||null,extractedData:nextData,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
-       const strategyMessage={type:"agent",text:"Customer strategy v"+String(data.strategy.version||"")+" was saved to "+customer.name+" and applied to this pack. I updated the working customs record using the saved strategy. The pack will be automatically checked against the strategy on future processing.",persist:true};
-       nextData.agentMessages=[...(nextData.agentMessages||[]).filter(m=>m?.persist!==false),strategyMessage];
-       savedPack={...savedPack,extractedData:nextData,workingRecord:buildWorkingCustomsRecord({...savedPack,extractedData:nextData})};
-       savedPack=typeof persistValidatedPack==="function"?await persistValidatedPack(savedPack,false):savedPack;
-       await recordHistory?.(savedPack,"strategy_applied","Customer strategy saved and applied by Review Agent.",null,{customerId:customer.id,customerName:customer.name,version:data.strategy.version||null},null,"system","Customs IDP Agent");
-       if(typeof window!=="undefined")window.dispatchEvent(new CustomEvent("customers-updated"));
-       reply=strategyMessage.text;
+       nextData.customerStrategy=saveData.strategy.config||strategy;
+       nextData.customerStrategyApplied=true;
+       nextData.customerStrategyVersion=saveData.strategy.version||null;
+       const confirmation={type:"agent",text:"Customer strategy v"+String(saveData.strategy.version||"")+" was saved to "+customer.name+" and applied to this pack. It will be used automatically for future packs identified for this customer.",persist:true};
+       nextData.agentMessages=[...(nextData.agentMessages||[]),confirmation];
+       savedPack={...pack,customer:customer.name,customerId:customer.id,customerStrategy:saveData.strategy.config||strategy,customerStrategyApplied:true,customerStrategyVersion:saveData.strategy.version||null,extractedData:nextData,status:"Needs review",validationStatus:undefined,validationChecks:undefined,postedToLCAAt:undefined};
+       await persistPack?.(savedPack);
+       await recordHistory?.(savedPack,"strategy_applied","Customer strategy saved and applied by Review Agent.",null,{customerId:customer.id,customerName:customer.name,version:saveData.strategy.version||null},null,"system","Customs IDP Agent");
+       reply=confirmation.text;
      }
-
      if(result.action==="suggest_field_updates"&&Array.isArray(result.suggestions)&&result.suggestions.length){
        reply+=(/not changed|confirm/i.test(reply)?"":" I have not changed the extracted data. Please confirm below if you want these email-sourced values added.");
      }
@@ -479,14 +456,8 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
      setMessages(completed);
      const data=JSON.parse(JSON.stringify(savedPack.extractedData||{}));
      data.agentMessages=completed.filter(m=>m.persist!==false).map(serialiseMessage);
-     let finalPack={...savedPack,extractedData:data};
-     if(result.action==="update_field"){
-       finalPack={...finalPack,workingRecord:buildWorkingCustomsRecord(finalPack)};
-       finalPack=typeof persistValidatedPack==="function"?await persistValidatedPack(finalPack,false):finalPack;
-     }else{
-       const persisted=await persistPack?.(finalPack);
-       if(persisted===false)throw new Error("The pack change could not be saved.");
-     }
+     const finalPack={...savedPack,extractedData:data};
+     await persistPack?.(finalPack);
      updatePack?.(finalPack);
    }catch(error){
      const failed={type:"agent",text:"I couldn't reach the review agent. "+error.message,persist:true};
