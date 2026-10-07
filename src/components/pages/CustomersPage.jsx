@@ -34,7 +34,11 @@ const DEFAULT_STRATEGY={
   extractionRules:[],
   fieldRules:[],
   customValidations:[],
-  autoApplyWeightApportionment:false
+  autoApplyWeightApportionment:false,
+  lineCurrencyFromHeader:false,
+  totalInvoiceFromLines:false,
+  exporterAddress:"",
+  importerAddress:""
 };
 
 function cloneStrategy(strategy){
@@ -49,7 +53,11 @@ function cloneStrategy(strategy){
     requiredFields:Array.isArray(strategy?.requiredFields)?[...strategy.requiredFields]:[],
     fieldRules:Array.isArray(strategy?.fieldRules)?[...strategy.fieldRules]:[],
     customValidations:Array.isArray(strategy?.customValidations)?[...strategy.customValidations]:[],
-    autoApplyWeightApportionment:strategy?.autoApplyWeightApportionment===true
+    autoApplyWeightApportionment:strategy?.autoApplyWeightApportionment===true,
+    lineCurrencyFromHeader:strategy?.lineCurrencyFromHeader===true,
+    totalInvoiceFromLines:strategy?.totalInvoiceFromLines===true,
+    exporterAddress:typeof strategy?.exporterAddress==="string"?strategy.exporterAddress:"",
+    importerAddress:typeof strategy?.importerAddress==="string"?strategy.importerAddress:""
   };
 }
 
@@ -124,6 +132,9 @@ function Customers({notify}){
 
   useEffect(()=>{
     loadCustomers();
+    const handleCustomersUpdated=()=>{void loadCustomers();};
+    window.addEventListener("customers-updated",handleCustomersUpdated);
+    return()=>window.removeEventListener("customers-updated",handleCustomersUpdated);
   },[]);
 
   const openCreate=()=>{
