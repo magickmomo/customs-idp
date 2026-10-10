@@ -3,7 +3,8 @@ import test from "node:test";
 import {
   hasPasswordSetupMarker,
   passwordRecoveryRedirect,
-  shouldEnterPasswordSetup
+  shouldEnterPasswordSetup,
+  shouldWaitForPasswordRecovery
 } from "../src/auth/passwordRecovery.js";
 
 const session = {
@@ -29,6 +30,21 @@ test("enters password setup before organisation authentication", () => {
 
 test("does not expose password setup without an authenticated Supabase session", () => {
   assert.equal(shouldEnterPasswordSetup({ event: "PASSWORD_RECOVERY", session: null }), false);
+});
+
+test("keeps the recovery route pending while Supabase exchanges the email token", () => {
+  assert.equal(
+    shouldWaitForPasswordRecovery({ session: null, locationLike: { pathname: "/reset-password" } }),
+    true
+  );
+  assert.equal(
+    shouldWaitForPasswordRecovery({ session: null, locationLike: { pathname: "/inbox" } }),
+    false
+  );
+  assert.equal(
+    shouldWaitForPasswordRecovery({ session, locationLike: { pathname: "/reset-password" } }),
+    false
+  );
 });
 
 test("requires invited users to set a password once", () => {

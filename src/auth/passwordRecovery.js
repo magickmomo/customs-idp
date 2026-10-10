@@ -24,6 +24,10 @@ export function shouldEnterPasswordSetup({ event, session, locationLike }) {
   );
 }
 
+export function shouldWaitForPasswordRecovery({ session, locationLike }) {
+  return !session?.access_token && hasPasswordSetupMarker(locationLike);
+}
+
 export function passwordRecoveryRedirect(origin) {
   const base = String(origin || "").replace(/\/+$/, "");
   if (!base) throw new Error("An application origin is required for password recovery.");
