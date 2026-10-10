@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase.js";
+import { shouldEnterPasswordSetup } from "../auth/passwordRecovery.js";
 
 export function useAuthSession({ localTestRoute }) {
   const [authenticated,setAuthenticated]=useState(null);
@@ -8,24 +9,32 @@ export function useAuthSession({ localTestRoute }) {
 
   useEffect(()=>{
     let active=true;
-    const hasPasswordSetupMarker=()=>typeof window!=="undefined"&&/(?:^|[?&#])type=(?:invite|recovery)(?:[&#]|$)/.test(window.location.href);
-    const requiresInvitedUserSetup=session=>Boolean(session?.user?.invited_at&&session?.user?.user_metadata?.customs_idp_password_set!==true);
     if(localTestRoute){setAuthenticated(false);return()=>{active=false;};}
 
-    const syncSession=async(session)=>{
+    const syncSession=async(session,event="")=>{
       if(!session?.access_token){
         try{await fetch("/api/auth",{method:"DELETE",credentials:"include"});}catch{}
         if(active){setCurrentUser(null);setAuthenticated(false);setPasswordSetup(false);}
         return;
       }
+
+      const needsSetup=shouldEnterPasswordSetup({
+        event,
+        session,
+        locationLike:typeof window!=="undefined"?window.location:undefined
+      });
+      if(needsSetup){
+        if(active){setCurrentUser(null);setAuthenticated(false);setPasswordSetup(true);}
+        return;
+      }
+
       try{
         supabase.realtime.setAuth(session.access_token);
         const response=await fetch("/api/auth",{method:"POST",headers:{Authorization:"Bearer "+session.access_token},credentials:"include"});
         const data=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(data.error||"Authentication failed.");
-        const needsSetup=hasPasswordSetupMarker()||requiresInvitedUserSetup(session);
         if(active){
-          setPasswordSetup(needsSetup);
+          setPasswordSetup(false);
           setCurrentUser(data.user||null);
           setAuthenticated(true);
         }
@@ -36,18 +45,14 @@ export function useAuthSession({ localTestRoute }) {
     };
 
     supabase.auth.getSession().then(({data:{session}})=>{
-      if(active)syncSession(session);
+      if(active)syncSession(session,"INITIAL_SESSION");
     });
 
     const {data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
       if(event==="SIGNED_OUT"){
         if(active){setCurrentUser(null);setAuthenticated(false);setPasswordSetup(false);}
       } else if(session){
-        if(event==="PASSWORD_RECOVERY"||event==="SIGNED_IN"||event==="INITIAL_SESSION"){
-          syncSession(session);
-        } else {
-          syncSession(session);
-        }
+        syncSession(session,event);
       }
     });
 
