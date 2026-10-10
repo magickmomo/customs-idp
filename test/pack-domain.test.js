@@ -20,14 +20,15 @@ test("uses the retained source document name as the pack display name",()=>{
   const pack={id:"PK-1",extractedData:{documents:[{filename:"commercial-invoice-10482.pdf"}]}};
   assert.equal(getPackDisplayName(pack),"commercial-invoice-10482.pdf");
   assert.equal(getPackColumnValue(pack,"pack"),"commercial-invoice-10482.pdf");
-  assert.equal(getPackColumnValue(pack,"packId"),"PK-1");
   assert.equal(getPackDisplayName({...pack,email:{subject:"Customs documents"}}),"commercial-invoice-10482.pdf");
+  assert.equal(getPackDisplayName({id:"PK-1"}),"Document pack");
 });
 
 test("uses the requested inbox columns by default",()=>{
-  assert.deepEqual(DEFAULT_INBOX_COLUMN_KEYS,["pack","packId","customer","owner","documents","status","received"]);
+  assert.deepEqual(DEFAULT_INBOX_COLUMN_KEYS,["pack","customer","owner","documents","status","received"]);
   assert.deepEqual(normaliseInboxColumnSelection([]),DEFAULT_INBOX_COLUMN_KEYS);
   assert.deepEqual(normaliseInboxColumnSelection(["status","received","unknown","status"]),["status","received"]);
+  assert.deepEqual(normaliseInboxColumnSelection(["pack","packId","customer"]),["pack","customer"]);
 });
 
 test("normalizes database pack metadata without changing extracted fields",()=>{

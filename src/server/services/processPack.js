@@ -23,11 +23,18 @@ function cleanSegment(value){
   return String(value||"").replace(/[^a-zA-Z0-9._-]+/g,"-").replace(/^-+|-+$/g,"")||"document";
 }
 
-async function loadStoredSource(file,packId){
+export function sourcePathBelongsToPack(storagePath,{organisationId="",packId="",packUuid=""}={}){
+  const path=String(storagePath||"");
+  if(!path)return false;
+  const legacyPrefix=cleanSegment(packId)+"/";
+  const canonicalPrefix=`organisations/${cleanSegment(organisationId)}/packs/${cleanSegment(packUuid||packId)}/`;
+  return path.startsWith(legacyPrefix)||path.startsWith(canonicalPrefix);
+}
+
+async function loadStoredSource(file,context){
   const storagePath=String(file?.storagePath||"");
-  const prefix=cleanSegment(packId)+"/";
   if(!storagePath)throw new Error("Source document has no persisted storage path.");
-  if(!storagePath.startsWith(prefix))throw new Error("Source document storage path does not belong to this pack.");
+  if(!sourcePathBelongsToPack(storagePath,context))throw new Error("Source document storage path does not belong to this pack.");
   const url=process.env.SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;
   if(!url||!key)throw new Error("Supabase storage configuration is missing.");
   const supabase=createClient(url,key,{auth:{autoRefreshToken:false,persistSession:false}});
@@ -104,14 +111,15 @@ export async function processPack({organisationId,packId,reason,actor,dependenci
 
   const startedAt=deps.now();
   pack=await deps.savePack({...pack,status:"Processing",processingStartedAt:startedAt,processingCompletedAt:undefined,processingError:undefined});
+  try{
   const files=Array.isArray(pack.uploadedFiles)?pack.uploadedFiles:[];
   if(!files.length){
     const failed=await deps.savePack({...pack,status:"Needs review",processingCompletedAt:deps.now(),processingError:"No persisted source documents are available."});
     try{await deps.insertHistory({organisationId,packId,actor,action:"processing_error",description:"Pack processing could not start",afterData:{error:failed.processingError}});}catch(error){deps.logError("Unable to record pack processing history",error);}
     throw new ProcessPackError("No persisted source documents are available.",422,failed);
   }
-  const storagePrefix=cleanSegment(packId)+"/";
-  const invalidPath=files.find(file=>file.storagePath&&!String(file.storagePath).startsWith(storagePrefix));
+  const sourceContext={organisationId,packId,packUuid:pack.packUuid||packId};
+  const invalidPath=files.find(file=>!sourcePathBelongsToPack(file?.storagePath,sourceContext));
   if(invalidPath){
     const message="Source document storage path does not belong to this pack.";
     const failed=await deps.savePack({...pack,status:"Needs review",processingCompletedAt:deps.now(),processingError:message});
@@ -130,7 +138,7 @@ export async function processPack({organisationId,packId,reason,actor,dependenci
   for(const file of files){
     const document={id:file.id||file.storagePath,filename:file.name||"document",mimeType:file.type||"application/octet-stream",storagePath:file.storagePath||null};
     try{
-      const source=await deps.loadSource(file,packId);
+      const source=await deps.loadSource(file,sourceContext);
       const result=await deps.extractDocument({fileData:source.fileData,filename:document.filename,mimeType:source.mimeType||document.mimeType,customerStrategy:extractionStrategy});
       if(!result?.extraction)throw new Error("No extraction result was returned.");
       document.mimeType=source.mimeType||document.mimeType;
@@ -206,4 +214,14 @@ export async function processPack({organisationId,packId,reason,actor,dependenci
     }
   }
   return saved;
+  }catch(error){
+    if(error instanceof ProcessPackError)throw error;
+    const message=error?.message||"Pack processing failed.";
+    let failed=pack;
+    try{
+      failed=await deps.savePack({...pack,status:pack.email?"Processing":"Needs review",processingCompletedAt:pack.email?undefined:deps.now(),processingError:message});
+      try{await deps.insertHistory({organisationId,packId,actor,action:"processing_error",description:"Pack processing failed",afterData:{error:message}});}catch(historyError){deps.logError("Unable to record pack processing history",historyError);}
+    }catch(saveError){deps.logError("Unable to persist pack processing failure",saveError);}
+    throw new ProcessPackError(message,500,failed);
+  }
 }

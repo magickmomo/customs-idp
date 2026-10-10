@@ -61,14 +61,11 @@ function Review({pack,currentUserName,back,notify,onAssign,updatePack,validatePa
     const entries=await Promise.all((pack.uploadedFiles||[]).map(async f=>{
       try{
         if(f.storagePath){
-          const cachedExpiry=Date.parse(f.accessUrlExpiresAt||"");
-          const cachedIsUsable=f.accessUrl && Number.isFinite(cachedExpiry) && cachedExpiry-Date.now()>5*60*1000;
-          if(cachedIsUsable)return [f.id,f.accessUrl];
-
           const response=await fetch("/api/storage",{
             method:"POST",
             headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({action:"signed-url",path:f.storagePath,packId:pack.id})
+            credentials:"include",
+            body:JSON.stringify({action:"signed-url",fileId:f.id,packId:pack.id})
           });
           const data=await response.json();
           if(response.ok&&data.accessUrl){
@@ -953,6 +950,8 @@ function SettingsPage({currentUserRole="member"}){
   const [invite,setInvite]=useState({name:"",email:"",role:"member"});
   const [inviting,setInviting]=useState(false);
   const [inviteMessage,setInviteMessage]=useState("");
+  const [emailJobs,setEmailJobs]=useState([]);
+  const [emailJobsError,setEmailJobsError]=useState("");
 
   const loadOutlook=async()=>{
     const response=await fetch("/api/outlook?action=status",{credentials:"include"});
@@ -966,6 +965,25 @@ function SettingsPage({currentUserRole="member"}){
     loadOutlook().catch(()=>{if(active)setOutlook({loading:false,connected:false,connection:null,subscriptionHealth:null});});
     return()=>{active=false;};
   },[]);
+
+  const loadEmailJobs=async()=>{
+    const response=await fetch("/api/email-jobs",{credentials:"include"});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.error||"Unable to load email intake status.");
+    setEmailJobs(Array.isArray(data.jobs)?data.jobs:[]);
+  };
+
+  useEffect(()=>{let active=true;loadEmailJobs().catch(error=>{if(active)setEmailJobsError(error.message||"Unable to load email intake status.");});return()=>{active=false;};},[]);
+
+  const retryEmailJob=async jobId=>{
+    setEmailJobsError("");
+    try{
+      const response=await fetch("/api/email-jobs",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({jobId})});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||"Unable to retry email intake.");
+      await loadEmailJobs();
+    }catch(error){setEmailJobsError(error.message||"Unable to retry email intake.");}
+  };
 
   useEffect(()=>{
     if(!syncRun?.id)return;
@@ -1084,6 +1102,13 @@ function SettingsPage({currentUserRole="member"}){
         </> : <button className="primary-action" onClick={connectOutlook} disabled={connecting}>{connecting?"Opening Microsoft…":"Connect Outlook"}</button>}
         {error&&<div className="password-login-error">{error}</div>}
         <small>Access is limited to Microsoft Graph Mail.Read. Customs IDP does not request permission to send or modify email.</small>
+      </div>
+
+      <div className="panel settings-card">
+        <h2>Inbound email processing</h2>
+        <p>Durable Resend intake jobs, including retries and terminal failures.</p>
+        {emailJobsError&&<div className="password-login-error">{emailJobsError}</div>}
+        {!emailJobs.length?<div className="setting-status"><span>No inbound email jobs recorded</span></div>:emailJobs.slice(0,10).map(job=><div className={"setting-status "+(job.status==="failed"?"setting-status-error":"")} key={job.id}><span>{job.provider_email_id}<small>{job.stage}{job.last_error?" · "+job.last_error:""}</small></span><b>{job.status} · {job.attempts}/{job.max_attempts}{canInviteUsers&&["failed","retry"].includes(job.status)?<button className="text-btn" type="button" onClick={()=>retryEmailJob(job.id)}>Retry</button>:null}</b></div>)}
       </div>
 
       <div className="panel settings-card"><h2>Middleware</h2><p>Configure the output contract used by the downstream customs system.</p><label>Endpoint</label><input value="https://middleware.internal/customs/orders" readOnly/><label>Format</label><select><option>JSON</option></select><label>Destination</label><input value="ASM UK" readOnly/></div>

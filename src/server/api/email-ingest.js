@@ -21,6 +21,8 @@ export default async function handler(req,res){
 
   try{
     const body=req.body||{};
+    const organisationId=String(req.trustedOrganisationId||DEFAULT_ORGANISATION.id);
+    const organisationName=organisationId===DEFAULT_ORGANISATION.id?DEFAULT_ORGANISATION.name:organisationId;
     const to=String(body.to||"").trim().toLowerCase();
     const from=String(body.from||"").trim();
     const subject=String(body.subject||"").trim();
@@ -39,7 +41,7 @@ export default async function handler(req,res){
     const requestedCustomerName=String(body.customer||"").trim();
 
     let customerContext=await resolveCustomerContext({
-      organisationId:DEFAULT_ORGANISATION.id,
+      organisationId,
       to,
       routedCustomerName,
       requestedCustomerName
@@ -58,25 +60,25 @@ export default async function handler(req,res){
       : [];
 
     const ticket=ingestTicket||messageId||("EMAIL-"+Date.now().toString().slice(-6));
-    let id="PK-EMAIL-"+Date.now().toString(36).toUpperCase();
+    let id="PK-EMAIL-"+crypto.randomUUID().toUpperCase();
     let packUuid=crypto.randomUUID();
-    const existingByTicket=await supabaseFetch("document_packs?ticket=eq."+encodeURIComponent(ticket)+"&select=id,pack_uuid,customer,status,docs&limit=1");
+    const existingByTicket=await supabaseFetch("document_packs?organisation_id=eq."+encodeURIComponent(organisationId)+"&ticket=eq."+encodeURIComponent(ticket)+"&select=id,pack_uuid,customer,status,docs&limit=1");
     const existingByMessage=messageId
-      ? await supabaseFetch("document_packs?extracted_data->email->>messageId=eq."+encodeURIComponent(messageId)+"&select=id,pack_uuid,customer,status,docs&limit=1").catch(()=>[])
+      ? await supabaseFetch("document_packs?organisation_id=eq."+encodeURIComponent(organisationId)+"&extracted_data->email->>messageId=eq."+encodeURIComponent(messageId)+"&select=id,pack_uuid,customer,status,docs&limit=1").catch(()=>[])
       : [];
     const existing=existingByTicket[0]||existingByMessage[0];
     if(existing){
       if(!repair){
         // Backfill the atomic claim for older packs so webhook and polling
         // cannot create another pack for this message.
-        if(messageId||ticket) await claimEmailIngest(messageId ? "MESSAGE:"+messageId : "TICKET:"+ticket, String(existing.id));
+        if(messageId||ticket) await claimEmailIngest(organisationId+":"+(messageId ? "MESSAGE:"+messageId : "TICKET:"+ticket), String(existing.id));
         return res.status(200).json({ok:true,duplicate:true,packId:existing.id,customer:existing.customer,status:existing.status,message:"Email already ingested."});
       }
       id=existing.id;
     }else if(!repair){
       // The webhook and fallback poller can reach this route concurrently.
       // Claim the email before any OpenAI/document processing starts.
-      const emailKey=messageId ? "MESSAGE:"+messageId : "TICKET:"+ticket;
+      const emailKey=organisationId+":"+(messageId ? "MESSAGE:"+messageId : "TICKET:"+ticket);
       const claim=await claimEmailIngest(emailKey,id);
       if(!claim.claimed){
         return res.status(200).json({ok:true,duplicate:true,packId:claim.packId,customer,status:"Processing",message:"Email already claimed by another intake worker."});
@@ -93,8 +95,8 @@ export default async function handler(req,res){
     }
 
     const pack={
-      organisationId:DEFAULT_ORGANISATION.id,
-      organisationName:DEFAULT_ORGANISATION.name,
+      organisationId,
+      organisationName,
       id,
       packUuid,
       customer,
@@ -132,7 +134,7 @@ export default async function handler(req,res){
       body:JSON.stringify({
         id:pack.id,
         pack_uuid:pack.packUuid,
-        organisation_id:DEFAULT_ORGANISATION.id,
+        organisation_id:organisationId,
         customer:pack.customer,
         customer_id:pack.customerId||null,
         docs:pack.docs,
@@ -142,7 +144,7 @@ export default async function handler(req,res){
         ticket:pack.ticket,
         assigned_to:pack.assignedTo,
         extracted_data:{
-          _tenant:{organisationId:DEFAULT_ORGANISATION.id,organisationName:DEFAULT_ORGANISATION.name},
+          _tenant:{organisationId,organisationName},
           documentType:"email",
           email:pack.email,
           documents:[],
@@ -167,13 +169,13 @@ export default async function handler(req,res){
       const fileData=normaliseAttachmentData(attachment);
       let storagePath=null,storageError=null;
       if(!fileData)storageError="Attachment content was not supplied by the email connector.";
-      else try{storagePath=await storeAttachment({packId:id,filename,mimeType,fileData});}catch(error){storageError=formatExtractionError(error);}
+      else try{storagePath=await storeAttachment({organisationId,packUuid,filename,mimeType,fileData});}catch(error){storageError=formatExtractionError(error);}
       storedFiles.push({id:id+"-"+index,name:filename,size:Number(attachment.size)||0,type:mimeType,storagePath,...(storageError?{storageError}:{})});
     }
     const storageWarnings=storedFiles.filter(file=>file.storageError).map(file=>file.name+": "+file.storageError);
     await supabaseFetch("document_packs?id=eq."+encodeURIComponent(pack.id),{method:"PATCH",body:JSON.stringify({
       extracted_data:{
-        _tenant:{organisationId:DEFAULT_ORGANISATION.id,organisationName:DEFAULT_ORGANISATION.name},
+        _tenant:{organisationId,organisationName},
         documentType:"email",email:pack.email,documents:[],documentCount:0,sourceDocuments:[],emailFields:emailExtraction.fields,
         warnings:[...(emailExtraction.warnings||[]),...storageWarnings],agentMessages:[],
         _manager:{processingStartedAt:new Date().toISOString(),processingCompletedAt:null,uploadedFiles:storedFiles}
@@ -182,7 +184,7 @@ export default async function handler(req,res){
       updated_at:new Date().toISOString()
     }),headers:{Prefer:"return=minimal"}});
 
-    const completed=await processPack({organisationId:DEFAULT_ORGANISATION.id,packId:id,reason:repair?"reprocess":"initial",actor:{type:"system",name:"Email Ingestion"}});
+    const completed=await processPack({organisationId,packId:id,reason:repair?"reprocess":"initial",actor:{type:"system",name:"Email Ingestion"}});
     const extractedAttachmentCount=completed.extractedData?.documents?.filter(document=>document.extraction).length||0;
 
     return res.status(200).json({
@@ -296,16 +298,17 @@ async function resolveCustomerContext({organisationId,to,routedCustomerName,requ
   };
 }
 
-async function storeAttachment({packId,filename,mimeType,fileData}){
+async function storeAttachment({organisationId,packUuid,filename,mimeType,fileData}){
   const url=process.env.SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;
   if(!url||!key)throw new Error("Supabase storage configuration is missing.");
   const supabase=createClient(url,key,{auth:{autoRefreshToken:false,persistSession:false}});
   const raw=String(fileData||"");
   const base64=raw.includes(",")?raw.slice(raw.indexOf(",")+1):raw;
   const buffer=Buffer.from(base64,"base64");
-  const safePack=String(packId).replace(/[^a-zA-Z0-9._-]+/g,"-");
+  const safeOrganisation=String(organisationId).replace(/[^a-zA-Z0-9._-]+/g,"-");
+  const safePack=String(packUuid).replace(/[^a-zA-Z0-9._-]+/g,"-");
   const safeName=String(filename).replace(/[^a-zA-Z0-9._-]+/g,"-").replace(/^-+|-+$/g,"")||"document";
-  const path=safePack+"/"+Date.now()+"-"+safeName;
+  const path="organisations/"+safeOrganisation+"/packs/"+safePack+"/"+crypto.randomUUID()+"-"+safeName;
   const {error}=await supabase.storage.from("CUSTOMS-DOCUMENTS").upload(path,buffer,{contentType:mimeType,upsert:false});
   if(error)throw new Error(error.message);
   return path;
@@ -391,11 +394,15 @@ function safeEqual(a,b){
 }
 
 async function claimEmailIngest(emailKey,packId){
-  const rows=await supabaseFetch("rpc/claim_email_ingest",{
+  let rows=await supabaseFetch("rpc/claim_email_ingest",{
     method:"POST",
     body:JSON.stringify({p_email_key:emailKey,p_pack_id:packId})
   });
-  const row=Array.isArray(rows)?rows[0]:null;
+  let row=Array.isArray(rows)?rows[0]:null;
+  if(row&&!row.claimed){
+    rows=await supabaseFetch("rpc/recover_stale_email_ingest_claim",{method:"POST",body:JSON.stringify({p_email_key:emailKey,p_pack_id:packId})});
+    row=Array.isArray(rows)?rows[0]:row;
+  }
   if(!row)throw new Error("Email idempotency claim returned no result.");
   return {claimed:Boolean(row.claimed),packId:String(row.pack_id||packId)};
 }

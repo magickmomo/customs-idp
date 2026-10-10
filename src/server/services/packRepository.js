@@ -54,7 +54,12 @@ export function packToRow(pack){
   extractedData._manager={
     processingStartedAt:pack.processingStartedAt||null,
     processingCompletedAt:pack.processingCompletedAt||null,
-    uploadedFiles:Array.isArray(pack.uploadedFiles)?pack.uploadedFiles:[]
+    uploadedFiles:Array.isArray(pack.uploadedFiles)?pack.uploadedFiles.map(file=>{
+      const clean={...file};
+      delete clean.accessUrl;
+      delete clean.accessUrlExpiresAt;
+      return clean;
+    }):[]
   };
   if(pack.validationStatus||pack.validationChecks||pack.validationSummary){
     extractedData._validation={

@@ -32,7 +32,14 @@ async function withResendEnv(callback) {
   process.env.RESEND_INBOUND_ADDRESS = "test@example.resend.app";
 
   try {
-    return await callback({ secret });
+    const jobs=[];
+    const jobStore={
+      enqueue:async input=>{const job={id:"job_1",organisation_id:input.organisationId,provider_email_id:input.emailId,payload:input.payload,status:"pending",attempts:1,max_attempts:5};jobs.push(job);return job;},
+      claim:async()=>jobs.splice(0),
+      complete:async job=>({...job,status:"completed"}),
+      fail:async job=>({...job,status:"retry"})
+    };
+    return await callback({ secret,jobStore });
   } finally {
     for (const [key, value] of Object.entries(original)) {
       if (value === undefined) delete process.env[key];
@@ -101,8 +108,8 @@ test("handleResendWebhook reports missing configuration before processing", asyn
   }
 });
 
-test("handleResendWebhook acknowledges a valid email before deferred processing starts", async () => {
-  await withResendEnv(async ({ secret }) => {
+test("handleResendWebhook acknowledges only after durably queuing a valid email", async () => {
+  await withResendEnv(async ({ secret,jobStore }) => {
     const rawBody = JSON.stringify({
       type: "email.received",
       data: {
@@ -124,7 +131,8 @@ test("handleResendWebhook acknowledges a valid email before deferred processing 
       },
       defer: callback => {
         deferred = callback;
-      }
+      },
+      jobStore
     });
     const body = await response.json();
 
@@ -138,7 +146,7 @@ test("handleResendWebhook acknowledges a valid email before deferred processing 
 });
 
 test("deferred Resend processing retrieves the email and attachment then invokes email ingest", async () => {
-  await withResendEnv(async ({ secret }) => {
+  await withResendEnv(async ({ secret,jobStore }) => {
     const rawBody = JSON.stringify({
       created_at: "2026-10-06T06:37:46.000Z",
       type: "email.received",
@@ -188,7 +196,8 @@ test("deferred Resend processing retrieves the email and attachment then invokes
       },
       defer: callback => {
         deferred = callback;
-      }
+      },
+      jobStore
     });
 
     assert.equal(response.status, 200);
@@ -247,5 +256,39 @@ test("non-email events return immediately without scheduling deferred work", asy
     assert.equal(response.status, 200);
     assert.equal(body.ignored, true);
     assert.equal(deferred, false);
+  });
+});
+
+test("webhook returns an error when the durable job cannot be stored",async()=>{
+  await withResendEnv(async({secret})=>{
+    const rawBody=JSON.stringify({type:"email.received",data:{email_id:"email_123",to:["test@example.resend.app"]}});
+    let deferred=false;
+    const response=await handleResendWebhook({
+      headers:signedHeaders({secret,rawBody}),rawBody,
+      jobStore:{enqueue:async()=>{throw new Error("Database unavailable");}},
+      defer:()=>{deferred=true;}
+    });
+    assert.equal(response.status,503);
+    assert.equal(deferred,false);
+    assert.equal((await response.json()).stage,"queue");
+  });
+});
+
+test("failed deferred work is persisted for retry",async()=>{
+  await withResendEnv(async({secret})=>{
+    const rawBody=JSON.stringify({type:"email.received",data:{email_id:"email_123",to:["test@example.resend.app"]}});
+    let deferred,failed;
+    const job={id:"job-1",organisation_id:"demo-organisation",provider_email_id:"email_123",payload:JSON.parse(rawBody),status:"pending",attempts:1,max_attempts:5};
+    const jobStore={
+      enqueue:async()=>job,
+      claim:async()=>[job],
+      complete:async()=>{throw new Error("must not complete");},
+      fail:async(_job,error,options)=>{failed={error,options};return {...job,status:"retry"};}
+    };
+    const response=await handleResendWebhook({headers:signedHeaders({secret,rawBody}),rawBody,jobStore,fetchImpl:async()=>{throw new Error("Resend unavailable");},defer:callback=>{deferred=callback;}});
+    assert.equal(response.status,200);
+    await deferred();
+    assert.match(failed.error.message,/Resend unavailable/);
+    assert.equal(failed.options.stage,"retrieve-email");
   });
 });
