@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase.js";
 import {
-  shouldEnterPasswordSetup,
+  shouldKeepPasswordSetup,
   shouldWaitForPasswordRecovery
 } from "../auth/passwordRecovery.js";
 
@@ -9,6 +9,11 @@ export function useAuthSession({ localTestRoute }) {
   const [authenticated,setAuthenticated]=useState(null);
   const [currentUser,setCurrentUser]=useState(null);
   const [passwordSetup,setPasswordSetup]=useState(false);
+  const passwordSetupActive=useRef(false);
+  const setPasswordSetupMode=useCallback(active=>{
+    passwordSetupActive.current=Boolean(active);
+    setPasswordSetup(Boolean(active));
+  },[]);
 
   useEffect(()=>{
     let active=true;
@@ -17,22 +22,23 @@ export function useAuthSession({ localTestRoute }) {
     const syncSession=async(session,event="")=>{
       const locationLike=typeof window!=="undefined"?window.location:undefined;
       if(!session?.access_token){
-        if(shouldWaitForPasswordRecovery({session,locationLike})){
+        if(passwordSetupActive.current||shouldWaitForPasswordRecovery({session,locationLike})){
           if(active)setAuthenticated(current=>current===false?null:current);
           return;
         }
         try{await fetch("/api/auth",{method:"DELETE",credentials:"include"});}catch{}
-        if(active){setCurrentUser(null);setAuthenticated(false);setPasswordSetup(false);}
+        if(active){setCurrentUser(null);setAuthenticated(false);setPasswordSetupMode(false);}
         return;
       }
 
-      const needsSetup=shouldEnterPasswordSetup({
+      const needsSetup=shouldKeepPasswordSetup({
+        active:passwordSetupActive.current,
         event,
         session,
         locationLike
       });
       if(needsSetup){
-        if(active){setCurrentUser(null);setAuthenticated(false);setPasswordSetup(true);}
+        if(active){setCurrentUser(null);setAuthenticated(false);setPasswordSetupMode(true);}
         return;
       }
 
@@ -42,13 +48,13 @@ export function useAuthSession({ localTestRoute }) {
         const data=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(data.error||"Authentication failed.");
         if(active){
-          setPasswordSetup(false);
+          setPasswordSetupMode(false);
           setCurrentUser(data.user||null);
           setAuthenticated(true);
         }
       }catch(error){
         await supabase.auth.signOut().catch(()=>{});
-        if(active){setCurrentUser(null);setAuthenticated(false);setPasswordSetup(false);}
+        if(active){setCurrentUser(null);setAuthenticated(false);setPasswordSetupMode(false);}
       }
     };
 
@@ -58,14 +64,14 @@ export function useAuthSession({ localTestRoute }) {
 
     const {data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
       if(event==="SIGNED_OUT"){
-        if(active){setCurrentUser(null);setAuthenticated(false);setPasswordSetup(false);}
+        if(active){setCurrentUser(null);setAuthenticated(false);setPasswordSetupMode(false);}
       } else if(session){
         syncSession(session,event);
       }
     });
 
     return()=>{active=false;subscription.unsubscribe();};
-  },[localTestRoute]);
+  },[localTestRoute,setPasswordSetupMode]);
 
-  return { authenticated, currentUser, passwordSetup, setAuthenticated, setCurrentUser, setPasswordSetup };
+  return { authenticated, currentUser, passwordSetup, setAuthenticated, setCurrentUser, setPasswordSetup:setPasswordSetupMode };
 }

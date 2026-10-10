@@ -24,6 +24,10 @@ export function shouldEnterPasswordSetup({ event, session, locationLike }) {
   );
 }
 
+export function shouldKeepPasswordSetup({ active, event, session, locationLike }) {
+  return Boolean(active) || shouldEnterPasswordSetup({ event, session, locationLike });
+}
+
 export function shouldWaitForPasswordRecovery({ session, locationLike }) {
   return !session?.access_token && hasPasswordSetupMarker(locationLike);
 }

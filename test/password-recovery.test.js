@@ -4,6 +4,7 @@ import {
   hasPasswordSetupMarker,
   passwordRecoveryRedirect,
   shouldEnterPasswordSetup,
+  shouldKeepPasswordSetup,
   shouldWaitForPasswordRecovery
 } from "../src/auth/passwordRecovery.js";
 
@@ -44,6 +45,18 @@ test("keeps the recovery route pending while Supabase exchanges the email token"
   assert.equal(
     shouldWaitForPasswordRecovery({ session, locationLike: { pathname: "/reset-password" } }),
     false
+  );
+});
+
+test("keeps password setup active after Supabase cleans the recovery URL", () => {
+  assert.equal(
+    shouldKeepPasswordSetup({
+      active: true,
+      event: "TOKEN_REFRESHED",
+      session,
+      locationLike: { pathname: "/inbox" }
+    }),
+    true
   );
 });
 
