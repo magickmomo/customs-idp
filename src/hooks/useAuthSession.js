@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase.js";
-import { shouldEnterPasswordSetup } from "../auth/passwordRecovery.js";
+import {
+  shouldEnterPasswordSetup,
+  shouldWaitForPasswordRecovery
+} from "../auth/passwordRecovery.js";
 
 export function useAuthSession({ localTestRoute }) {
   const [authenticated,setAuthenticated]=useState(null);
@@ -12,7 +15,12 @@ export function useAuthSession({ localTestRoute }) {
     if(localTestRoute){setAuthenticated(false);return()=>{active=false;};}
 
     const syncSession=async(session,event="")=>{
+      const locationLike=typeof window!=="undefined"?window.location:undefined;
       if(!session?.access_token){
+        if(shouldWaitForPasswordRecovery({session,locationLike})){
+          if(active)setAuthenticated(current=>current===false?null:current);
+          return;
+        }
         try{await fetch("/api/auth",{method:"DELETE",credentials:"include"});}catch{}
         if(active){setCurrentUser(null);setAuthenticated(false);setPasswordSetup(false);}
         return;
@@ -21,7 +29,7 @@ export function useAuthSession({ localTestRoute }) {
       const needsSetup=shouldEnterPasswordSetup({
         event,
         session,
-        locationLike:typeof window!=="undefined"?window.location:undefined
+        locationLike
       });
       if(needsSetup){
         if(active){setCurrentUser(null);setAuthenticated(false);setPasswordSetup(true);}
