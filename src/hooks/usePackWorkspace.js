@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase.js";
 import { customerStrategyStore, normaliseDatabasePack } from "../domain/packData.js";
+import { savePackRequest } from "../services/packPersistence.js";
 
 export function usePackWorkspace({ authenticated }) {
   const [livePacks,setLivePacks]=useState([]);
@@ -101,11 +102,9 @@ export function usePackWorkspace({ authenticated }) {
 
   const persistPack=async(pack)=>{
     const save=async()=>{
-      const response=await fetch("/api/packs",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify(pack)});
-      const data=await response.json().catch(()=>({}));
-      if(!response.ok) throw new Error(data.error||("Database save failed (HTTP "+response.status+")"));
+      const savedPack=await savePackRequest(pack);
       setDataSource("database");
-      return true;
+      return savedPack;
     };
     try{
       return await save();

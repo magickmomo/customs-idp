@@ -207,14 +207,16 @@ export function usePackActions({
     };
 
     setLivePacks(previous => [newPack, ...previous]);
-    if(!await persistPack(newPack)){
+    let persistedPack=await persistPack(newPack);
+    if(!persistedPack){
       setLivePacks(previous=>previous.filter(pack=>pack.id!==id));
       notify("Could not create the document pack before upload");
       return;
     }
+    setLivePacks(previous=>previous.map(pack=>pack.id===id?persistedPack:pack));
 
     try {
-      uploadedFiles=await Promise.all(selected.map(async(file,index)=>{
+      const uploadResults=await Promise.allSettled(selected.map(async(file,index)=>{
         const metadata=uploadedFiles[index];
         const response=await fetch("/api/storage",{
           method:"POST",
@@ -228,21 +230,24 @@ export function usePackActions({
         if(!uploadResponse.ok)throw new Error(`Could not upload ${file.name}`);
         return {...metadata,storagePath:data.path};
       }));
-      const storedPack={...newPack,uploadedFiles};
-      if(!await persistPack(storedPack))throw new Error("Could not persist source document metadata");
-      setLivePacks(previous=>previous.map(pack=>pack.id===id?storedPack:pack));
+      uploadedFiles=uploadResults.map((result,index)=>result.status==="fulfilled"?result.value:uploadedFiles[index]);
+      const failedUpload=uploadResults.find(result=>result.status==="rejected");
+      if(failedUpload)throw failedUpload.reason;
+      const storedPack={...persistedPack,uploadedFiles};
+      const savedStoredPack=await persistPack(storedPack);
+      if(!savedStoredPack)throw new Error("Could not persist source document metadata");
+      persistedPack=savedStoredPack;
+      setLivePacks(previous=>previous.map(pack=>pack.id===id?persistedPack:pack));
     }catch(error){
-      const failed={...newPack,status:"Needs review",processingError:"Upload failed: "+(error?.message||"Unknown storage error"),uploadedFiles};
-      await persistPack(failed);
-      setLivePacks(previous=>previous.map(pack=>pack.id===id?failed:pack));
+      const failed={...persistedPack,status:"Needs review",processingError:"Upload failed: "+(error?.message||"Unknown storage error"),uploadedFiles};
+      const savedFailed=await persistPack(failed);
+      setLivePacks(previous=>previous.map(pack=>pack.id===id?(savedFailed||failed):pack));
       notify("Document storage upload failed: "+(error?.message||"Unknown storage error"));
       return;
     }
 
-    newPack.uploadedFiles = uploadedFiles;
-
     await recordHistory(
-      newPack,
+      persistedPack,
       "uploaded",
       `Uploaded ${selected.length} document${selected.length === 1 ? "" : "s"} and confirmed the document pack.`,
       null,
