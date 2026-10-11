@@ -49,7 +49,7 @@ export function useAuthSession({ localTestRoute }) {
         if(!response.ok)throw new Error(data.error||"Authentication failed.");
         if(active){
           setPasswordSetupMode(false);
-          setCurrentUser(data.user||null);
+          setCurrentUser(data.user?{...data.user,organisationId:data.organisation?.id||data.user.organisationId||null}:null);
           setAuthenticated(true);
         }
       }catch(error){

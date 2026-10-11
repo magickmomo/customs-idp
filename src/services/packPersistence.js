@@ -10,3 +10,8 @@ export async function savePackRequest(pack, fetchImplementation = fetch) {
   if (!data.pack) throw new Error("Database save did not return the persisted pack");
   return data.pack;
 }
+
+export function replacePersistedPack(packs, savedPack) {
+  if (!savedPack?.id) return packs;
+  return packs.map(pack => pack.id === savedPack.id ? savedPack : pack);
+}

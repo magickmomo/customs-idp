@@ -79,6 +79,7 @@ function App({children}){
     postToLCA
   } = usePackActions({
     currentUserName,
+    currentOrganisationId:currentUser?.organisationId,
     livePacks,
     setLivePacks,
     selectedPack,

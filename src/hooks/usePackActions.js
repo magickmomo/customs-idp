@@ -3,6 +3,7 @@ import { DEFAULT_ORGANISATION } from "../tenant.js";
 import { buildWorkingCustomsRecord } from "../domain/workingRecord.js";
 import { buildValidatedPack } from "../domain/packValidation.js";
 import { deleteUploadedDocument } from "../services/documentStorage.js";
+import { persistManualUploadSources } from "../services/manualUploadPersistence.js";
 
 const DEFAULT_CUSTOMER_STRATEGY={instructions:"",requiredFields:[],weightHandling:"ask_user"};
 
@@ -58,6 +59,7 @@ const buildCustomerContext = (customers, customerId) => {
 
 export function usePackActions({
   currentUserName,
+  currentOrganisationId,
   livePacks,
   setLivePacks,
   selectedPack,
@@ -74,9 +76,14 @@ export function usePackActions({
     if (!pack) return pack;
     const validated = buildValidatedPack(pack);
     setLivePacks(previous => previous.map(item => item.id === validated.id ? validated : item));
-    await persistPack(validated);
+    const saved=await persistPack(validated);
+    if(!saved){
+      setLivePacks(previous=>previous.map(item=>item.id===pack.id?pack:item));
+      notify("Validation could not be saved because the pack changed. Reload and try again.");
+      return false;
+    }
     await recordHistory(
-      validated,
+      saved,
       "validated",
       validated.validationStatus === "Validated"
         ? "Pack validated successfully"
@@ -101,7 +108,7 @@ export function usePackActions({
       );
     }
 
-    return validated;
+    return saved;
   };
 
   const reprocessPack = async pack => {
@@ -187,7 +194,7 @@ export function usePackActions({
     const strategyApplied = uploadCustomerContext.matched;
 
     const newPack = {
-      organisationId: DEFAULT_ORGANISATION.id,
+      organisationId: currentOrganisationId||DEFAULT_ORGANISATION.id,
       organisationName: DEFAULT_ORGANISATION.name,
       id,
       packUuid: crypto.randomUUID(),
@@ -207,39 +214,38 @@ export function usePackActions({
     };
 
     setLivePacks(previous => [newPack, ...previous]);
-    let persistedPack=await persistPack(newPack);
-    if(!persistedPack){
-      setLivePacks(previous=>previous.filter(pack=>pack.id!==id));
-      notify("Could not create the document pack before upload");
-      return;
-    }
-    setLivePacks(previous=>previous.map(pack=>pack.id===id?persistedPack:pack));
-
+    let persistedPack;
     try {
-      const uploadResults=await Promise.allSettled(selected.map(async(file,index)=>{
-        const metadata=uploadedFiles[index];
-        const response=await fetch("/api/storage",{
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          credentials:"include",
-          body:JSON.stringify({action:"upload-url",packId:id,fileId:metadata.id})
-        });
-        const data=await response.json().catch(()=>({}));
-        if(!response.ok)throw new Error(data.error||"Could not create storage upload URL");
-        const uploadResponse=await fetch(data.signedUrl,{method:"PUT",headers:{"Content-Type":metadata.type},body:file});
-        if(!uploadResponse.ok)throw new Error(`Could not upload ${file.name}`);
-        return {...metadata,storagePath:data.path};
-      }));
-      uploadedFiles=uploadResults.map((result,index)=>result.status==="fulfilled"?result.value:uploadedFiles[index]);
-      const failedUpload=uploadResults.find(result=>result.status==="rejected");
-      if(failedUpload)throw failedUpload.reason;
-      const storedPack={...persistedPack,uploadedFiles};
-      const savedStoredPack=await persistPack(storedPack);
-      if(!savedStoredPack)throw new Error("Could not persist source document metadata");
-      persistedPack=savedStoredPack;
+      persistedPack=await persistManualUploadSources({
+        initialPack:newPack,
+        sourceFiles:selected,
+        persistPack,
+        createUploadTarget:async metadata=>{
+          const response=await fetch("/api/storage",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            credentials:"include",
+            body:JSON.stringify({action:"upload-url",packId:id,fileId:metadata.id})
+          });
+          const data=await response.json().catch(()=>({}));
+          if(!response.ok)throw new Error(data.error||"Could not create storage upload URL");
+          return data;
+        },
+        uploadSource:async(file,metadata,target)=>{
+          const uploadResponse=await fetch(target.signedUrl,{method:"PUT",headers:{"Content-Type":metadata.type},body:file});
+          if(!uploadResponse.ok)throw new Error(`Could not upload ${file.name}`);
+        }
+      });
+      uploadedFiles=persistedPack.uploadedFiles;
       setLivePacks(previous=>previous.map(pack=>pack.id===id?persistedPack:pack));
     }catch(error){
-      const failed={...persistedPack,status:"Needs review",processingError:"Upload failed: "+(error?.message||"Unknown storage error"),uploadedFiles};
+      if(!error.persistedPack){
+        setLivePacks(previous=>previous.filter(pack=>pack.id!==id));
+        notify("Could not create the document pack before upload");
+        return;
+      }
+      uploadedFiles=error.uploadedFiles||uploadedFiles;
+      const failed={...error.persistedPack,status:"Needs review",processingError:"Upload failed: "+(error?.message||"Unknown storage error"),uploadedFiles};
       const savedFailed=await persistPack(failed);
       setLivePacks(previous=>previous.map(pack=>pack.id===id?(savedFailed||failed):pack));
       notify("Document storage upload failed: "+(error?.message||"Unknown storage error"));
@@ -308,31 +314,44 @@ export function usePackActions({
     }
   };
 
-  const assignPack = (packId, assignedTo) => {
+  const assignPack = async (packId, assignedTo) => {
     const previous = livePacks.find(pack => pack.id === packId);
     if (!previous) return;
 
     const updated = { ...previous, assignedTo };
     setLivePacks(packs => packs.map(pack => pack.id === packId ? updated : pack));
-    void persistPack(updated);
-    void recordHistory(
-      updated,
+    const saved=await persistPack(updated);
+    if(!saved){
+      setLivePacks(packs=>packs.map(pack=>pack.id===packId?previous:pack));
+      notify(`Pack ${packId} could not be assigned because it changed. Reload and try again.`);
+      return false;
+    }
+    await recordHistory(
+      saved,
       "assigned",
       `Pack assigned to ${assignedTo}`,
       { assignedTo: previous.assignedTo || "Unassigned" },
       { assignedTo }
     );
     notify(`Pack ${packId} assigned to ${assignedTo}`);
+    return saved;
   };
 
-  const updatePack = pack => {
+  const updatePack = async pack => {
     if (!pack) return;
+    const previous=livePacks.find(item=>item.id===pack.id)||pack;
     const next = pack.extractedData?.documents
       ? { ...pack, workingRecord: buildWorkingCustomsRecord(pack) }
       : pack;
 
     setLivePacks(previous => previous.map(item => item.id === next.id ? next : item));
-    void persistPack(next);
+    const saved=await persistPack(next);
+    if(!saved){
+      setLivePacks(packs=>packs.map(item=>item.id===pack.id?previous:item));
+      notify("Pack changes could not be saved because the pack changed. Reload and try again.");
+      return false;
+    }
+    return saved;
   };
 
   const validatePack = () => {
@@ -340,7 +359,7 @@ export function usePackActions({
     void persistValidatedPack(selectedPack, true);
   };
 
-  const postToLCA = () => {
+  const postToLCA = async () => {
     if (!selectedPack) return;
 
     if (selectedPack.validationStatus !== "Validated" || selectedPack.status !== "Ready") {
@@ -362,10 +381,16 @@ export function usePackActions({
     };
 
     setLivePacks(previous => previous.map(pack => pack.id === posted.id ? posted : pack));
-    void persistPack(posted);
-    void recordHistory(posted, "posted_to_lca", "Pack posted to LCA", null, { postedToLCAAt: now });
+    const saved=await persistPack(posted);
+    if(!saved){
+      setLivePacks(previous=>previous.map(pack=>pack.id===selectedPack.id?selectedPack:pack));
+      notify("Pack could not be posted because it changed. Reload and try again.");
+      return false;
+    }
+    await recordHistory(saved, "posted_to_lca", "Pack posted to LCA", null, { postedToLCAAt: now });
     notify("Pack posted to LCA");
     navigate("inbox");
+    return saved;
   };
 
   return {

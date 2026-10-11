@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase.js";
 import { customerStrategyStore, normaliseDatabasePack } from "../domain/packData.js";
-import { savePackRequest } from "../services/packPersistence.js";
+import { replacePersistedPack, savePackRequest } from "../services/packPersistence.js";
 
 export function usePackWorkspace({ authenticated }) {
   const [livePacks,setLivePacks]=useState([]);
@@ -103,6 +103,7 @@ export function usePackWorkspace({ authenticated }) {
   const persistPack=async(pack)=>{
     const save=async()=>{
       const savedPack=await savePackRequest(pack);
+      setLivePacks(previous=>replacePersistedPack(previous,savedPack));
       setDataSource("database");
       return savedPack;
     };
