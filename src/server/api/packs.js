@@ -32,7 +32,7 @@ export default async function handler(req,res){
         return res.status(403).json({error:"Organisation is not configured."});
       }
 
-      const existing=await supabaseFetch(`document_packs?id=eq.${encodeURIComponent(pack.id)}&select=id,pack_uuid,organisation_id,extracted_data&limit=1`);
+      const existing=await supabaseFetch(`document_packs?id=eq.${encodeURIComponent(pack.id)}&select=id,pack_uuid,organisation_id,extracted_data,updated_at&limit=1`);
       if(existing?.[0]&&String(existing[0].organisation_id)!==String(organisationId)){
         return res.status(409).json({error:"Pack id is already in use."});
       }
@@ -42,15 +42,21 @@ export default async function handler(req,res){
       if(existing?.[0]?.pack_uuid)pack.packUuid=existing[0].pack_uuid;
 
       const row=packToRow({...pack,organisationId:organisation.id,organisationName:organisation.name});
-
-      await supabaseFetch("document_packs",{
-        method:"POST",
-        body:JSON.stringify(row),
-        headers:{
-          "Prefer":"resolution=merge-duplicates,return=minimal"
+      if(existing?.[0]){
+        const expectedUpdatedAt=String(pack.updated_at||"").trim();
+        if(!expectedUpdatedAt||expectedUpdatedAt!==String(existing[0].updated_at||"")){
+          return res.status(409).json({error:"This pack changed while you were editing it. Reload it before saving again."});
         }
-      });
+        const updated=await supabaseFetch(`document_packs?id=eq.${encodeURIComponent(pack.id)}&organisation_id=eq.${encodeURIComponent(organisationId)}&updated_at=eq.${encodeURIComponent(expectedUpdatedAt)}`,{
+          method:"PATCH",
+          body:JSON.stringify(row),
+          headers:{Prefer:"return=representation"}
+        });
+        if(!updated?.[0])return res.status(409).json({error:"This pack changed while you were editing it. Reload it before saving again."});
+        return res.status(200).json({pack:normalizePack(updated[0])});
+      }
 
+      await supabaseFetch("document_packs",{method:"POST",body:JSON.stringify(row),headers:{Prefer:"return=minimal"}});
       return res.status(200).json({pack:normalizePack(row)});
     }catch(error){return res.status(503).json({error:error.message});}
   }

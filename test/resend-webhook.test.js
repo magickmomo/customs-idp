@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import test from "node:test";
-import { handleResendWebhook, verifyResendSignature } from "../src/server/api/resend-webhook.js";
+import { handleResendWebhook, processQueuedResendJobs, processResendEmail, verifyResendSignature } from "../src/server/api/resend-webhook.js";
 
 function signedHeaders({ secret, rawBody, id = "msg_test", timestamp = Math.floor(Date.now() / 1000) }) {
   const key = Buffer.from(secret.replace(/^whsec_/, ""), "base64");
@@ -290,5 +290,32 @@ test("failed deferred work is persisted for retry",async()=>{
     await deferred();
     assert.match(failed.error.message,/Resend unavailable/);
     assert.equal(failed.options.stage,"retrieve-email");
+  });
+});
+
+test("permanent email-ingest errors preserve the pack id and stop retrying",async()=>{
+  await withResendEnv(async()=>{
+    const response=await processResendEmail({
+      event:{data:{email_id:"email_123",to:["test@example.resend.app"],attachments:[]}},
+      emailId:"email_123",
+      fetchImpl:async url=>String(url).endsWith("/attachments")?Response.json({data:[]}):Response.json({data:{subject:"Unsupported input"}}),
+      emailIngestHandler:async(_req,res)=>res.status(422).json({error:"Unsupported attachment.",packId:"PK-EMAIL-1"})
+    });
+    const body=await response.json();
+    assert.equal(response.status,422);
+    assert.equal(body.packId,"PK-EMAIL-1");
+    assert.equal(body.retryable,false);
+  });
+});
+
+test("an expired worker cannot count completion after losing attempt ownership",async()=>{
+  await withResendEnv(async()=>{
+    const job={id:"job-1",attempt_token:"attempt-old",organisation_id:"demo-organisation",provider_email_id:"email_123",payload:{data:{email_id:"email_123",to:["test@example.resend.app"],attachments:[]}},attempts:1,max_attempts:5};
+    const summary=await processQueuedResendJobs({
+      jobStore:{claim:async()=>[job],complete:async()=>null,fail:async()=>{throw new Error("must not fail");}},
+      fetchImpl:async url=>String(url).endsWith("/attachments")?Response.json({data:[]}):Response.json({data:{subject:"Documents"}}),
+      emailIngestHandler:async(_req,res)=>res.status(200).json({ok:true,packId:"PK-EMAIL-1",status:"Ready"})
+    });
+    assert.deepEqual(summary,{claimed:1,completed:0,retrying:0,failed:0,superseded:1});
   });
 });

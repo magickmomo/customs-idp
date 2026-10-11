@@ -19,6 +19,7 @@ export default async function handler(req,res){
   const supplied=String(req.headers["x-email-ingest-secret"]||"");
   if(!supplied || !safeEqual(supplied,secret)) return res.status(401).json({error:"Invalid email ingestion secret."});
 
+  let activePackId=null;
   try{
     const body=req.body||{};
     const organisationId=String(req.trustedOrganisationId||DEFAULT_ORGANISATION.id);
@@ -75,6 +76,7 @@ export default async function handler(req,res){
         return res.status(200).json({ok:true,duplicate:true,packId:existing.id,customer:existing.customer,status:existing.status,message:"Email already ingested."});
       }
       id=existing.id;
+      activePackId=id;
     }else if(!repair){
       // The webhook and fallback poller can reach this route concurrently.
       // Claim the email before any OpenAI/document processing starts.
@@ -160,6 +162,7 @@ export default async function handler(req,res){
       }),
       headers:{"Prefer":"resolution=merge-duplicates,return=minimal"}
     });
+    activePackId=pack.id;
 
     const storedFiles=[];
     for(let index=0;index<attachments.length;index++){
@@ -199,7 +202,7 @@ export default async function handler(req,res){
       message:completed.status==="Processing"?"Email accepted but remains locked in Processing until automated review completes.":"Email processing and automated review completed."
     });
   }catch(error){
-    return res.status(500).json({error:error.message||"Email ingestion failed."});
+    return res.status(500).json({error:error.message||"Email ingestion failed.",packId:activePackId});
   }
 }
 

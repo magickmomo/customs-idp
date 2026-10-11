@@ -8,7 +8,8 @@ begin
     'document_packs','outlook_connections','organisations',
     'organisation_members','teams','customers','customer_strategies',
     'mailboxes','pack_history','email_ingest_claims',
-    'outlook_sync_runs','outlook_webhook_events','customer_memory'
+    'outlook_sync_runs','outlook_webhook_events','customer_memory',
+    'email_ingest_jobs'
   ] loop
     if to_regclass('public.' || required_table) is null then
       raise exception 'Missing table: public.%', required_table;
@@ -26,6 +27,13 @@ begin
     where n.nspname='public' and p.proname='claim_email_ingest'
   ) then
     raise exception 'claim_email_ingest function missing';
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='email_ingest_jobs'
+      and column_name='attempt_token'
+  ) then
+    raise exception 'email_ingest_jobs.attempt_token missing';
   end if;
   if not exists (
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace

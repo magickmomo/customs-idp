@@ -1,9 +1,10 @@
 # Fresh Supabase development database
 
 **Scope:** a new Supabase project in your own account using synthetic data. This
-branch is NOT a migration-history upgrade for Liam's existing project.
+migration sequence is NOT an automatic history upgrade for Liam's existing
+project.
 
-## What this branch changes
+## What the bootstrap changes
 
 - Adds an initial migration for `document_packs` (from `database/schema.sql`)
   and `outlook_connections` (reconstructed from current application queries).
@@ -33,10 +34,10 @@ Renaming previously deployed migrations can cause drift or repeated execution.
 8. In Supabase SQL Editor, run `supabase/tests/bootstrap_smoke.sql`.
 9. Verify the Storage bucket is private and demo organisation exists.
 
-Alternatively, configure the Supabase GitHub integration to deploy **this
-branch to your new test project**. If your integration only deploys the
-repository's `main` branch, DO NOT switch it on yet or merge this testing
-branch solely to force a deployment. Use the CLI workflow above instead.
+Alternatively, configure the Supabase GitHub integration to deploy the
+repository's `main` branch to your new test project. Confirm the project ref
+before enabling it; never point this migration sequence at another project's
+database merely to clear a preview check.
 
 ## Connect the app
 
@@ -69,15 +70,12 @@ an inbound Resend test address and webhook, and any cron/worker secrets used by
 the specific application revision. Do not point existing production webhooks at
 this test instance.
 
-## Important gaps, not solved by a schema bootstrap
+## Important boundaries
 
-- **The new durable Resend job migration isn't in this repository branch yet.**
-  Add its SQL after merging/pulling the feature implementing it, and update the
-  smoke test to include that new table/functions.
 - The baseline `outlook_connections` table is inferred rather than copied from
   an authoritative production migration. Schema differences may remain.
-- The existing application has known unsafe service-role storage access paths,
-  auth-secret fallback, and tenant isolation issues. Successfully provisioning
-  a fresh database **does not make it safe for real customer data**.
-- The migration sequence is not executed in this GitHub commit. Validate it
-  against an isolated throwaway Supabase instance before depending on it.
+- The durable Resend queue, attempt ownership, private storage bucket and tenant
+  policies are included, but must still be exercised against an isolated test
+  database before using real customer data.
+- Run `supabase/tests/bootstrap_smoke.sql` after every fresh deployment and test
+  duplicate delivery, retry and terminal-failure behavior end to end.
