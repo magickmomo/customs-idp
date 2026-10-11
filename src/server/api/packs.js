@@ -32,7 +32,7 @@ export default async function handler(req,res){
         return res.status(403).json({error:"Organisation is not configured."});
       }
 
-      const existing=await supabaseFetch(`document_packs?id=eq.${encodeURIComponent(pack.id)}&select=id,pack_uuid,organisation_id,extracted_data,updated_at&limit=1`);
+      const existing=await supabaseFetch(`document_packs?id=eq.${encodeURIComponent(pack.id)}&select=id,pack_uuid,organisation_id,extracted_data,updated_at,processing_token,processing_lease_until&limit=1`);
       if(existing?.[0]&&String(existing[0].organisation_id)!==String(organisationId)){
         return res.status(409).json({error:"Pack id is already in use."});
       }
@@ -40,6 +40,9 @@ export default async function handler(req,res){
       const sourceError=validateSourceMetadata(pack,existing?.[0],organisationId);
       if(sourceError)return res.status(422).json({error:sourceError});
       if(existing?.[0]?.pack_uuid)pack.packUuid=existing[0].pack_uuid;
+      if(existing?.[0]?.processing_token&&new Date(existing[0].processing_lease_until||0).getTime()>Date.now()){
+        return res.status(409).json({error:"This pack is currently being processed. Wait for processing to finish before editing it."});
+      }
 
       const row=packToRow({...pack,organisationId:organisation.id,organisationName:organisation.name});
       if(existing?.[0]){

@@ -253,10 +253,12 @@ async function getReceivedEmail(emailId, fetchImpl) {
 }
 
 async function getReceivedAttachments(emailId, eventAttachments, fetchImpl) {
+  let listingError=null;
   const listed = await resendGet(
     `/emails/receiving/${encodeURIComponent(emailId)}/attachments`,
     fetchImpl
   ).catch(error => {
+    listingError=error;
     console.warn("Resend attachment listing failed; falling back to webhook metadata", {
       emailId,
       error: error?.message || String(error)
@@ -292,9 +294,9 @@ async function getReceivedAttachments(emailId, eventAttachments, fetchImpl) {
     if(contentBase64&&Buffer.byteLength(contentBase64,"base64")>MAX_ATTACHMENT_BYTES)throw permanentError(`Attachment "${item.filename||"attachment"}" exceeds 25 MB.`);
 
     if (!contentBase64) {
-      throw permanentError(
-        `Resend attachment "${item.filename || item.name || "attachment"}" has no downloadable content.`
-      );
+      const error=new Error(`Resend attachment "${item.filename || item.name || "attachment"}" has no downloadable content.`);
+      error.retryable=listingError?listingError.retryable!==false:false;
+      throw error;
     }
 
     return {

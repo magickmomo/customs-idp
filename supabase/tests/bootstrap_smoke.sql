@@ -36,6 +36,19 @@ begin
     raise exception 'email_ingest_jobs.attempt_token missing';
   end if;
   if not exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='document_packs'
+      and column_name='processing_token'
+  ) then
+    raise exception 'document_packs.processing_token missing';
+  end if;
+  if not exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public' and p.proname='claim_document_pack_processing'
+  ) then
+    raise exception 'claim_document_pack_processing function missing';
+  end if;
+  if not exists (
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='claim_outlook_webhook_events'
   ) then

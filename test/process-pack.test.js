@@ -20,6 +20,7 @@ function fixture(overrides={}){
   };
   const dependencies={
     loadPack:async()=>clone(basePack),
+    claimPackProcessing:async()=>({...clone(basePack),processingToken:"attempt-1"}),
     savePack:async pack=>{const copy=clone(pack);saved.push(copy);return copy;},
     listCustomers:async()=>[],
     loadCustomerStrategy:async(_organisationId,customerId)=>{strategies.push(customerId);return null;},
@@ -35,6 +36,20 @@ function fixture(overrides={}){
   };
   return {dependencies,saved,history,strategies};
 }
+
+test("processPack rejects a concurrent worker when the pack lease is already owned",async()=>{
+  let extracted=false;
+  const setup=fixture({dependencies:{
+    claimPackProcessing:async()=>null,
+    extractDocument:async()=>{extracted=true;return {extraction:{lines:[]}};}
+  }});
+  await assert.rejects(
+    processPack({organisationId:"org-1",packId:"PK-1",reason:"initial",actor:{type:"system"},dependencies:setup.dependencies}),
+    error=>error instanceof ProcessPackError&&error.status===409
+  );
+  assert.equal(extracted,false);
+  assert.equal(setup.saved.length,0);
+});
 
 test("processPack processes persisted sources and records ordered history",async()=>{
   const setup=fixture({

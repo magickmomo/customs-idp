@@ -308,6 +308,23 @@ test("permanent email-ingest errors preserve the pack id and stop retrying",asyn
   });
 });
 
+test("temporary attachment-listing failures remain retryable when webhook metadata has no content",async()=>{
+  await withResendEnv(async()=>{
+    const response=await processResendEmail({
+      event:{data:{email_id:"email_123",to:["test@example.resend.app"],attachments:[{filename:"invoice.pdf",content_type:"application/pdf"}]}},
+      emailId:"email_123",
+      fetchImpl:async url=>{
+        if(String(url).endsWith("/attachments"))return new Response("temporarily unavailable",{status:503});
+        return Response.json({data:{subject:"Documents"}});
+      }
+    });
+    const body=await response.json();
+    assert.equal(response.status,502);
+    assert.equal(body.stage,"retrieve-attachments");
+    assert.equal(body.retryable,true);
+  });
+});
+
 test("an expired worker cannot count completion after losing attempt ownership",async()=>{
   await withResendEnv(async()=>{
     const job={id:"job-1",attempt_token:"attempt-old",organisation_id:"demo-organisation",provider_email_id:"email_123",payload:{data:{email_id:"email_123",to:["test@example.resend.app"],attachments:[]}},attempts:1,max_attempts:5};
