@@ -17,6 +17,7 @@ import { UploadConfirmModal } from "./components/UploadConfirmModal.jsx";
 import { usePackActions } from "./hooks/usePackActions.js";
 import { findPackByUuid, packRoute, packUuidFromPath } from "./domain/routes.js";
 import { ensurePackUuid } from "./domain/packData.js";
+import { canOpenPack } from "./domain/packView.js";
 
 export const WorkspaceContext=createContext(null);
 
@@ -48,7 +49,7 @@ function App({children}){
   const routePage=pathname==="/manager"?"manager":pathname==="/customers"?"customers":pathname==="/agent"?"agent":pathname==="/settings"?"settings":pathname?.startsWith("/inbox/")?"review":"inbox";
   const isReview=routePage==="review";
   const navigate=(target)=>{const routes={inbox:"/inbox",manager:"/manager",customers:"/customers",agent:"/agent",settings:"/settings"};router.push(routes[target]||"/inbox");setMobileMenuOpen(false);};
-  const openPack=pack=>{if(!pack)return;if(pack.status==="Processing"){notify("This pack is still processing. It will become available when extraction completes.");return;}router.push(packRoute(ensurePackUuid(pack)));setMobileMenuOpen(false);};
+  const openPack=pack=>{if(!pack)return;if(!canOpenPack(pack)){notify("This pack is still processing. It will become available when extraction completes.");return;}router.push(packRoute(ensurePackUuid(pack)));setMobileMenuOpen(false);};
   const notify=(msg)=>{setToast(msg);setTimeout(()=>setToast(""),2500)};
 
   const loadUploadCustomers=async()=>{

@@ -1,7 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_INBOX_COLUMN_KEYS, normaliseDatabasePack, normaliseInboxColumnSelection } from "../src/domain/packData.js";
-import { formatReceivedDateTime, getPackColumnValue, getPackCustomerLabel, getPackDisplayName, reconcilePackDocuments } from "../src/domain/packView.js";
+import { canOpenPack, formatReceivedDateTime, getPackColumnValue, getPackCustomerLabel, getPackDisplayName, reconcilePackDocuments } from "../src/domain/packView.js";
+
+test("allows errored processing packs to open for recovery",()=>{
+  assert.equal(canOpenPack({status:"Processing"}),false);
+  assert.equal(canOpenPack({status:"Processing",processingError:"Extraction failed"}),true);
+  assert.equal(canOpenPack({status:"Needs review"}),true);
+});
 
 test("formats ISO received dates and preserves invalid values",()=>{
   const value="2026-09-19T18:49:25.577Z";
