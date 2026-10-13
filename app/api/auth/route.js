@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 const COOKIE_NAME = "customs-idp-auth";
-const MAX_AGE_SECONDS = 60 * 15;
+const MAX_AGE_SECONDS = 60 * 60;
 const DEFAULT_ORGANISATION_ID = "demo-organisation";
 
 const LOCAL_TEST_USERS = {

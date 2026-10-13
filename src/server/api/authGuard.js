@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 const COOKIE_NAME="customs-idp-auth";
-const MAX_AGE_SECONDS=60*15;
+const MAX_AGE_SECONDS=60*60;
 const DEFAULT_ORGANISATION_ID="demo-organisation";
 function getSecret(){const configured=String(process.env.IDP_AUTH_SECRET||"").trim();if(!configured)throw new Error("IDP_AUTH_SECRET is required.");return configured;}
 function sign(value){return crypto.createHmac("sha256",getSecret()).update(value).digest("base64url");}

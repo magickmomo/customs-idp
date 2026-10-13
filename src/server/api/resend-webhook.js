@@ -3,6 +3,7 @@ import emailIngest from "./email-ingest.js";
 import { runLegacyHandler } from "../nextLegacyAdapter.js";
 import { DEFAULT_ORGANISATION } from "../../tenant.js";
 import { processPack } from "../services/processPack.js";
+import { loadPack } from "../services/packRepository.js";
 import { claimEmailJobs, completeEmailJob, enqueueEmailJob, failEmailJob } from "../services/emailIngestJobs.js";
 
 const RESEND_API = "https://api.resend.com";
@@ -151,7 +152,7 @@ export async function processResendEmail({ event, emailId, organisationId = DEFA
   }
 }
 
-export async function processQueuedResendJobs({ limit = 5, fetchImpl = fetch, emailIngestHandler = emailIngest, jobStore = productionJobStore } = {}) {
+export async function processQueuedResendJobs({ limit = 5, fetchImpl = fetch, emailIngestHandler = emailIngest, jobStore = productionJobStore, packLoader = loadPack, packProcessor = processPack } = {}) {
   const jobs = await jobStore.claim(limit);
   const summary = { claimed: jobs.length, completed: 0, retrying: 0, failed: 0, superseded: 0 };
 
@@ -159,14 +160,28 @@ export async function processQueuedResendJobs({ limit = 5, fetchImpl = fetch, em
     try {
       let packId = job.pack_id || null;
       if (packId) {
-        const pack = await processPack({
-          organisationId: job.organisation_id,
-          packId,
-          reason: "reprocess",
-          actor: { type: "system", name: "Email Retry Worker" }
-        });
-        if (pack.status === "Processing") {
-          throw processingError(pack.processingError || "Email audit is still incomplete.", packId, "audit");
+        const existingPack=await packLoader(job.organisation_id,packId);
+        const sources=Array.isArray(existingPack?.uploadedFiles)?existingPack.uploadedFiles:[];
+        const sourcesPersisted=Boolean(existingPack)&&sources.every(file=>Boolean(String(file?.storagePath||"").trim()));
+        if(sourcesPersisted){
+          const pack = await packProcessor({
+            organisationId: job.organisation_id,
+            packId,
+            reason: "reprocess",
+            actor: { type: "system", name: "Email Retry Worker" }
+          });
+          if (pack.status === "Processing") {
+            throw processingError(pack.processingError || "Email audit is still incomplete.", packId, "audit");
+          }
+        }else{
+          const response=await processResendEmail({
+            event:job.payload||{},emailId:job.provider_email_id,organisationId:job.organisation_id,
+            repair:true,fetchImpl,emailIngestHandler
+          });
+          const body=await response.clone().json().catch(()=>({}));
+          if(!response.ok)throw processingError(body.error||`Email ingestion returned HTTP ${response.status}`,body.packId||packId,body.stage||"email-ingest",body.retryable!==false);
+          packId=body.packId||packId;
+          if(body.status==="Processing")throw processingError("Email processing remains incomplete.",packId,"processing");
         }
       } else {
         const response = await processResendEmail({

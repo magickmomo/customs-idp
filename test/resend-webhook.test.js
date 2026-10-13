@@ -336,3 +336,39 @@ test("an expired worker cannot count completion after losing attempt ownership",
     assert.deepEqual(summary,{claimed:1,completed:0,retrying:0,failed:0,superseded:1});
   });
 });
+
+test("queued retries process packs directly when every source is persisted",async()=>{
+  await withResendEnv(async()=>{
+    const job={id:"job-1",pack_id:"PK-EMAIL-1",organisation_id:"org-1",provider_email_id:"email_123",payload:{},attempts:2};
+    let processed=false,completed;
+    const summary=await processQueuedResendJobs({
+      jobStore:{claim:async()=>[job],complete:async(_job,result)=>{completed=result;return {...job,status:"completed"};},fail:async()=>{throw new Error("must not fail");}},
+      packLoader:async()=>({id:"PK-EMAIL-1",uploadedFiles:[{id:"file-1",storagePath:"organisations/org-1/packs/uuid/file.pdf"}]}),
+      packProcessor:async()=>{processed=true;return {status:"Needs review"};},
+      fetchImpl:async()=>{throw new Error("Resend must not be called");}
+    });
+    assert.equal(processed,true);
+    assert.equal(completed.packId,"PK-EMAIL-1");
+    assert.equal(summary.completed,1);
+  });
+});
+
+test("queued retries rerun repair ingestion when an existing source is missing",async()=>{
+  await withResendEnv(async()=>{
+    const job={id:"job-1",pack_id:"PK-EMAIL-1",organisation_id:"org-1",provider_email_id:"email_123",payload:{data:{attachments:[{filename:"invoice.pdf",content_type:"application/pdf"}]}},attempts:2};
+    let ingestRequest,processed=false;
+    const summary=await processQueuedResendJobs({
+      jobStore:{claim:async()=>[job],complete:async current=>({...current,status:"completed"}),fail:async()=>{throw new Error("must not fail");}},
+      packLoader:async()=>({id:"PK-EMAIL-1",uploadedFiles:[{id:"file-1",storagePath:null}]}),
+      packProcessor:async()=>{processed=true;return {status:"Needs review"};},
+      fetchImpl:async url=>String(url).endsWith("/attachments")
+        ? Response.json({data:[{filename:"invoice.pdf",content_type:"application/pdf",content_base64:"JVBERg==",size:123}]})
+        : Response.json({data:{subject:"Documents"}}),
+      emailIngestHandler:async(req,res)=>{ingestRequest=req;return res.status(200).json({ok:true,packId:"PK-EMAIL-1",status:"Needs review"});}
+    });
+    assert.equal(processed,false);
+    assert.equal(ingestRequest.body.repair,true);
+    assert.equal(ingestRequest.body.attachments[0].contentBase64,"JVBERg==");
+    assert.equal(summary.completed,1);
+  });
+});

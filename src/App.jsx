@@ -31,7 +31,7 @@ function App({children}){
   const pathname=usePathname();
   const router=useRouter();
   const localTestRoute=process.env.NODE_ENV !== "production"&&typeof window!=="undefined"&&window.location.pathname==="/test-auth";
-  const {authenticated,currentUser,passwordSetup,setAuthenticated,setCurrentUser,setPasswordSetup}=useAuthSession({localTestRoute});
+  const {authenticated,currentUser,passwordSetup,authError,setAuthenticated,setCurrentUser,setPasswordSetup}=useAuthSession({localTestRoute});
   const [agentOpen,setAgentOpen]=useState(true);
   const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
   const [sidebarCollapsed,setSidebarCollapsed]=useState(false);
@@ -100,7 +100,7 @@ function App({children}){
 
   if(passwordSetup)return <SupabasePasswordSetup onComplete={user=>{setPasswordSetup(false);setCurrentUser(user);setAuthenticated(true);router.push("/inbox");}}/>;
   if(authenticated===null)return <div className="test-login"><div className="test-login-card"><div className="test-login-brand"><div className="brand-mark"><Zap size={18}/></div><div><strong>Customs IDP</strong><span>Intelligent Data Processing</span></div></div><div className="test-login-copy"><div className="eyebrow">Secure access</div><h1>Checking access…</h1><p>Please wait.</p></div></div></div>;
-  if(!authenticated)return localTestRoute ? <LocalTestLogin onSuccess={user=>{setCurrentUser(user);setAuthenticated(true);router.push("/inbox");}}/> : passwordSetup ? <SupabasePasswordSetup onComplete={user=>{setPasswordSetup(false);setCurrentUser(user);setAuthenticated(true);router.push("/inbox");}}/> : <SupabaseLogin onSuccess={user=>{setCurrentUser(user);setAuthenticated(true);router.push("/inbox");}}/>;
+  if(!authenticated)return localTestRoute ? <LocalTestLogin onSuccess={user=>{setCurrentUser(user);setAuthenticated(true);router.push("/inbox");}}/> : passwordSetup ? <SupabasePasswordSetup onComplete={user=>{setPasswordSetup(false);setCurrentUser(user);setAuthenticated(true);router.push("/inbox");}}/> : <SupabaseLogin initialError={authError} onSuccess={user=>{setCurrentUser(user);setAuthenticated(true);router.push("/inbox");}}/>;
   if(!currentUser)return <div className="test-login"><div className="test-login-card"><div className="test-login-copy"><div className="eyebrow">Account</div><h1>Loading profile…</h1><p>Loading your Customs IDP organisation access.</p></div></div></div>;
 
   const workspaceValue={currentUser,currentUserName,currentUserRole,canViewManager,livePacks,setLivePacks,dataSource,packsLoading,packLoadError,setPackLoadError,emailSyncStatus,persistPack,selectedPack,navigate,openPack,notify,handleUpload,deletePack,assignPack,updatePack,validatePack,postToLCA,reprocessPack,persistValidatedPack,recordHistory};

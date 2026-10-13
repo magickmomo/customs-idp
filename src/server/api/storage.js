@@ -4,7 +4,21 @@ import { createClient } from "@supabase/supabase-js";
 const BUCKET="CUSTOMS-DOCUMENTS";
 const SIGNED_URL_TTL_SECONDS=10*60;
 const MAX_FILE_SIZE=25*1024*1024;
-const ALLOWED_TYPES=new Set(["application/pdf","image/png","image/jpeg","image/webp","text/csv","application/csv","application/vnd.ms-excel","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
+const ALLOWED_TYPES=new Set([
+  "application/pdf","image/png","image/jpeg","image/webp","text/csv","application/csv",
+  "application/vnd.ms-excel","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/msword","application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "message/rfc822","application/vnd.ms-outlook"
+]);
+const ALLOWED_EXTENSIONS=new Set([".pdf",".png",".jpg",".jpeg",".webp",".csv",".xls",".xlsx",".doc",".docx",".eml",".msg"]);
+
+export function isSupportedUpload(name,type){
+  const contentType=String(type||"").trim().toLowerCase();
+  if(ALLOWED_TYPES.has(contentType))return true;
+  if(contentType&&contentType!=="application/octet-stream")return false;
+  const filename=String(name||"").toLowerCase();
+  return [...ALLOWED_EXTENSIONS].some(extension=>filename.endsWith(extension));
+}
 
 function getClient(){
   const url=process.env.SUPABASE_URL;
@@ -48,8 +62,6 @@ export default async function handler(req,res){
   const auth=requireAuth(req,res);
   if(!auth)return;
   try{
-    const supabase=getClient();
-
     if(req.method==="POST"){
       const {action,packId,fileId}=req.body||{};
 
@@ -62,7 +74,8 @@ export default async function handler(req,res){
         const size=Number(file.size)||0;
         const contentType=String(file.type||"application/octet-stream").toLowerCase();
         if(size<=0||size>MAX_FILE_SIZE)return res.status(422).json({error:"File size is invalid or exceeds 25 MB."});
-        if(!ALLOWED_TYPES.has(contentType))return res.status(422).json({error:"File type is not supported."});
+        if(!isSupportedUpload(file.name,contentType))return res.status(422).json({error:"File type is not supported."});
+        const supabase=getClient();
         const safeName=cleanSegment(file.name);
         const storagePath=`organisations/${cleanSegment(auth.organisationId)}/packs/${cleanSegment(row.pack_uuid||row.id)}/${cleanSegment(file.id)}-${safeName}`;
         const {data,error}=await supabase.storage.from(BUCKET).createSignedUploadUrl(storagePath,{upsert:false});
@@ -84,6 +97,7 @@ export default async function handler(req,res){
         const canonicalPrefix=`organisations/${cleanSegment(auth.organisationId)}/packs/${cleanSegment(row.pack_uuid||row.id)}/`;
         const legacyPrefix=cleanSegment(row.id)+"/";
         if(!path.startsWith(canonicalPrefix)&&!path.startsWith(legacyPrefix))return res.status(403).json({error:"Source file is outside the pack storage namespace"});
+        const supabase=getClient();
         const {data,error}=await supabase.storage.from(BUCKET).createSignedUrl(path,SIGNED_URL_TTL_SECONDS);
         if(error) return res.status(404).json({error:error.message});
         return res.status(200).json({

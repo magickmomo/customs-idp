@@ -54,3 +54,33 @@ test("whole-pack updates use an atomic updated-at condition",async()=>{
     assert.ok(urls.some(url=>url.includes("updated_at=eq.2026-10-11T08%3A00%3A00.000Z")));
   });
 });
+
+test("pack creation returns the database timestamp used by the immediate metadata update",async()=>{
+  let stored=null;
+  const databaseTimestamp="2026-10-13T09:30:00.123+00:00";
+  await withSupabaseFetch(async(url,options={})=>{
+    const path=String(url);
+    if(path.includes("/organisations?"))return Response.json([{id:"org-1",name:"Org",status:"active"}]);
+    if(path.includes("/document_packs?")&&options.method!=="PATCH")return Response.json(stored?[stored]:[]);
+    if(path.endsWith("/document_packs")&&options.method==="POST"){
+      assert.equal(options.headers.Prefer,"return=representation");
+      stored={...JSON.parse(options.body),updated_at:databaseTimestamp};
+      return Response.json([stored]);
+    }
+    if(options.method==="PATCH"){
+      assert.match(path,/updated_at=eq.2026-10-13T09%3A30%3A00.123%2B00%3A00/);
+      stored={...stored,...JSON.parse(options.body)};
+      return Response.json([stored]);
+    }
+    throw new Error("Unexpected request: "+url);
+  },async()=>{
+    const createRes=response();
+    await handler(request(undefined),createRes);
+    assert.equal(createRes.statusCode,200);
+    assert.equal(createRes.body.pack.updated_at,databaseTimestamp);
+
+    const updateRes=response();
+    await handler({...request(databaseTimestamp),body:{...request(databaseTimestamp).body,status:"Processing"}},updateRes);
+    assert.equal(updateRes.statusCode,200);
+  });
+});

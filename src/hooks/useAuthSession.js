@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase.js";
 import {
+  passwordRecoveryCallbackError,
   shouldKeepPasswordSetup,
   shouldWaitForPasswordRecovery
 } from "../auth/passwordRecovery.js";
+
+const RECOVERY_SESSION_WAIT_MS=5000;
 
 export function useAuthSession({ localTestRoute }) {
   const [authenticated,setAuthenticated]=useState(null);
   const [currentUser,setCurrentUser]=useState(null);
   const [passwordSetup,setPasswordSetup]=useState(false);
+  const [authError,setAuthError]=useState("");
   const passwordSetupActive=useRef(false);
+  const recoveryTimer=useRef(null);
   const setPasswordSetupMode=useCallback(active=>{
     passwordSetupActive.current=Boolean(active);
     setPasswordSetup(Boolean(active));
@@ -19,17 +24,37 @@ export function useAuthSession({ localTestRoute }) {
     let active=true;
     if(localTestRoute){setAuthenticated(false);return()=>{active=false;};}
 
+    const clearRecoveryTimer=()=>{
+      if(recoveryTimer.current){clearTimeout(recoveryTimer.current);recoveryTimer.current=null;}
+    };
+    const finishFailedRecovery=message=>{
+      clearRecoveryTimer();
+      if(active){
+        setAuthError(message||"This password recovery link is invalid or has expired. Request a new password reset email.");
+        setCurrentUser(null);setAuthenticated(false);setPasswordSetupMode(false);
+      }
+    };
+
     const syncSession=async(session,event="")=>{
       const locationLike=typeof window!=="undefined"?window.location:undefined;
       if(!session?.access_token){
+        const callbackError=passwordRecoveryCallbackError(locationLike);
+        if(callbackError){finishFailedRecovery(callbackError);return;}
         if(passwordSetupActive.current||shouldWaitForPasswordRecovery({session,locationLike})){
           if(active)setAuthenticated(current=>current===false?null:current);
+          if(!recoveryTimer.current){
+            recoveryTimer.current=setTimeout(()=>finishFailedRecovery(),RECOVERY_SESSION_WAIT_MS);
+          }
           return;
         }
+        clearRecoveryTimer();
         try{await fetch("/api/auth",{method:"DELETE",credentials:"include"});}catch{}
-        if(active){setCurrentUser(null);setAuthenticated(false);setPasswordSetupMode(false);}
+        if(active){setAuthError("");setCurrentUser(null);setAuthenticated(false);setPasswordSetupMode(false);}
         return;
       }
+
+      clearRecoveryTimer();
+      if(active)setAuthError("");
 
       const needsSetup=shouldKeepPasswordSetup({
         active:passwordSetupActive.current,
@@ -70,8 +95,8 @@ export function useAuthSession({ localTestRoute }) {
       }
     });
 
-    return()=>{active=false;subscription.unsubscribe();};
+    return()=>{active=false;clearRecoveryTimer();subscription.unsubscribe();};
   },[localTestRoute,setPasswordSetupMode]);
 
-  return { authenticated, currentUser, passwordSetup, setAuthenticated, setCurrentUser, setPasswordSetup:setPasswordSetupMode };
+  return { authenticated, currentUser, passwordSetup, authError, setAuthenticated, setCurrentUser, setPasswordSetup:setPasswordSetupMode };
 }

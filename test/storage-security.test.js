@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import crypto from "node:crypto";
-import handler from "../src/server/api/storage.js";
+import handler, { isSupportedUpload } from "../src/server/api/storage.js";
 import { createAuthCookie } from "../src/server/api/authGuard.js";
 
 function response(){return {statusCode:200,body:null,status(code){this.statusCode=code;return this;},json(value){this.body=value;return this;}};}
@@ -18,6 +18,40 @@ function request(body,method="POST"){
   const cookie=createAuthCookie({organisationId:"org-safe",userId:"user-1"},{secure:false}).split(";")[0];
   return {method,headers:{cookie},body,query:body};
 }
+
+test("storage accepts every file format advertised by the picker",()=>{
+  const files=[
+    ["invoice.pdf","application/pdf"],["sheet.xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+    ["legacy.xls","application/vnd.ms-excel"],["letter.doc","application/msword"],
+    ["letter.docx","application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+    ["data.csv","text/csv"],["scan.png","image/png"],["scan.jpg","image/jpeg"],
+    ["message.eml","message/rfc822"],["message.msg","application/vnd.ms-outlook"]
+  ];
+  for(const [name,type] of files)assert.equal(isSupportedUpload(name,type),true,`${name} should be supported`);
+});
+
+test("empty MIME fallbacks require a supported filename extension",()=>{
+  assert.equal(isSupportedUpload("message.msg",""),true);
+  assert.equal(isSupportedUpload("letter.docx","application/octet-stream"),true);
+  assert.equal(isSupportedUpload("payload.exe","application/octet-stream"),false);
+  assert.equal(isSupportedUpload("payload.exe","application/x-msdownload"),false);
+});
+
+test("upload URLs reject oversized files before contacting storage",async()=>withEnv(async()=>{
+  const originalFetch=globalThis.fetch;
+  let calls=0;
+  globalThis.fetch=async()=>{
+    calls+=1;
+    return Response.json([{id:"PK-1",pack_uuid:"pack-uuid",extracted_data:{_manager:{uploadedFiles:[{id:"file-1",name:"large.pdf",type:"application/pdf",size:26*1024*1024}]}}}]);
+  };
+  try{
+    const res=response();
+    await handler(request({action:"upload-url",packId:"PK-1",fileId:"file-1"}),res);
+    assert.equal(res.statusCode,422);
+    assert.match(res.body.error,/25 MB/);
+    assert.equal(calls,1);
+  }finally{globalThis.fetch=originalFetch;}
+}));
 
 test("storage API never signs an arbitrary client path",async()=>withEnv(async()=>{
   let called=false;

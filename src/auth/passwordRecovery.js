@@ -32,6 +32,17 @@ export function shouldWaitForPasswordRecovery({ session, locationLike }) {
   return !session?.access_token && hasPasswordSetupMarker(locationLike);
 }
 
+export function passwordRecoveryCallbackError(locationLike) {
+  const { search, hash } = locationParts(locationLike);
+  for (const value of [search.replace(/^\?/, ""), hash.replace(/^#/, "")]) {
+    const params = new URLSearchParams(value);
+    if (params.get("error") || params.get("error_description")) {
+      return "This password recovery link is invalid or has expired. Request a new password reset email.";
+    }
+  }
+  return "";
+}
+
 export function passwordRecoveryRedirect(origin) {
   const base = String(origin || "").replace(/\/+$/, "");
   if (!base) throw new Error("An application origin is required for password recovery.");

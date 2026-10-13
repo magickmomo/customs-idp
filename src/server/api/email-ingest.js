@@ -11,6 +11,21 @@ const DEFAULT_STRATEGIES = {
   "Raven Industrial": { emailFields: [] }
 };
 
+export function mergeInboundAttachments(packId,attachments,existingFiles=[]){
+  return attachments.map((attachment,index)=>{
+    const fileId=packId+"-"+index;
+    const persisted=existingFiles.find(file=>String(file?.id)===fileId);
+    return {
+      id:fileId,
+      name:String(attachment.filename||attachment.name||("attachment-"+(index+1))),
+      size:Number(attachment.size)||0,
+      type:String(attachment.mimeType||attachment.contentType||"application/octet-stream"),
+      storagePath:persisted?.storagePath||null,
+      ...(persisted?.storagePath?{}:(persisted?.storageError?{storageError:persisted.storageError}:{}))
+    };
+  });
+}
+
 export default async function handler(req,res){
   if(req.method!=="POST") return res.status(405).json({error:"Method not allowed"});
 
@@ -63,9 +78,9 @@ export default async function handler(req,res){
     const ticket=ingestTicket||messageId||("EMAIL-"+Date.now().toString().slice(-6));
     let id="PK-EMAIL-"+crypto.randomUUID().toUpperCase();
     let packUuid=crypto.randomUUID();
-    const existingByTicket=await supabaseFetch("document_packs?organisation_id=eq."+encodeURIComponent(organisationId)+"&ticket=eq."+encodeURIComponent(ticket)+"&select=id,pack_uuid,customer,status,docs&limit=1");
+    const existingByTicket=await supabaseFetch("document_packs?organisation_id=eq."+encodeURIComponent(organisationId)+"&ticket=eq."+encodeURIComponent(ticket)+"&select=id,pack_uuid,customer,status,docs,extracted_data&limit=1");
     const existingByMessage=messageId
-      ? await supabaseFetch("document_packs?organisation_id=eq."+encodeURIComponent(organisationId)+"&extracted_data->email->>messageId=eq."+encodeURIComponent(messageId)+"&select=id,pack_uuid,customer,status,docs&limit=1").catch(()=>[])
+      ? await supabaseFetch("document_packs?organisation_id=eq."+encodeURIComponent(organisationId)+"&extracted_data->email->>messageId=eq."+encodeURIComponent(messageId)+"&select=id,pack_uuid,customer,status,docs,extracted_data&limit=1").catch(()=>[])
       : [];
     const existing=existingByTicket[0]||existingByMessage[0];
     if(existing){
@@ -96,6 +111,7 @@ export default async function handler(req,res){
       }
     }
 
+    const existingFiles=Array.isArray(existing?.extracted_data?._manager?.uploadedFiles)?existing.extracted_data._manager.uploadedFiles:[];
     const pack={
       organisationId,
       organisationName,
@@ -109,13 +125,7 @@ export default async function handler(req,res){
       received:receivedAt,
       ticket,
       assignedTo:"Unassigned",
-      uploadedFiles:attachments.map((a,index)=>({
-        id:id+"-"+index,
-        name:String(a.filename||a.name||("attachment-"+(index+1))),
-        size:Number(a.size)||0,
-        type:String(a.mimeType||a.contentType||"application/octet-stream"),
-        storagePath:null
-      })),
+      uploadedFiles:mergeInboundAttachments(id,attachments,existingFiles),
       email:{
         messageId,
         from,
@@ -167,8 +177,13 @@ export default async function handler(req,res){
     const storedFiles=[];
     for(let index=0;index<attachments.length;index++){
       const attachment=attachments[index];
+      const persisted=pack.uploadedFiles[index];
       const filename=String(attachment.filename||attachment.name||"attachment");
       const mimeType=String(attachment.mimeType||attachment.contentType||"application/octet-stream");
+      if(persisted?.storagePath){
+        storedFiles.push({...persisted,name:filename,size:Number(attachment.size)||persisted.size||0,type:mimeType});
+        continue;
+      }
       const fileData=normaliseAttachmentData(attachment);
       let storagePath=null,storageError=null;
       if(!fileData)storageError="Attachment content was not supplied by the email connector.";

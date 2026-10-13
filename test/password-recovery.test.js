@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   hasPasswordSetupMarker,
+  passwordRecoveryCallbackError,
   passwordRecoveryRedirect,
   shouldEnterPasswordSetup,
   shouldKeepPasswordSetup,
@@ -46,6 +47,12 @@ test("keeps the recovery route pending while Supabase exchanges the email token"
     shouldWaitForPasswordRecovery({ session, locationLike: { pathname: "/reset-password" } }),
     false
   );
+});
+
+test("reports malformed and expired recovery callbacks",()=>{
+  assert.match(passwordRecoveryCallbackError({search:"?error=access_denied&error_description=Token+has+expired"}),/invalid or has expired/);
+  assert.match(passwordRecoveryCallbackError({hash:"#error_code=otp_expired&error=access_denied"}),/invalid or has expired/);
+  assert.equal(passwordRecoveryCallbackError({pathname:"/reset-password"}),"");
 });
 
 test("keeps password setup active after Supabase cleans the recovery URL", () => {

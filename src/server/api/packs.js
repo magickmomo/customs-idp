@@ -59,8 +59,9 @@ export default async function handler(req,res){
         return res.status(200).json({pack:normalizePack(updated[0])});
       }
 
-      await supabaseFetch("document_packs",{method:"POST",body:JSON.stringify(row),headers:{Prefer:"return=minimal"}});
-      return res.status(200).json({pack:normalizePack(row)});
+      const created=await supabaseFetch("document_packs",{method:"POST",body:JSON.stringify(row),headers:{Prefer:"return=representation"}});
+      if(!created?.[0])throw new Error("The created pack could not be reloaded.");
+      return res.status(200).json({pack:normalizePack(created[0])});
     }catch(error){return res.status(503).json({error:error.message});}
   }
 
